@@ -1,0 +1,7 @@
+examples/config.py
+nce_token.txt
+.venv/
+*__pycache__*
+*pynetcom.egg-info*
+dist/
+build/
