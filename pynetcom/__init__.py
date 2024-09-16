@@ -1,13 +1,16 @@
-# Импортируем основные классы и функции библиотеки
+# Import classes and functions
+
 from pynetcom.rest_nce import RestNCE
+from pynetcom.rest_nsp import RestNSP
 
-# Версия библиотеки
-__version__ = "0.1.0"
+# Library version
+__version__ = "0.1.2"
 
-# Описание библиотеки
+# Description
 __doc__ = """
 pynetcom - Python library for interacting with network devices and management systems
 via REST API and CLI, supporting multiple vendors like Huawei, Nokia, and more.
 """
 
-__all__ = ["RestNCE"]  # Список объектов, которые будут импортироваться по умолчанию
+# Objects list, thats will be imported by default
+__all__ = ["RestNCE", "RestNSP"]

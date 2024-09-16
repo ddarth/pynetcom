@@ -25,7 +25,7 @@ class RestNCE(object):
         :param nce_password: nce_api_user_password
         """
         
-        self.logger = logging.getLogger(__name__)  # Именованный логгер
+        self.logger = logging.getLogger(__name__)
         self.API_NCE_HOST = nce_host
         self.API_NCE_USER = nce_username
         self.API_NCE_PASS = nce_password
@@ -60,7 +60,7 @@ class RestNCE(object):
 
         url = self.API_NCE_HOST + self.AUTH_REST_URL
         logging.debug(['url: ', url])
-        # verify=False - отключить  проверку сертификата 
+        # verify=False - disable ssl certificate verification check
         response = requests.put(url, data=json.dumps(payload), 
             headers = {"content-type":"application/json", "Accept":"application/json"}, 
             verify=False
@@ -77,7 +77,7 @@ class RestNCE(object):
             if response_json['exceptionId'] == 'user.pwd.expired':
                 logging.error('Check used status on NCE. User password is expiried')
             return False
-        # Вытащить токен из полученных данных
+        # Get token from received data
         self.token = response_json ["accessSession"]
         self.__write_token()
         self.__update_request_header()
@@ -117,8 +117,9 @@ class RestNCE(object):
             logging.error("GET REQUEST RETURN ERROR: %d", response.status_code)
             logging.debug(response.json())
             return False
-        # Смотрим заголовок ответа, так как в нем содержится инфа о том,
-        # был ли результат "обрезан", а так же указана ссылка на следующий запрос
+        # Look the header. It contain pagination flag which indicate that
+        # the data is croped and also contain link to "next request".
+
         response_header = response.headers
         # print(response.json())
         # print(response_header)

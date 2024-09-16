@@ -76,6 +76,10 @@ To run examples, follow these steps:
     API_NCE_USER =  "your_nce_api_user"
     API_NCE_PASS = "your_nce_password"
     API_NCE_HOST = "https://your_nce_hostip:26335"
+
+    API_NSP_USER =  "your_nsp_api_user"
+    API_NSP_PASS = "your_nsp_password"
+    API_NSP_HOST = "https://your_nsp_host"
     ```
 
 5. Run an example script:
@@ -100,8 +104,12 @@ nce.send_request("/restconf/v2/data/huawei-nce-resource-inventory:subnets")
 items = nce.get_data()
 print(items)
 ```
+For additional info see examples/ folder
 
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
+## Warning
+Library use nsp_token.txt and nce_token.txt to store tokens.
+Make sure that your have write permission to it.
