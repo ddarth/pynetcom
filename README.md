@@ -43,7 +43,7 @@ To run examples, follow these steps:
 1. Clone the repository:
 
     ```bash
-    git clone <repository_url>
+    git clone https://github.com/ddarth/pynetcom.git
     cd pynetcom
     ```
 
@@ -80,6 +80,11 @@ To run examples, follow these steps:
     API_NSP_USER =  "your_nsp_api_user"
     API_NSP_PASS = "your_nsp_password"
     API_NSP_HOST = "https://your_nsp_host"
+
+    NETCONF_HOST = "192.168.0.1"
+    NETCONF_PORT = 830 # 22 for huawei
+    NETCONF_USER = "your_netconf_user"
+    NETCONF_PASSWORD = "yout_netconf_password"
     ```
 
 5. Run an example script:
