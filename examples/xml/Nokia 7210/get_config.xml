@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rpc message-id="get-config-running" xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <get-config>
+    <source>
+      <running/>
+    </source>
+    <filter>
+      <configure xmlns="urn:alcatel-lucent.com:sros:ns:yang:conf-r13">
+        <port>
+          <port-id>1/1/28</port-id>
+        </port>
+      </configure>
+    </filter>
+  </get-config>
+</rpc>

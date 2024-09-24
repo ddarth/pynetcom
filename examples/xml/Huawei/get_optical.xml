@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rpc message-id="get-config-running33" xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+    <get>
+        <filter type="subtree">
+            <devm xmlns="urn:huawei:yang:huawei-devm">
+                <ports>
+                    <port>
+                        <position>0/1/0</position>
+                            <optical-module xmlns="urn:huawei:yang:huawei-pic">
+                        </optical-module>
+                    </port>
+                </ports>
+            </devm>
+        </filter>
+    </get>
+</rpc>

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rpc message-id="get-config-running33" xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+    <get>
+        <filter type="subtree">
+            <ifm xmlns="urn:huawei:yang:huawei-ifm">
+                <interfaces>
+                    <interface>
+                        <name>GigabitEthernet0/1/2</name>
+                    </interface>
+                </interfaces>
+            </ifm>
+        </filter>
+    </get>
+</rpc>
