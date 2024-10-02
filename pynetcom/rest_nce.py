@@ -25,7 +25,7 @@ class RestNCE(object):
         :param nce_password: nce_api_user_password
         """
         
-        self.logger = logging.getLogger(__name__)
+        self.logger = logging.getLogger('pynetcom')
         self.API_NCE_HOST = nce_host
         self.API_NCE_USER = nce_username
         self.API_NCE_PASS = nce_password

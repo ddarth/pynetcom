@@ -64,7 +64,7 @@ class EquipCLI(object):
 	debug = 1 # 0 -disable, 1 - error, 2 - info
 	# @CARET_READ_READY - что ожидаем когда послали команду
 	def __init__(self, HOST, USERNAME, PASSWORD, CARET_READ_READY, CARET_WRITE_READY = "", VENDOR = ""):
-		self.logger = logging.getLogger(__name__)
+		self.logger = logging.getLogger('pynetcom')
 		self.host = HOST
 		self.username = USERNAME
 		self.password = PASSWORD

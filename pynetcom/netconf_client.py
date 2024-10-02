@@ -26,7 +26,7 @@ class NetconfClient:
             Juniper: device_params={'name':'junos'}
             Server or anything not in above: device_params={'name':'default'}
         """
-        self.logger = logging.getLogger(__name__)
+        self.logger = logging.getLogger('pynetcom')
         self.host = host
         self.port = port
         self.user = user
@@ -37,6 +37,7 @@ class NetconfClient:
         self.__connect()
 
     def __connect(self):
+        self.logger.debug(f'Connecting to {self.host}, {self.port}')
         self.session = manager.connect(
             host=self.host,
             port=self.port,
@@ -49,6 +50,7 @@ class NetconfClient:
         
 
     def get_config(self):
+        self.logger.debug(f'Get config')
         config = self.session.get_config(source="running")
         # config = self.session.get_configuration()
         # print('########################################')
@@ -56,6 +58,7 @@ class NetconfClient:
         return xmltodict.parse(config.xml)
     
     def get(self, request_filter):
+        self.logger.debug(f'Get request with filter: {request_filter}')
         response = self.session.get(("subtree", request_filter))
         # print(response)
         return xmltodict.parse(response.data_xml)

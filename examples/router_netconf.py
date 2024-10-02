@@ -6,7 +6,9 @@ import json
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # Set needed logging level
-logging.getLogger().setLevel(logging.INFO)
+logging.getLogger().setLevel(logging.WARNING)
+logging.getLogger('pynetcom').setLevel(logging.INFO)
+
 
 """
 When instantiating a connection to a known type of NETCONF server:

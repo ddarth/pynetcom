@@ -48,7 +48,7 @@ class RestNSP(object):
         :param nsp_username: nsp_api_user
         :param nsp_password: nsp_api_user_password
         """
-        self.logger = logging.getLogger(__name__)
+        self.logger = logging.getLogger('pynetcom')
         self.API_NSP_HOST = nsp_host
         self.API_NSP_USER = nsp_username
         self.API_NSP_PASS = nsp_password
