@@ -5,7 +5,7 @@
             <devm xmlns="urn:huawei:yang:huawei-devm">
                 <ports>
                     <port>
-                        <position>0/1/0</position>
+                        <position>0/2/0</position>
                             <optical-module xmlns="urn:huawei:yang:huawei-pic">
                         </optical-module>
                     </port>

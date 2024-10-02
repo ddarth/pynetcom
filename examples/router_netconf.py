@@ -48,4 +48,4 @@ request_filter = """
             </ifm>
 """
 status = netconf_client.get(request_filter)
-print(json.dumps(status, indent=4))
+print(json.dumps(status['data']['ifm'], indent=4))

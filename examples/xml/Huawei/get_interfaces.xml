@@ -1,11 +1,37 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<rpc message-id="get-config-running33" xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+<rpc message-id="get-config-running" xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
     <get>
         <filter type="subtree">
             <ifm xmlns="urn:huawei:yang:huawei-ifm">
                 <interfaces>
                     <interface>
-                        <name>GigabitEthernet0/1/2</name>
+                        <name></name>
+                        <position/>
+                        <description/>
+                        <admin-status/>
+                        <dynamic>
+                            <oper-status/>
+                            <physical-status/>
+                            <link-status/>
+                            <bandwidth/>
+                            <ipv4-status/>
+                            <line-protocol-up-time/>
+                        </dynamic>
+                        
+                        <lldp xmlns="urn:huawei:yang:huawei-lldp">
+                            <session>
+                                <neighbors>
+                                    <neighbor>
+                                        <system-name/>
+                                        <port-id/>
+                                        <port-description/>
+                                    </neighbor>
+                                </neighbors>
+                            </session>
+                        </lldp>
+                        <qos xmlns="urn:huawei:yang:huawei-qos">
+                            <port-shapings/>
+                        </qos>
                     </interface>
                 </interfaces>
             </ifm>
