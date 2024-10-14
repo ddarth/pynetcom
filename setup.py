@@ -21,7 +21,7 @@ else:
 
 setup(
     name='pynetcom',
-    version='0.1.3',
+    version='0.1.4',
     description='Library for Huawei, Nokia network device API interactions',
     long_description=open('README.md', encoding='utf-8').read(),  # Long description (from README)
     long_description_content_type="text/markdown",

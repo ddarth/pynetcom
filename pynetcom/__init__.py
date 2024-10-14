@@ -6,7 +6,7 @@ from pynetcom.netconf_client import NetconfClient
 # from pynetcom.cli_client import EquipCLI, NokiaEquipCLI, HuaweiEquipCLI, cli_caret
 
 # Library version
-__version__ = "0.1.3"
+__version__ = "0.1.4"
 
 # Description
 __doc__ = """
