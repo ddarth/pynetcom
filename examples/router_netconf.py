@@ -29,8 +29,8 @@ When instantiating a connection to a known type of NETCONF server:
     Server or anything not in above: device_params={'name':'default'}
 """
 
-netconf_client = NetconfClient(host="10.255.77.6", port=22, 
-                               user="M2M_user", password="M2M_user_123", 
+netconf_client = NetconfClient(host=NETCONF_HOST, port=NETCONF_PORT, 
+                               user=NETCONF_USER, password=NETCONF_PASSWORD, 
                                device_params={'name':'huaweiyang'})
 # netconf_client.get_config()
 # config = netconf_client.get_config()

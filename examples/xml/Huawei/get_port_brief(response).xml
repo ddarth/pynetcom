@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rpc-reply message-id="1013" xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <data>
+    <devm xmlns="urn:huawei:yang:huawei-devm">
+      <ports>
+        <port>
+          <position>0/2/2</position>
+          <last-down-time>2023-03-09T05:41:35Z</last-down-time>
+          <medium-type>fiber</medium-type>
+          <ethernet xmlns="urn:huawei:yang:huawei-pic">
+            <negotiation>disabled</negotiation>
+          </ethernet>
+          <optical-module xmlns="urn:huawei:yang:huawei-pic">
+            <rx-high-power-warn-en>true</rx-high-power-warn-en>
+            <rx-low-power-warn-en>true</rx-low-power-warn-en>
+            <tx-high-power-warn-en>true</tx-high-power-warn-en>
+            <tx-low-power-warn-en>true</tx-low-power-warn-en>
+            <volt-high-warn-en>true</volt-high-warn-en>
+            <volt-low-warn-en>true</volt-low-warn-en>
+            <vendor-name>Hisense</vendor-name>
+            <vendor-pn>LTF1305-BC+</vendor-pn>
+            <trans-bw>10000</trans-bw>
+            <trans-mode>single-mode</trans-mode>
+            <hot-plug>true</hot-plug>
+            <type>sfp-plus</type>
+            <fiber-type>lc</fiber-type>
+            <wavelength>1310.00</wavelength>
+            <transmission-distance>10000</transmission-distance>
+            <tx-power>-2.01</tx-power>
+            <rx-power>-40.00</rx-power>
+            <rx-high-warn-power>0.499</rx-high-warn-power>
+            <rx-low-warn-power>-14.400</rx-low-warn-power>
+            <tx-high-warn-power>0.499</tx-high-warn-power>
+            <tx-low-warn-power>-8.198</tx-low-warn-power>
+            <rx-high-alarm-power>2.500</rx-high-alarm-power>
+            <rx-low-alarm-power>-16.401</rx-low-alarm-power>
+            <tx-high-alarm-power>2.500</tx-high-alarm-power>
+            <tx-low-alarm-power>-10.199</tx-low-alarm-power>
+            <tunable>not-tunable</tunable>
+            <bias>30</bias>
+            <voltage>3364</voltage>
+            <temperature>40</temperature>
+            <vendor-oui> </vendor-oui>
+            <vendor-rev> </vendor-rev>
+            <gpon-sn> </gpon-sn>
+          </optical-module>
+        </port>
+      </ports>
+    </devm>
+  </data>
+</rpc-reply>

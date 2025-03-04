@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rpc message-id="1013"  xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+<get>
+    <filter type="subtree">
+        <devm:devm xmlns:devm="urn:huawei:yang:huawei-devm" xmlns:pic="urn:huawei:yang:huawei-pic">
+            <devm:ports>
+                <devm:port>
+                    <devm:position>0/2/31</devm:position>
+                    <devm:last-up-time/>
+                    <devm:last-down-time/>
+                    <devm:medium-type/>
+                    <pic:ethernet xmlns="urn:huawei:yang:huawei-pic">
+                        <speed/>
+                        <duplex/>
+                        <negotiation/>
+                        <negotiation-mode/>
+                    </pic:ethernet>
+                    <optical-module xmlns="urn:huawei:yang:huawei-pic">
+                    </optical-module>
+                </devm:port>
+            </devm:ports>
+        </devm:devm>
+    </filter>
+</get>
+</rpc>

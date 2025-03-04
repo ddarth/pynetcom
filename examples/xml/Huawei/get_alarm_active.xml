@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rpc message-id="1013"  xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+<get>
+    <filter type="subtree">
+      <fm:fm xmlns:fm="urn:huawei:yang:huawei-fm">
+        <fm:active-alarms>
+          <fm:active-alarm/>
+        </fm:active-alarms>
+      </fm:fm>
+    </filter>
+</get>
+</rpc>

@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rpc-reply message-id="1017" xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <data>
+    <devm xmlns="urn:huawei:yang:huawei-devm">
+      <ports>
+        <port>
+          <position>0/2/8</position>
+          <ethernet xmlns="urn:huawei:yang:huawei-pic">
+            <speed>1000M</speed>
+            <duplex>full</duplex>
+            <negotiation>disabled</negotiation>
+            <negotiation-mode>auto</negotiation-mode>
+            <down-hold-time>0</down-hold-time>
+            <up-hold-time>2000</up-hold-time>
+            <flowctl>receive-enabled</flowctl>
+            <hold-up>disabled</hold-up>
+            <mru>9700</mru>
+            <inter-packet-gap>11</inter-packet-gap>
+            <mac-itf-mode>SGMII</mac-itf-mode>
+            <switch-speed>undo</switch-speed>
+            <los-trap-down-hold>enable</los-trap-down-hold>
+            <fall-flow-change>
+              <interval>5</interval>
+              <rx-threshold-ratio>99</rx-threshold-ratio>
+              <tx-threshold-ratio>99</tx-threshold-ratio>
+              <start-bandwidth-ratio>20</start-bandwidth-ratio>
+              <check-enable>true</check-enable>
+            </fall-flow-change>
+            <local-loopback-result>
+              <result>no-test</result>
+            </local-loopback-result>
+          </ethernet>
+        </port>
+      </ports>
+    </devm>
+  </data>
+</rpc-reply>
