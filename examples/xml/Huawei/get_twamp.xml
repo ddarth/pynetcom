@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rpc message-id="1018"  xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+<get>
+    <filter type="subtree">
+        <twamp-controller xmlns='urn:huawei:yang:huawei-twamp-controller'>
+        <client>
+            <sessions>
+                <session>
+                    <send-ip-addr/>
+                    <ref-ip-addr/>
+                    <description/>
+                    <session-detail>
+                        <state/>
+                    </session-detail>
+                    <twoway-delay-result>
+                        <average-delay/>
+                        <maximum-delay/>
+                        <minimum-delay/>
+                        <average-jitter/>
+                        <maximum-jitter/>
+                        <minimum-jitter/>
+                        <average-tx-jitter/>
+                        <maximum-tx-jitter/>
+                        <minimum-tx-jitter/>
+                        <average-rx-jitter/>
+                        <minimum-rx-jitter/>
+                    </twoway-delay-result>
+                    <twoway-loss-result>
+                        <average-loss/>
+                        <maximum-loss/>
+                        <minimum-loss/>
+                        <average-loss-ratio/>
+                        <maximum-loss-ratio/>
+                        <minimum-loss-ratio/>
+                        <average-rx-error/>
+                        <maximum-rx-error/>
+                        <minium-rx-error/>
+                        <average-rx-error-ratio/>
+                        <maximum-rx-error-ratio/>
+                        <minimum-rx-error-ratio/>
+                    </twoway-loss-result>
+                </session>
+            </sessions>
+        </client>
+        </twamp-controller>
+    </filter>
+</get>
+</rpc>

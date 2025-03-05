@@ -37,7 +37,7 @@ netconf_client = NetconfClient(host=NETCONF_HOST, port=NETCONF_PORT,
 # print(json.dumps(config, indent=4))
 
 print('#########################################################################')
-print('# Get port status.')
+print('# Get port status by GET request.')
 print('#########################################################################')
 
 request_filter = """
@@ -51,3 +51,14 @@ request_filter = """
 """
 status = netconf_client.get(request_filter)
 print(json.dumps(status['data']['ifm'], indent=4))
+
+print('#########################################################################')
+print('# Clear twamp statistics by RPC request.')
+print('#########################################################################')
+
+clear_filter = """
+    <twamp-controller:reset-statistics xmlns:twamp-controller="urn:huawei:yang:huawei-twamp-controller">
+    </twamp-controller:reset-statistics>
+"""
+status = netconf_client.rpc(clear_filter)
+print(json.dumps(status, indent=4))

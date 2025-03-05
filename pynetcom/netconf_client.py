@@ -62,6 +62,13 @@ class NetconfClient:
         response = self.session.get(("subtree", request_filter))
         # print(response)
         return xmltodict.parse(response.data_xml)
+    
+    def rpc(self, rpc_command):
+        self.logger.debug(f'Send request with filter: {rpc_command}')
+        rpc_request = etree.fromstring(rpc_command)
+        result = self.session.rpc(rpc_request).xml
+        return xmltodict.parse(result)
+
 
     def close(self):
         self.session.close()

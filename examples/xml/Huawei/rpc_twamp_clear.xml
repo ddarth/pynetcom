@@ -1,0 +1,3 @@
+<!-- Not worked. Need to add body -->
+    <twamp-controller:reset-statistics xmlns:twamp-controller="urn:huawei:yang:huawei-twamp-controller">
+    </twamp-controller:reset-statistics>
