@@ -8,3 +8,4 @@ dist/
 build/
 connect.log
 .vscode/*
+PYPI_UPLOAD.md
