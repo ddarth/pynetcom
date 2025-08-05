@@ -86,15 +86,7 @@ class EquipCLI(object):
 
 	def connect_ssh(self):
 		logging.info(""+self.host+": Connect by ssh...")
-		self.child = pexpect.spawn('cmd.exe', logfile=open('connect.log', 'wb'))
-		print('ZZZ')
-		self.child.expect(r'[\$>#]')
-		self.child.sendline('ls')
-		self.child.expect(r'[\$>#]')
-		print(self.child.before)
-		print('dddd')
-		self.child = pexpect.spawn(f'ssh {self.username}@{self.host}', logfile='connect.log')
-		print('qq')
+		self.child = pexpect.spawn(f'ssh {self.username}@{self.host}')
 		self.child.setwinsize(400,400)
 		if os_name == 'Windows':
 			print('windows except')
@@ -494,15 +486,15 @@ class HuaweiEquipCLI(EquipCLI):
 	def cli_display_ip_vpn_instance(self):
 		return self.exec_cli("display ip vpn-instance")
 	def cli_display_arp_vpn_instance_X(self, arg):
-		if self.sysVersion=="5.160 (NE40E&80E V600R008C10SPC300)":
+		if self.sys_version=="5.160 (NE40E&80E V600R008C10SPC300)":
 			return self.exec_cli("display arp vpn-instance "+arg+" all")
-		# elif self.sysVersion=="8.220 (NetEngine 8000 V800R022C00SPC600)":
+		# elif self.sys_version=="8.220 (NetEngine 8000 V800R022C00SPC600)":
 		#	 return self.exec_cli("display arp vpn-instance "+arg+" slot 15")
-		elif "(NetEngine 8000 V800R02" in self.sysVersion:
+		elif "(NetEngine 8000 V800R02" in self.sys_version:
 			return self.exec_cli("display arp vpn-instance "+arg+" slot 15")
-		elif "NE40E&80E V600R009" in self.sysVersion:
+		elif "NE40E&80E V600R009" in self.sys_version:
 			return self.exec_cli("display arp vpn-instance "+arg+" all")
-		elif "NE40E V800R021" in self.sysVersion or " (NE40E V800R022" in self.sysVersion:
+		elif "NE40E V800R02" in self.sys_version:
 			return self.exec_cli("display arp all | in "+arg)
 		else:
 			return self.exec_cli("display arp vpn-instance "+arg)
@@ -512,12 +504,12 @@ class HuaweiEquipCLI(EquipCLI):
 		return self.exec_cli("display mac-address")
 	def cli_display_vsi_services_all(self):
 		# IF Switch, then skip
-		if "5.110 (S5300 V200R001C00SPC300)" in self.sysVersion:
+		if "5.110 (S5300 V200R001C00SPC300)" in self.sys_version:
 			return ""
 		return self.exec_cli("display vsi services all")
 	def cli_display_ve_group(self):
 		# IF Switch, then skip
-		if "5.110 (S5300 V200R001C00SPC300)" in self.sysVersion:
+		if "5.110 (S5300 V200R001C00SPC300)" in self.sys_version:
 			return ""
 		return self.exec_cli("display virtual-ethernet ve-group")
 
