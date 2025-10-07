@@ -37,7 +37,7 @@ netconf_client = NetconfClient(host=NETCONF_HOST, port=NETCONF_PORT,
 # print(json.dumps(config, indent=4))
 
 print('#########################################################################')
-print('# Get port status by GET request.')
+print('# Huawei: Get port status by GET request.')
 print('#########################################################################')
 
 request_filter = """
@@ -53,7 +53,7 @@ status = netconf_client.get(request_filter)
 print(json.dumps(status['data']['ifm'], indent=4))
 
 print('#########################################################################')
-print('# Clear twamp statistics by RPC request.')
+print('# Huawei: Clear twamp statistics by RPC request.')
 print('#########################################################################')
 
 clear_filter = """
@@ -62,3 +62,7 @@ clear_filter = """
 """
 status = netconf_client.rpc(clear_filter)
 print(json.dumps(status, indent=4))
+
+print('#########################################################################')
+print('# Nokia: Get port status by GET request.')
+print('#########################################################################')
