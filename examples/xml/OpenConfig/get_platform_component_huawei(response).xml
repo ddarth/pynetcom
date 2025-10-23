@@ -1,0 +1,1660 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rpc-reply message-id="get-config-running" xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <data>
+    <components xmlns="http://openconfig.net/yang/platform">
+      <component>
+        <name>CHASSIS:1</name>
+        <config>
+          <name>CHASSIS:1</name>
+        </config>
+        <state>
+          <name>CHASSIS:1</name>
+          <type>CHASSIS</type>
+          <id>16777216</id>
+          <description>ATN910CGCHASSIS</description>
+          <mfg-name></mfg-name>
+          <mfg-date>0000-00-00</mfg-date>
+          <hardware-version>NA</hardware-version>
+          <firmware-version>NA</firmware-version>
+          <software-version>VRP (R) software, Version 8.220(CN), RELEASE 0001</software-version>
+          <serial-no></serial-no>
+          <oper-status>ACTIVE</oper-status>
+          <parent></parent>
+          <equipment-failure xmlns="http://openconfig.net/yang/alarms">false</equipment-failure>
+          <entity-id xmlns="http://openconfig.net/yang/platform/extension">16777216</entity-id>
+        </state>
+        <subcomponents>
+          <subcomponent>
+            <name>CARD:0/2</name>
+            <config>
+              <name>CARD:0/2</name>
+            </config>
+            <state>
+              <name>CARD:0/2</name>
+            </state>
+          </subcomponent>
+          <subcomponent>
+            <name>MPU:2</name>
+            <config>
+              <name>MPU:2</name>
+            </config>
+            <state>
+              <name>MPU:2</name>
+            </state>
+          </subcomponent>
+          <subcomponent>
+            <name>PWR:5</name>
+            <config>
+              <name>PWR:5</name>
+            </config>
+            <state>
+              <name>PWR:5</name>
+            </state>
+          </subcomponent>
+          <subcomponent>
+            <name>FAN:6</name>
+            <config>
+              <name>FAN:6</name>
+            </config>
+            <state>
+              <name>FAN:6</name>
+            </state>
+          </subcomponent>
+        </subcomponents>
+      </component>
+      <component>
+        <name>MPU:2</name>
+        <config>
+          <name>MPU:2</name>
+        </config>
+        <state>
+          <name>MPU:2</name>
+          <type>CONTROLLER_CARD</type>
+          <id>16908289</id>
+          <description>ATN 910C,ANG1CXPL,ATN 910C-G, DC Power, Port Capacity 16*10GE/GE/FE(o)+12*GE/FE(o)+4*GE/FE(e), Default 2*10GE+8*GE</description>
+          <mfg-name>Huawei</mfg-name>
+          <mfg-date>2022-08-06</mfg-date>
+          <hardware-version>ANG1CXPL REV C</hardware-version>
+          <firmware-version>EPLD1 ver V120, EPLD2 ver V130, FPGA ver V130</firmware-version>
+          <software-version>Version 8.220 RELEASE 0001, BootROM ver 08.66, BootLoad ver 08.66</software-version>
+          <serial-no>2102352YTQ10N8100439</serial-no>
+          <oper-status>ACTIVE</oper-status>
+          <parent>CHASSIS:1</parent>
+          <equipment-failure xmlns="http://openconfig.net/yang/alarms">false</equipment-failure>
+          <entity-id xmlns="http://openconfig.net/yang/platform/extension">16908289</entity-id>
+          <temperature>
+            <instant>40</instant>
+            <avg>40</avg>
+            <min>40</min>
+            <max>40</max>
+            <interval>300000000000</interval>
+            <min-time>1760388483623384320</min-time>
+            <max-time>1760388483623384320</max-time>
+            <alarm-status>false</alarm-status>
+          </temperature>
+          <memory>
+            <available>19291180621924664</available>
+            <utilized>7568058794828572</utilized>
+          </memory>
+        </state>
+        <subcomponents>
+          <subcomponent>
+            <name>PORT:Ethernet2/0/0</name>
+            <config>
+              <name>PORT:Ethernet2/0/0</name>
+            </config>
+            <state>
+              <name>PORT:Ethernet2/0/0</name>
+            </state>
+          </subcomponent>
+        </subcomponents>
+      </component>
+      <component>
+        <name>CARD:0/2</name>
+        <config>
+          <name>CARD:0/2</name>
+        </config>
+        <state>
+          <name>CARD:0/2</name>
+          <type>FRU</type>
+          <id>16908290</id>
+          <description>CARD ATN 910C-G</description>
+          <mfg-name></mfg-name>
+          <mfg-date>0000-00-00</mfg-date>
+          <hardware-version></hardware-version>
+          <firmware-version></firmware-version>
+          <software-version></software-version>
+          <serial-no></serial-no>
+          <oper-status>ACTIVE</oper-status>
+          <parent>CHASSIS:1</parent>
+          <equipment-failure xmlns="http://openconfig.net/yang/alarms">false</equipment-failure>
+          <entity-id xmlns="http://openconfig.net/yang/platform/extension">16908290</entity-id>
+        </state>
+        <subcomponents>
+          <subcomponent>
+            <name>PORT:GigabitEthernet0/2/0</name>
+            <config>
+              <name>PORT:GigabitEthernet0/2/0</name>
+            </config>
+            <state>
+              <name>PORT:GigabitEthernet0/2/0</name>
+            </state>
+          </subcomponent>
+          <subcomponent>
+            <name>PORT:GigabitEthernet0/2/1</name>
+            <config>
+              <name>PORT:GigabitEthernet0/2/1</name>
+            </config>
+            <state>
+              <name>PORT:GigabitEthernet0/2/1</name>
+            </state>
+          </subcomponent>
+          <subcomponent>
+            <name>PORT:GigabitEthernet0/2/2</name>
+            <config>
+              <name>PORT:GigabitEthernet0/2/2</name>
+            </config>
+            <state>
+              <name>PORT:GigabitEthernet0/2/2</name>
+            </state>
+          </subcomponent>
+          <subcomponent>
+            <name>PORT:GigabitEthernet0/2/3</name>
+            <config>
+              <name>PORT:GigabitEthernet0/2/3</name>
+            </config>
+            <state>
+              <name>PORT:GigabitEthernet0/2/3</name>
+            </state>
+          </subcomponent>
+          <subcomponent>
+            <name>PORT:GigabitEthernet0/2/4</name>
+            <config>
+              <name>PORT:GigabitEthernet0/2/4</name>
+            </config>
+            <state>
+              <name>PORT:GigabitEthernet0/2/4</name>
+            </state>
+          </subcomponent>
+          <subcomponent>
+            <name>PORT:GigabitEthernet0/2/5</name>
+            <config>
+              <name>PORT:GigabitEthernet0/2/5</name>
+            </config>
+            <state>
+              <name>PORT:GigabitEthernet0/2/5</name>
+            </state>
+          </subcomponent>
+          <subcomponent>
+            <name>PORT:GigabitEthernet0/2/6</name>
+            <config>
+              <name>PORT:GigabitEthernet0/2/6</name>
+            </config>
+            <state>
+              <name>PORT:GigabitEthernet0/2/6</name>
+            </state>
+          </subcomponent>
+          <subcomponent>
+            <name>PORT:GigabitEthernet0/2/7</name>
+            <config>
+              <name>PORT:GigabitEthernet0/2/7</name>
+            </config>
+            <state>
+              <name>PORT:GigabitEthernet0/2/7</name>
+            </state>
+          </subcomponent>
+          <subcomponent>
+            <name>PORT:GigabitEthernet0/2/8</name>
+            <config>
+              <name>PORT:GigabitEthernet0/2/8</name>
+            </config>
+            <state>
+              <name>PORT:GigabitEthernet0/2/8</name>
+            </state>
+          </subcomponent>
+          <subcomponent>
+            <name>PORT:GigabitEthernet0/2/9</name>
+            <config>
+              <name>PORT:GigabitEthernet0/2/9</name>
+            </config>
+            <state>
+              <name>PORT:GigabitEthernet0/2/9</name>
+            </state>
+          </subcomponent>
+          <subcomponent>
+            <name>PORT:GigabitEthernet0/2/10</name>
+            <config>
+              <name>PORT:GigabitEthernet0/2/10</name>
+            </config>
+            <state>
+              <name>PORT:GigabitEthernet0/2/10</name>
+            </state>
+          </subcomponent>
+          <subcomponent>
+            <name>PORT:GigabitEthernet0/2/11</name>
+            <config>
+              <name>PORT:GigabitEthernet0/2/11</name>
+            </config>
+            <state>
+              <name>PORT:GigabitEthernet0/2/11</name>
+            </state>
+          </subcomponent>
+          <subcomponent>
+            <name>PORT:GigabitEthernet0/2/12</name>
+            <config>
+              <name>PORT:GigabitEthernet0/2/12</name>
+            </config>
+            <state>
+              <name>PORT:GigabitEthernet0/2/12</name>
+            </state>
+          </subcomponent>
+          <subcomponent>
+            <name>PORT:GigabitEthernet0/2/13</name>
+            <config>
+              <name>PORT:GigabitEthernet0/2/13</name>
+            </config>
+            <state>
+              <name>PORT:GigabitEthernet0/2/13</name>
+            </state>
+          </subcomponent>
+          <subcomponent>
+            <name>PORT:GigabitEthernet0/2/14</name>
+            <config>
+              <name>PORT:GigabitEthernet0/2/14</name>
+            </config>
+            <state>
+              <name>PORT:GigabitEthernet0/2/14</name>
+            </state>
+          </subcomponent>
+          <subcomponent>
+            <name>PORT:GigabitEthernet0/2/15</name>
+            <config>
+              <name>PORT:GigabitEthernet0/2/15</name>
+            </config>
+            <state>
+              <name>PORT:GigabitEthernet0/2/15</name>
+            </state>
+          </subcomponent>
+          <subcomponent>
+            <name>PORT:GigabitEthernet0/2/16</name>
+            <config>
+              <name>PORT:GigabitEthernet0/2/16</name>
+            </config>
+            <state>
+              <name>PORT:GigabitEthernet0/2/16</name>
+            </state>
+          </subcomponent>
+          <subcomponent>
+            <name>PORT:GigabitEthernet0/2/17</name>
+            <config>
+              <name>PORT:GigabitEthernet0/2/17</name>
+            </config>
+            <state>
+              <name>PORT:GigabitEthernet0/2/17</name>
+            </state>
+          </subcomponent>
+          <subcomponent>
+            <name>PORT:GigabitEthernet0/2/18</name>
+            <config>
+              <name>PORT:GigabitEthernet0/2/18</name>
+            </config>
+            <state>
+              <name>PORT:GigabitEthernet0/2/18</name>
+            </state>
+          </subcomponent>
+          <subcomponent>
+            <name>PORT:GigabitEthernet0/2/19</name>
+            <config>
+              <name>PORT:GigabitEthernet0/2/19</name>
+            </config>
+            <state>
+              <name>PORT:GigabitEthernet0/2/19</name>
+            </state>
+          </subcomponent>
+          <subcomponent>
+            <name>PORT:GigabitEthernet0/2/20</name>
+            <config>
+              <name>PORT:GigabitEthernet0/2/20</name>
+            </config>
+            <state>
+              <name>PORT:GigabitEthernet0/2/20</name>
+            </state>
+          </subcomponent>
+          <subcomponent>
+            <name>PORT:GigabitEthernet0/2/21</name>
+            <config>
+              <name>PORT:GigabitEthernet0/2/21</name>
+            </config>
+            <state>
+              <name>PORT:GigabitEthernet0/2/21</name>
+            </state>
+          </subcomponent>
+          <subcomponent>
+            <name>PORT:GigabitEthernet0/2/22</name>
+            <config>
+              <name>PORT:GigabitEthernet0/2/22</name>
+            </config>
+            <state>
+              <name>PORT:GigabitEthernet0/2/22</name>
+            </state>
+          </subcomponent>
+          <subcomponent>
+            <name>PORT:GigabitEthernet0/2/23</name>
+            <config>
+              <name>PORT:GigabitEthernet0/2/23</name>
+            </config>
+            <state>
+              <name>PORT:GigabitEthernet0/2/23</name>
+            </state>
+          </subcomponent>
+          <subcomponent>
+            <name>PORT:GigabitEthernet0/2/24</name>
+            <config>
+              <name>PORT:GigabitEthernet0/2/24</name>
+            </config>
+            <state>
+              <name>PORT:GigabitEthernet0/2/24</name>
+            </state>
+          </subcomponent>
+          <subcomponent>
+            <name>PORT:GigabitEthernet0/2/25</name>
+            <config>
+              <name>PORT:GigabitEthernet0/2/25</name>
+            </config>
+            <state>
+              <name>PORT:GigabitEthernet0/2/25</name>
+            </state>
+          </subcomponent>
+          <subcomponent>
+            <name>PORT:GigabitEthernet0/2/26</name>
+            <config>
+              <name>PORT:GigabitEthernet0/2/26</name>
+            </config>
+            <state>
+              <name>PORT:GigabitEthernet0/2/26</name>
+            </state>
+          </subcomponent>
+          <subcomponent>
+            <name>PORT:GigabitEthernet0/2/27</name>
+            <config>
+              <name>PORT:GigabitEthernet0/2/27</name>
+            </config>
+            <state>
+              <name>PORT:GigabitEthernet0/2/27</name>
+            </state>
+          </subcomponent>
+          <subcomponent>
+            <name>PORT:GigabitEthernet0/2/28</name>
+            <config>
+              <name>PORT:GigabitEthernet0/2/28</name>
+            </config>
+            <state>
+              <name>PORT:GigabitEthernet0/2/28</name>
+            </state>
+          </subcomponent>
+          <subcomponent>
+            <name>PORT:GigabitEthernet0/2/29</name>
+            <config>
+              <name>PORT:GigabitEthernet0/2/29</name>
+            </config>
+            <state>
+              <name>PORT:GigabitEthernet0/2/29</name>
+            </state>
+          </subcomponent>
+          <subcomponent>
+            <name>PORT:GigabitEthernet0/2/30</name>
+            <config>
+              <name>PORT:GigabitEthernet0/2/30</name>
+            </config>
+            <state>
+              <name>PORT:GigabitEthernet0/2/30</name>
+            </state>
+          </subcomponent>
+          <subcomponent>
+            <name>PORT:GigabitEthernet0/2/31</name>
+            <config>
+              <name>PORT:GigabitEthernet0/2/31</name>
+            </config>
+            <state>
+              <name>PORT:GigabitEthernet0/2/31</name>
+            </state>
+          </subcomponent>
+        </subcomponents>
+      </component>
+      <component>
+        <name>PWR:5</name>
+        <config>
+          <name>PWR:5</name>
+        </config>
+        <state>
+          <name>PWR:5</name>
+          <type>POWER_SUPPLY</type>
+          <id>17104897</id>
+          <description>POWER 5</description>
+          <mfg-name></mfg-name>
+          <mfg-date>0000-00-00</mfg-date>
+          <hardware-version>NA</hardware-version>
+          <firmware-version>NA</firmware-version>
+          <software-version></software-version>
+          <serial-no></serial-no>
+          <oper-status>ACTIVE</oper-status>
+          <parent>CHASSIS:1</parent>
+          <equipment-failure xmlns="http://openconfig.net/yang/alarms">false</equipment-failure>
+          <entity-id xmlns="http://openconfig.net/yang/platform/extension">17104897</entity-id>
+        </state>
+        <power-supply>
+          <state>
+            <enabled xmlns="http://openconfig.net/yang/platform/psu">true</enabled>
+          </state>
+        </power-supply>
+      </component>
+      <component>
+        <name>FAN:6</name>
+        <config>
+          <name>FAN:6</name>
+        </config>
+        <state>
+          <name>FAN:6</name>
+          <type>FAN</type>
+          <id>17170433</id>
+          <description>FAN 6</description>
+          <mfg-name></mfg-name>
+          <mfg-date>0000-00-00</mfg-date>
+          <hardware-version></hardware-version>
+          <firmware-version></firmware-version>
+          <software-version></software-version>
+          <serial-no></serial-no>
+          <oper-status>ACTIVE</oper-status>
+          <parent>CHASSIS:1</parent>
+          <equipment-failure xmlns="http://openconfig.net/yang/alarms">false</equipment-failure>
+          <entity-id xmlns="http://openconfig.net/yang/platform/extension">17170433</entity-id>
+        </state>
+        <fan>
+          <state>
+            <speed xmlns="http://openconfig.net/yang/platform/fan">4800</speed>
+          </state>
+        </fan>
+      </component>
+      <component>
+        <name>PORT:Ethernet2/0/0</name>
+        <config>
+          <name>PORT:Ethernet2/0/0</name>
+        </config>
+        <state>
+          <name>PORT:Ethernet2/0/0</name>
+          <type>PORT</type>
+          <id>16916737</id>
+          <description>Ethernet0/0/0</description>
+          <mfg-name></mfg-name>
+          <mfg-date>0000-00-00</mfg-date>
+          <hardware-version>NA</hardware-version>
+          <firmware-version>NA</firmware-version>
+          <software-version></software-version>
+          <serial-no></serial-no>
+          <oper-status>INACTIVE</oper-status>
+          <parent>MPU:2</parent>
+          <equipment-failure xmlns="http://openconfig.net/yang/alarms">false</equipment-failure>
+          <entity-id xmlns="http://openconfig.net/yang/platform/extension">16916737</entity-id>
+        </state>
+      </component>
+      <component>
+        <name>PORT:GigabitEthernet0/2/0</name>
+        <config>
+          <name>PORT:GigabitEthernet0/2/0</name>
+        </config>
+        <state>
+          <name>PORT:GigabitEthernet0/2/0</name>
+          <type>PORT</type>
+          <id>16912641</id>
+          <description>10Gb/s-1310nm-LC-10km(0.009mm)</description>
+          <mfg-name>WTD             </mfg-name>
+          <mfg-date>2020-10-13</mfg-date>
+          <hardware-version>NA</hardware-version>
+          <firmware-version>NA</firmware-version>
+          <software-version></software-version>
+          <serial-no>HB204100030855  </serial-no>
+          <oper-status>ACTIVE</oper-status>
+          <parent>CARD:0/2</parent>
+          <equipment-failure xmlns="http://openconfig.net/yang/alarms">false</equipment-failure>
+          <entity-id xmlns="http://openconfig.net/yang/platform/extension">16912641</entity-id>
+        </state>
+      </component>
+      <component>
+        <name>PORT:GigabitEthernet0/2/1</name>
+        <config>
+          <name>PORT:GigabitEthernet0/2/1</name>
+        </config>
+        <state>
+          <name>PORT:GigabitEthernet0/2/1</name>
+          <type>PORT</type>
+          <id>16912642</id>
+          <description>1200Mb/s-1310nm-LC-10km(0.009mm)</description>
+          <mfg-name>Hisense         </mfg-name>
+          <mfg-date>2021-07-28</mfg-date>
+          <hardware-version>NA</hardware-version>
+          <firmware-version>NA</firmware-version>
+          <software-version></software-version>
+          <serial-no>V20B7059434     </serial-no>
+          <oper-status>ACTIVE</oper-status>
+          <parent>CARD:0/2</parent>
+          <equipment-failure xmlns="http://openconfig.net/yang/alarms">false</equipment-failure>
+          <entity-id xmlns="http://openconfig.net/yang/platform/extension">16912642</entity-id>
+        </state>
+      </component>
+      <component>
+        <name>PORT:GigabitEthernet0/2/2</name>
+        <config>
+          <name>PORT:GigabitEthernet0/2/2</name>
+        </config>
+        <state>
+          <name>PORT:GigabitEthernet0/2/2</name>
+          <type>PORT</type>
+          <id>16912643</id>
+          <description>1200Mb/s-1310nm-LC-10km(0.009mm)</description>
+          <mfg-name>EOPTOLINK INC   </mfg-name>
+          <mfg-date>2020-05-22</mfg-date>
+          <hardware-version>NA</hardware-version>
+          <firmware-version>NA</firmware-version>
+          <software-version></software-version>
+          <serial-no>SL4V169097      </serial-no>
+          <oper-status>ACTIVE</oper-status>
+          <parent>CARD:0/2</parent>
+          <equipment-failure xmlns="http://openconfig.net/yang/alarms">false</equipment-failure>
+          <entity-id xmlns="http://openconfig.net/yang/platform/extension">16912643</entity-id>
+        </state>
+      </component>
+      <component>
+        <name>PORT:GigabitEthernet0/2/3</name>
+        <config>
+          <name>PORT:GigabitEthernet0/2/3</name>
+        </config>
+        <state>
+          <name>PORT:GigabitEthernet0/2/3</name>
+          <type>PORT</type>
+          <id>16912644</id>
+          <description>GigabitEthernet0/2/3</description>
+          <mfg-name></mfg-name>
+          <mfg-date>0000-00-00</mfg-date>
+          <hardware-version>NA</hardware-version>
+          <firmware-version>NA</firmware-version>
+          <software-version></software-version>
+          <serial-no></serial-no>
+          <oper-status>INACTIVE</oper-status>
+          <parent>CARD:0/2</parent>
+          <equipment-failure xmlns="http://openconfig.net/yang/alarms">false</equipment-failure>
+          <entity-id xmlns="http://openconfig.net/yang/platform/extension">16912644</entity-id>
+        </state>
+      </component>
+      <component>
+        <name>PORT:GigabitEthernet0/2/4</name>
+        <config>
+          <name>PORT:GigabitEthernet0/2/4</name>
+        </config>
+        <state>
+          <name>PORT:GigabitEthernet0/2/4</name>
+          <type>PORT</type>
+          <id>16912645</id>
+          <description>GigabitEthernet0/2/4</description>
+          <mfg-name></mfg-name>
+          <mfg-date>0000-00-00</mfg-date>
+          <hardware-version>NA</hardware-version>
+          <firmware-version>NA</firmware-version>
+          <software-version></software-version>
+          <serial-no></serial-no>
+          <oper-status>INACTIVE</oper-status>
+          <parent>CARD:0/2</parent>
+          <equipment-failure xmlns="http://openconfig.net/yang/alarms">false</equipment-failure>
+          <entity-id xmlns="http://openconfig.net/yang/platform/extension">16912645</entity-id>
+        </state>
+      </component>
+      <component>
+        <name>PORT:GigabitEthernet0/2/5</name>
+        <config>
+          <name>PORT:GigabitEthernet0/2/5</name>
+        </config>
+        <state>
+          <name>PORT:GigabitEthernet0/2/5</name>
+          <type>PORT</type>
+          <id>16912646</id>
+          <description>GigabitEthernet0/2/5</description>
+          <mfg-name></mfg-name>
+          <mfg-date>0000-00-00</mfg-date>
+          <hardware-version>NA</hardware-version>
+          <firmware-version>NA</firmware-version>
+          <software-version></software-version>
+          <serial-no></serial-no>
+          <oper-status>INACTIVE</oper-status>
+          <parent>CARD:0/2</parent>
+          <equipment-failure xmlns="http://openconfig.net/yang/alarms">false</equipment-failure>
+          <entity-id xmlns="http://openconfig.net/yang/platform/extension">16912646</entity-id>
+        </state>
+      </component>
+      <component>
+        <name>PORT:GigabitEthernet0/2/6</name>
+        <config>
+          <name>PORT:GigabitEthernet0/2/6</name>
+        </config>
+        <state>
+          <name>PORT:GigabitEthernet0/2/6</name>
+          <type>PORT</type>
+          <id>16912647</id>
+          <description>GigabitEthernet0/2/6</description>
+          <mfg-name></mfg-name>
+          <mfg-date>0000-00-00</mfg-date>
+          <hardware-version>NA</hardware-version>
+          <firmware-version>NA</firmware-version>
+          <software-version></software-version>
+          <serial-no></serial-no>
+          <oper-status>INACTIVE</oper-status>
+          <parent>CARD:0/2</parent>
+          <equipment-failure xmlns="http://openconfig.net/yang/alarms">false</equipment-failure>
+          <entity-id xmlns="http://openconfig.net/yang/platform/extension">16912647</entity-id>
+        </state>
+      </component>
+      <component>
+        <name>PORT:GigabitEthernet0/2/7</name>
+        <config>
+          <name>PORT:GigabitEthernet0/2/7</name>
+        </config>
+        <state>
+          <name>PORT:GigabitEthernet0/2/7</name>
+          <type>PORT</type>
+          <id>16912648</id>
+          <description>GigabitEthernet0/2/7</description>
+          <mfg-name></mfg-name>
+          <mfg-date>0000-00-00</mfg-date>
+          <hardware-version>NA</hardware-version>
+          <firmware-version>NA</firmware-version>
+          <software-version></software-version>
+          <serial-no></serial-no>
+          <oper-status>INACTIVE</oper-status>
+          <parent>CARD:0/2</parent>
+          <equipment-failure xmlns="http://openconfig.net/yang/alarms">false</equipment-failure>
+          <entity-id xmlns="http://openconfig.net/yang/platform/extension">16912648</entity-id>
+        </state>
+      </component>
+      <component>
+        <name>PORT:GigabitEthernet0/2/8</name>
+        <config>
+          <name>PORT:GigabitEthernet0/2/8</name>
+        </config>
+        <state>
+          <name>PORT:GigabitEthernet0/2/8</name>
+          <type>PORT</type>
+          <id>16912649</id>
+          <description>GigabitEthernet0/2/8</description>
+          <mfg-name></mfg-name>
+          <mfg-date>0000-00-00</mfg-date>
+          <hardware-version>NA</hardware-version>
+          <firmware-version>NA</firmware-version>
+          <software-version></software-version>
+          <serial-no></serial-no>
+          <oper-status>INACTIVE</oper-status>
+          <parent>CARD:0/2</parent>
+          <equipment-failure xmlns="http://openconfig.net/yang/alarms">false</equipment-failure>
+          <entity-id xmlns="http://openconfig.net/yang/platform/extension">16912649</entity-id>
+        </state>
+      </component>
+      <component>
+        <name>PORT:GigabitEthernet0/2/9</name>
+        <config>
+          <name>PORT:GigabitEthernet0/2/9</name>
+        </config>
+        <state>
+          <name>PORT:GigabitEthernet0/2/9</name>
+          <type>PORT</type>
+          <id>16912650</id>
+          <description>GigabitEthernet0/2/9</description>
+          <mfg-name></mfg-name>
+          <mfg-date>0000-00-00</mfg-date>
+          <hardware-version>NA</hardware-version>
+          <firmware-version>NA</firmware-version>
+          <software-version></software-version>
+          <serial-no></serial-no>
+          <oper-status>INACTIVE</oper-status>
+          <parent>CARD:0/2</parent>
+          <equipment-failure xmlns="http://openconfig.net/yang/alarms">false</equipment-failure>
+          <entity-id xmlns="http://openconfig.net/yang/platform/extension">16912650</entity-id>
+        </state>
+      </component>
+      <component>
+        <name>PORT:GigabitEthernet0/2/10</name>
+        <config>
+          <name>PORT:GigabitEthernet0/2/10</name>
+        </config>
+        <state>
+          <name>PORT:GigabitEthernet0/2/10</name>
+          <type>PORT</type>
+          <id>16912651</id>
+          <description>1200Mb/s-1310nm-LC-10km(0.009mm)</description>
+          <mfg-name>EOPTOLINK INC   </mfg-name>
+          <mfg-date>2020-05-22</mfg-date>
+          <hardware-version>NA</hardware-version>
+          <firmware-version>NA</firmware-version>
+          <software-version></software-version>
+          <serial-no>SL4V169094      </serial-no>
+          <oper-status>ACTIVE</oper-status>
+          <parent>CARD:0/2</parent>
+          <equipment-failure xmlns="http://openconfig.net/yang/alarms">false</equipment-failure>
+          <entity-id xmlns="http://openconfig.net/yang/platform/extension">16912651</entity-id>
+        </state>
+      </component>
+      <component>
+        <name>PORT:GigabitEthernet0/2/11</name>
+        <config>
+          <name>PORT:GigabitEthernet0/2/11</name>
+        </config>
+        <state>
+          <name>PORT:GigabitEthernet0/2/11</name>
+          <type>PORT</type>
+          <id>16912652</id>
+          <description>GigabitEthernet0/2/11</description>
+          <mfg-name></mfg-name>
+          <mfg-date>0000-00-00</mfg-date>
+          <hardware-version>NA</hardware-version>
+          <firmware-version>NA</firmware-version>
+          <software-version></software-version>
+          <serial-no></serial-no>
+          <oper-status>INACTIVE</oper-status>
+          <parent>CARD:0/2</parent>
+          <equipment-failure xmlns="http://openconfig.net/yang/alarms">true</equipment-failure>
+          <entity-id xmlns="http://openconfig.net/yang/platform/extension">16912652</entity-id>
+        </state>
+      </component>
+      <component>
+        <name>PORT:GigabitEthernet0/2/12</name>
+        <config>
+          <name>PORT:GigabitEthernet0/2/12</name>
+        </config>
+        <state>
+          <name>PORT:GigabitEthernet0/2/12</name>
+          <type>PORT</type>
+          <id>16912653</id>
+          <description>1300Mb/s-1310nm-LC-10km(0.009mm)</description>
+          <mfg-name>HG GENUINE      </mfg-name>
+          <mfg-date>2021-05-19</mfg-date>
+          <hardware-version>NA</hardware-version>
+          <firmware-version>NA</firmware-version>
+          <software-version></software-version>
+          <serial-no>2000043041225   </serial-no>
+          <oper-status>ACTIVE</oper-status>
+          <parent>CARD:0/2</parent>
+          <equipment-failure xmlns="http://openconfig.net/yang/alarms">false</equipment-failure>
+          <entity-id xmlns="http://openconfig.net/yang/platform/extension">16912653</entity-id>
+        </state>
+      </component>
+      <component>
+        <name>PORT:GigabitEthernet0/2/13</name>
+        <config>
+          <name>PORT:GigabitEthernet0/2/13</name>
+        </config>
+        <state>
+          <name>PORT:GigabitEthernet0/2/13</name>
+          <type>PORT</type>
+          <id>16912654</id>
+          <description>1300Mb/s-1310nm-LC-10km(0.009mm)</description>
+          <mfg-name>HG GENUINE      </mfg-name>
+          <mfg-date>2021-05-19</mfg-date>
+          <hardware-version>NA</hardware-version>
+          <firmware-version>NA</firmware-version>
+          <software-version></software-version>
+          <serial-no>2000043041240   </serial-no>
+          <oper-status>ACTIVE</oper-status>
+          <parent>CARD:0/2</parent>
+          <equipment-failure xmlns="http://openconfig.net/yang/alarms">false</equipment-failure>
+          <entity-id xmlns="http://openconfig.net/yang/platform/extension">16912654</entity-id>
+        </state>
+      </component>
+      <component>
+        <name>PORT:GigabitEthernet0/2/14</name>
+        <config>
+          <name>PORT:GigabitEthernet0/2/14</name>
+        </config>
+        <state>
+          <name>PORT:GigabitEthernet0/2/14</name>
+          <type>PORT</type>
+          <id>16912655</id>
+          <description>1300Mb/s-1310nm-LC-10km(0.009mm)</description>
+          <mfg-name>HG GENUINE      </mfg-name>
+          <mfg-date>2021-05-19</mfg-date>
+          <hardware-version>NA</hardware-version>
+          <firmware-version>NA</firmware-version>
+          <software-version></software-version>
+          <serial-no>2000043041222   </serial-no>
+          <oper-status>ACTIVE</oper-status>
+          <parent>CARD:0/2</parent>
+          <equipment-failure xmlns="http://openconfig.net/yang/alarms">false</equipment-failure>
+          <entity-id xmlns="http://openconfig.net/yang/platform/extension">16912655</entity-id>
+        </state>
+      </component>
+      <component>
+        <name>PORT:GigabitEthernet0/2/15</name>
+        <config>
+          <name>PORT:GigabitEthernet0/2/15</name>
+        </config>
+        <state>
+          <name>PORT:GigabitEthernet0/2/15</name>
+          <type>PORT</type>
+          <id>16912656</id>
+          <description>GigabitEthernet0/2/15</description>
+          <mfg-name></mfg-name>
+          <mfg-date>0000-00-00</mfg-date>
+          <hardware-version>NA</hardware-version>
+          <firmware-version>NA</firmware-version>
+          <software-version></software-version>
+          <serial-no></serial-no>
+          <oper-status>INACTIVE</oper-status>
+          <parent>CARD:0/2</parent>
+          <equipment-failure xmlns="http://openconfig.net/yang/alarms">false</equipment-failure>
+          <entity-id xmlns="http://openconfig.net/yang/platform/extension">16912656</entity-id>
+        </state>
+      </component>
+      <component>
+        <name>PORT:GigabitEthernet0/2/16</name>
+        <config>
+          <name>PORT:GigabitEthernet0/2/16</name>
+        </config>
+        <state>
+          <name>PORT:GigabitEthernet0/2/16</name>
+          <type>PORT</type>
+          <id>16912657</id>
+          <description>GigabitEthernet0/2/16</description>
+          <mfg-name></mfg-name>
+          <mfg-date>0000-00-00</mfg-date>
+          <hardware-version>NA</hardware-version>
+          <firmware-version>NA</firmware-version>
+          <software-version></software-version>
+          <serial-no></serial-no>
+          <oper-status>INACTIVE</oper-status>
+          <parent>CARD:0/2</parent>
+          <equipment-failure xmlns="http://openconfig.net/yang/alarms">false</equipment-failure>
+          <entity-id xmlns="http://openconfig.net/yang/platform/extension">16912657</entity-id>
+        </state>
+      </component>
+      <component>
+        <name>PORT:GigabitEthernet0/2/17</name>
+        <config>
+          <name>PORT:GigabitEthernet0/2/17</name>
+        </config>
+        <state>
+          <name>PORT:GigabitEthernet0/2/17</name>
+          <type>PORT</type>
+          <id>16912658</id>
+          <description>GigabitEthernet0/2/17</description>
+          <mfg-name></mfg-name>
+          <mfg-date>0000-00-00</mfg-date>
+          <hardware-version>NA</hardware-version>
+          <firmware-version>NA</firmware-version>
+          <software-version></software-version>
+          <serial-no></serial-no>
+          <oper-status>INACTIVE</oper-status>
+          <parent>CARD:0/2</parent>
+          <equipment-failure xmlns="http://openconfig.net/yang/alarms">false</equipment-failure>
+          <entity-id xmlns="http://openconfig.net/yang/platform/extension">16912658</entity-id>
+        </state>
+      </component>
+      <component>
+        <name>PORT:GigabitEthernet0/2/18</name>
+        <config>
+          <name>PORT:GigabitEthernet0/2/18</name>
+        </config>
+        <state>
+          <name>PORT:GigabitEthernet0/2/18</name>
+          <type>PORT</type>
+          <id>16912659</id>
+          <description>GigabitEthernet0/2/18</description>
+          <mfg-name></mfg-name>
+          <mfg-date>0000-00-00</mfg-date>
+          <hardware-version>NA</hardware-version>
+          <firmware-version>NA</firmware-version>
+          <software-version></software-version>
+          <serial-no></serial-no>
+          <oper-status>INACTIVE</oper-status>
+          <parent>CARD:0/2</parent>
+          <equipment-failure xmlns="http://openconfig.net/yang/alarms">false</equipment-failure>
+          <entity-id xmlns="http://openconfig.net/yang/platform/extension">16912659</entity-id>
+        </state>
+      </component>
+      <component>
+        <name>PORT:GigabitEthernet0/2/19</name>
+        <config>
+          <name>PORT:GigabitEthernet0/2/19</name>
+        </config>
+        <state>
+          <name>PORT:GigabitEthernet0/2/19</name>
+          <type>PORT</type>
+          <id>16912660</id>
+          <description>GigabitEthernet0/2/19</description>
+          <mfg-name></mfg-name>
+          <mfg-date>0000-00-00</mfg-date>
+          <hardware-version>NA</hardware-version>
+          <firmware-version>NA</firmware-version>
+          <software-version></software-version>
+          <serial-no></serial-no>
+          <oper-status>INACTIVE</oper-status>
+          <parent>CARD:0/2</parent>
+          <equipment-failure xmlns="http://openconfig.net/yang/alarms">false</equipment-failure>
+          <entity-id xmlns="http://openconfig.net/yang/platform/extension">16912660</entity-id>
+        </state>
+      </component>
+      <component>
+        <name>PORT:GigabitEthernet0/2/20</name>
+        <config>
+          <name>PORT:GigabitEthernet0/2/20</name>
+        </config>
+        <state>
+          <name>PORT:GigabitEthernet0/2/20</name>
+          <type>PORT</type>
+          <id>16912661</id>
+          <description>GigabitEthernet0/2/20</description>
+          <mfg-name></mfg-name>
+          <mfg-date>0000-00-00</mfg-date>
+          <hardware-version>NA</hardware-version>
+          <firmware-version>NA</firmware-version>
+          <software-version></software-version>
+          <serial-no></serial-no>
+          <oper-status>INACTIVE</oper-status>
+          <parent>CARD:0/2</parent>
+          <equipment-failure xmlns="http://openconfig.net/yang/alarms">false</equipment-failure>
+          <entity-id xmlns="http://openconfig.net/yang/platform/extension">16912661</entity-id>
+        </state>
+      </component>
+      <component>
+        <name>PORT:GigabitEthernet0/2/21</name>
+        <config>
+          <name>PORT:GigabitEthernet0/2/21</name>
+        </config>
+        <state>
+          <name>PORT:GigabitEthernet0/2/21</name>
+          <type>PORT</type>
+          <id>16912662</id>
+          <description>GigabitEthernet0/2/21</description>
+          <mfg-name></mfg-name>
+          <mfg-date>0000-00-00</mfg-date>
+          <hardware-version>NA</hardware-version>
+          <firmware-version>NA</firmware-version>
+          <software-version></software-version>
+          <serial-no></serial-no>
+          <oper-status>INACTIVE</oper-status>
+          <parent>CARD:0/2</parent>
+          <equipment-failure xmlns="http://openconfig.net/yang/alarms">false</equipment-failure>
+          <entity-id xmlns="http://openconfig.net/yang/platform/extension">16912662</entity-id>
+        </state>
+      </component>
+      <component>
+        <name>PORT:GigabitEthernet0/2/22</name>
+        <config>
+          <name>PORT:GigabitEthernet0/2/22</name>
+        </config>
+        <state>
+          <name>PORT:GigabitEthernet0/2/22</name>
+          <type>PORT</type>
+          <id>16912663</id>
+          <description>GigabitEthernet0/2/22</description>
+          <mfg-name></mfg-name>
+          <mfg-date>0000-00-00</mfg-date>
+          <hardware-version>NA</hardware-version>
+          <firmware-version>NA</firmware-version>
+          <software-version></software-version>
+          <serial-no></serial-no>
+          <oper-status>INACTIVE</oper-status>
+          <parent>CARD:0/2</parent>
+          <equipment-failure xmlns="http://openconfig.net/yang/alarms">false</equipment-failure>
+          <entity-id xmlns="http://openconfig.net/yang/platform/extension">16912663</entity-id>
+        </state>
+      </component>
+      <component>
+        <name>PORT:GigabitEthernet0/2/23</name>
+        <config>
+          <name>PORT:GigabitEthernet0/2/23</name>
+        </config>
+        <state>
+          <name>PORT:GigabitEthernet0/2/23</name>
+          <type>PORT</type>
+          <id>16912664</id>
+          <description>GigabitEthernet0/2/23</description>
+          <mfg-name></mfg-name>
+          <mfg-date>0000-00-00</mfg-date>
+          <hardware-version>NA</hardware-version>
+          <firmware-version>NA</firmware-version>
+          <software-version></software-version>
+          <serial-no></serial-no>
+          <oper-status>INACTIVE</oper-status>
+          <parent>CARD:0/2</parent>
+          <equipment-failure xmlns="http://openconfig.net/yang/alarms">false</equipment-failure>
+          <entity-id xmlns="http://openconfig.net/yang/platform/extension">16912664</entity-id>
+        </state>
+      </component>
+      <component>
+        <name>PORT:GigabitEthernet0/2/24</name>
+        <config>
+          <name>PORT:GigabitEthernet0/2/24</name>
+        </config>
+        <state>
+          <name>PORT:GigabitEthernet0/2/24</name>
+          <type>PORT</type>
+          <id>16912665</id>
+          <description>GigabitEthernet0/2/24</description>
+          <mfg-name></mfg-name>
+          <mfg-date>0000-00-00</mfg-date>
+          <hardware-version>NA</hardware-version>
+          <firmware-version>NA</firmware-version>
+          <software-version></software-version>
+          <serial-no></serial-no>
+          <oper-status>INACTIVE</oper-status>
+          <parent>CARD:0/2</parent>
+          <equipment-failure xmlns="http://openconfig.net/yang/alarms">false</equipment-failure>
+          <entity-id xmlns="http://openconfig.net/yang/platform/extension">16912665</entity-id>
+        </state>
+      </component>
+      <component>
+        <name>PORT:GigabitEthernet0/2/25</name>
+        <config>
+          <name>PORT:GigabitEthernet0/2/25</name>
+        </config>
+        <state>
+          <name>PORT:GigabitEthernet0/2/25</name>
+          <type>PORT</type>
+          <id>16912666</id>
+          <description>GigabitEthernet0/2/25</description>
+          <mfg-name></mfg-name>
+          <mfg-date>0000-00-00</mfg-date>
+          <hardware-version>NA</hardware-version>
+          <firmware-version>NA</firmware-version>
+          <software-version></software-version>
+          <serial-no></serial-no>
+          <oper-status>INACTIVE</oper-status>
+          <parent>CARD:0/2</parent>
+          <equipment-failure xmlns="http://openconfig.net/yang/alarms">false</equipment-failure>
+          <entity-id xmlns="http://openconfig.net/yang/platform/extension">16912666</entity-id>
+        </state>
+      </component>
+      <component>
+        <name>PORT:GigabitEthernet0/2/26</name>
+        <config>
+          <name>PORT:GigabitEthernet0/2/26</name>
+        </config>
+        <state>
+          <name>PORT:GigabitEthernet0/2/26</name>
+          <type>PORT</type>
+          <id>16912667</id>
+          <description>GigabitEthernet0/2/26</description>
+          <mfg-name></mfg-name>
+          <mfg-date>0000-00-00</mfg-date>
+          <hardware-version>NA</hardware-version>
+          <firmware-version>NA</firmware-version>
+          <software-version></software-version>
+          <serial-no></serial-no>
+          <oper-status>INACTIVE</oper-status>
+          <parent>CARD:0/2</parent>
+          <equipment-failure xmlns="http://openconfig.net/yang/alarms">false</equipment-failure>
+          <entity-id xmlns="http://openconfig.net/yang/platform/extension">16912667</entity-id>
+        </state>
+      </component>
+      <component>
+        <name>PORT:GigabitEthernet0/2/27</name>
+        <config>
+          <name>PORT:GigabitEthernet0/2/27</name>
+        </config>
+        <state>
+          <name>PORT:GigabitEthernet0/2/27</name>
+          <type>PORT</type>
+          <id>16912668</id>
+          <description>1300Mb/s-RJ45-100m(m)</description>
+          <mfg-name>WTD             </mfg-name>
+          <mfg-date>2021-12-22</mfg-date>
+          <hardware-version>NA</hardware-version>
+          <firmware-version>NA</firmware-version>
+          <software-version></software-version>
+          <serial-no>HR215200390065  </serial-no>
+          <oper-status>ACTIVE</oper-status>
+          <parent>CARD:0/2</parent>
+          <equipment-failure xmlns="http://openconfig.net/yang/alarms">false</equipment-failure>
+          <entity-id xmlns="http://openconfig.net/yang/platform/extension">16912668</entity-id>
+        </state>
+      </component>
+      <component>
+        <name>PORT:GigabitEthernet0/2/28</name>
+        <config>
+          <name>PORT:GigabitEthernet0/2/28</name>
+        </config>
+        <state>
+          <name>PORT:GigabitEthernet0/2/28</name>
+          <type>PORT</type>
+          <id>16912669</id>
+          <description>GigabitEthernet0/2/28</description>
+          <mfg-name></mfg-name>
+          <mfg-date>0000-00-00</mfg-date>
+          <hardware-version>NA</hardware-version>
+          <firmware-version>NA</firmware-version>
+          <software-version></software-version>
+          <serial-no></serial-no>
+          <oper-status>ACTIVE</oper-status>
+          <parent>CARD:0/2</parent>
+          <equipment-failure xmlns="http://openconfig.net/yang/alarms">false</equipment-failure>
+          <entity-id xmlns="http://openconfig.net/yang/platform/extension">16912669</entity-id>
+        </state>
+      </component>
+      <component>
+        <name>PORT:GigabitEthernet0/2/29</name>
+        <config>
+          <name>PORT:GigabitEthernet0/2/29</name>
+        </config>
+        <state>
+          <name>PORT:GigabitEthernet0/2/29</name>
+          <type>PORT</type>
+          <id>16912670</id>
+          <description>GigabitEthernet0/2/29</description>
+          <mfg-name></mfg-name>
+          <mfg-date>0000-00-00</mfg-date>
+          <hardware-version>NA</hardware-version>
+          <firmware-version>NA</firmware-version>
+          <software-version></software-version>
+          <serial-no></serial-no>
+          <oper-status>ACTIVE</oper-status>
+          <parent>CARD:0/2</parent>
+          <equipment-failure xmlns="http://openconfig.net/yang/alarms">false</equipment-failure>
+          <entity-id xmlns="http://openconfig.net/yang/platform/extension">16912670</entity-id>
+        </state>
+      </component>
+      <component>
+        <name>PORT:GigabitEthernet0/2/30</name>
+        <config>
+          <name>PORT:GigabitEthernet0/2/30</name>
+        </config>
+        <state>
+          <name>PORT:GigabitEthernet0/2/30</name>
+          <type>PORT</type>
+          <id>16912671</id>
+          <description>GigabitEthernet0/2/30</description>
+          <mfg-name></mfg-name>
+          <mfg-date>0000-00-00</mfg-date>
+          <hardware-version>NA</hardware-version>
+          <firmware-version>NA</firmware-version>
+          <software-version></software-version>
+          <serial-no></serial-no>
+          <oper-status>ACTIVE</oper-status>
+          <parent>CARD:0/2</parent>
+          <equipment-failure xmlns="http://openconfig.net/yang/alarms">false</equipment-failure>
+          <entity-id xmlns="http://openconfig.net/yang/platform/extension">16912671</entity-id>
+        </state>
+      </component>
+      <component>
+        <name>PORT:GigabitEthernet0/2/31</name>
+        <config>
+          <name>PORT:GigabitEthernet0/2/31</name>
+        </config>
+        <state>
+          <name>PORT:GigabitEthernet0/2/31</name>
+          <type>PORT</type>
+          <id>16912672</id>
+          <description>GigabitEthernet0/2/31</description>
+          <mfg-name></mfg-name>
+          <mfg-date>0000-00-00</mfg-date>
+          <hardware-version>NA</hardware-version>
+          <firmware-version>NA</firmware-version>
+          <software-version></software-version>
+          <serial-no></serial-no>
+          <oper-status>ACTIVE</oper-status>
+          <parent>CARD:0/2</parent>
+          <equipment-failure xmlns="http://openconfig.net/yang/alarms">false</equipment-failure>
+          <entity-id xmlns="http://openconfig.net/yang/platform/extension">16912672</entity-id>
+        </state>
+      </component>
+      <component>
+        <name>TRANSCEIVER:GigabitEthernet0/2/0</name>
+        <config>
+          <name>TRANSCEIVER:GigabitEthernet0/2/0</name>
+        </config>
+        <transceiver xmlns="http://openconfig.net/yang/platform/transceiver">
+          <state>
+            <enabled>true</enabled>
+            <present>PRESENT</present>
+            <form-factor xmlns:oc-opt-types="http://openconfig.net/yang/transport-types">oc-opt-types:SFP_PLUS</form-factor>
+            <connector-type xmlns:oc-opt-types="http://openconfig.net/yang/transport-types">oc-opt-types:LC_CONNECTOR</connector-type>
+            <vendor>WTD</vendor>
+            <ethernet-pmd xmlns:oc-opt-types="http://openconfig.net/yang/transport-types">oc-opt-types:ETH_10GBASE_LR</ethernet-pmd>
+            <serial-no>HB204100030855</serial-no>
+            <fault-condition>false</fault-condition>
+            <output-power>
+              <instant>-175</instant>
+            </output-power>
+            <input-power>
+              <instant>-840</instant>
+            </input-power>
+            <laser-bias-current>
+              <instant>4232</instant>
+            </laser-bias-current>
+          </state>
+        </transceiver>
+      </component>
+      <component>
+        <name>TRANSCEIVER:GigabitEthernet0/2/1</name>
+        <config>
+          <name>TRANSCEIVER:GigabitEthernet0/2/1</name>
+        </config>
+        <transceiver xmlns="http://openconfig.net/yang/platform/transceiver">
+          <state>
+            <enabled>true</enabled>
+            <present>PRESENT</present>
+            <form-factor xmlns:oc-opt-types="http://openconfig.net/yang/transport-types">oc-opt-types:SFP</form-factor>
+            <connector-type xmlns:oc-opt-types="http://openconfig.net/yang/transport-types">oc-opt-types:LC_CONNECTOR</connector-type>
+            <vendor>Hisense</vendor>
+            <ethernet-pmd xmlns:oc-opt-types="http://openconfig.net/yang/transport-types">oc-opt-types:ETH_UNDEFINED</ethernet-pmd>
+            <serial-no>V20B7059434</serial-no>
+            <fault-condition>false</fault-condition>
+            <output-power>
+              <instant>-594</instant>
+            </output-power>
+            <input-power>
+              <instant>-899</instant>
+            </input-power>
+            <laser-bias-current>
+              <instant>0</instant>
+            </laser-bias-current>
+          </state>
+        </transceiver>
+      </component>
+      <component>
+        <name>TRANSCEIVER:GigabitEthernet0/2/2</name>
+        <config>
+          <name>TRANSCEIVER:GigabitEthernet0/2/2</name>
+        </config>
+        <transceiver xmlns="http://openconfig.net/yang/platform/transceiver">
+          <state>
+            <enabled>true</enabled>
+            <present>PRESENT</present>
+            <form-factor xmlns:oc-opt-types="http://openconfig.net/yang/transport-types">oc-opt-types:SFP</form-factor>
+            <connector-type xmlns:oc-opt-types="http://openconfig.net/yang/transport-types">oc-opt-types:LC_CONNECTOR</connector-type>
+            <vendor>EOPTOLINK INC</vendor>
+            <ethernet-pmd xmlns:oc-opt-types="http://openconfig.net/yang/transport-types">oc-opt-types:ETH_UNDEFINED</ethernet-pmd>
+            <serial-no>SL4V169097</serial-no>
+            <fault-condition>false</fault-condition>
+            <output-power>
+              <instant>-623</instant>
+            </output-power>
+            <input-power>
+              <instant>-854</instant>
+            </input-power>
+            <laser-bias-current>
+              <instant>0</instant>
+            </laser-bias-current>
+          </state>
+        </transceiver>
+      </component>
+      <component>
+        <name>TRANSCEIVER:GigabitEthernet0/2/3</name>
+        <config>
+          <name>TRANSCEIVER:GigabitEthernet0/2/3</name>
+        </config>
+        <transceiver xmlns="http://openconfig.net/yang/platform/transceiver">
+          <state>
+            <present>NOT_PRESENT</present>
+            <form-factor xmlns:oc-opt-types="http://openconfig.net/yang/transport-types">oc-opt-types:OTHER</form-factor>
+          </state>
+        </transceiver>
+      </component>
+      <component>
+        <name>TRANSCEIVER:GigabitEthernet0/2/4</name>
+        <config>
+          <name>TRANSCEIVER:GigabitEthernet0/2/4</name>
+        </config>
+        <transceiver xmlns="http://openconfig.net/yang/platform/transceiver">
+          <state>
+            <present>NOT_PRESENT</present>
+            <form-factor xmlns:oc-opt-types="http://openconfig.net/yang/transport-types">oc-opt-types:OTHER</form-factor>
+          </state>
+        </transceiver>
+      </component>
+      <component>
+        <name>TRANSCEIVER:GigabitEthernet0/2/5</name>
+        <config>
+          <name>TRANSCEIVER:GigabitEthernet0/2/5</name>
+        </config>
+        <transceiver xmlns="http://openconfig.net/yang/platform/transceiver">
+          <state>
+            <present>NOT_PRESENT</present>
+            <form-factor xmlns:oc-opt-types="http://openconfig.net/yang/transport-types">oc-opt-types:OTHER</form-factor>
+          </state>
+        </transceiver>
+      </component>
+      <component>
+        <name>TRANSCEIVER:GigabitEthernet0/2/6</name>
+        <config>
+          <name>TRANSCEIVER:GigabitEthernet0/2/6</name>
+        </config>
+        <transceiver xmlns="http://openconfig.net/yang/platform/transceiver">
+          <state>
+            <present>NOT_PRESENT</present>
+            <form-factor xmlns:oc-opt-types="http://openconfig.net/yang/transport-types">oc-opt-types:OTHER</form-factor>
+          </state>
+        </transceiver>
+      </component>
+      <component>
+        <name>TRANSCEIVER:GigabitEthernet0/2/7</name>
+        <config>
+          <name>TRANSCEIVER:GigabitEthernet0/2/7</name>
+        </config>
+        <transceiver xmlns="http://openconfig.net/yang/platform/transceiver">
+          <state>
+            <present>NOT_PRESENT</present>
+            <form-factor xmlns:oc-opt-types="http://openconfig.net/yang/transport-types">oc-opt-types:OTHER</form-factor>
+          </state>
+        </transceiver>
+      </component>
+      <component>
+        <name>TRANSCEIVER:GigabitEthernet0/2/8</name>
+        <config>
+          <name>TRANSCEIVER:GigabitEthernet0/2/8</name>
+        </config>
+        <transceiver xmlns="http://openconfig.net/yang/platform/transceiver">
+          <state>
+            <present>NOT_PRESENT</present>
+            <form-factor xmlns:oc-opt-types="http://openconfig.net/yang/transport-types">oc-opt-types:OTHER</form-factor>
+          </state>
+        </transceiver>
+      </component>
+      <component>
+        <name>TRANSCEIVER:GigabitEthernet0/2/9</name>
+        <config>
+          <name>TRANSCEIVER:GigabitEthernet0/2/9</name>
+        </config>
+        <transceiver xmlns="http://openconfig.net/yang/platform/transceiver">
+          <state>
+            <present>NOT_PRESENT</present>
+            <form-factor xmlns:oc-opt-types="http://openconfig.net/yang/transport-types">oc-opt-types:OTHER</form-factor>
+          </state>
+        </transceiver>
+      </component>
+      <component>
+        <name>TRANSCEIVER:GigabitEthernet0/2/10</name>
+        <config>
+          <name>TRANSCEIVER:GigabitEthernet0/2/10</name>
+        </config>
+        <transceiver xmlns="http://openconfig.net/yang/platform/transceiver">
+          <state>
+            <enabled>true</enabled>
+            <present>PRESENT</present>
+            <form-factor xmlns:oc-opt-types="http://openconfig.net/yang/transport-types">oc-opt-types:SFP</form-factor>
+            <connector-type xmlns:oc-opt-types="http://openconfig.net/yang/transport-types">oc-opt-types:LC_CONNECTOR</connector-type>
+            <vendor>EOPTOLINK INC</vendor>
+            <ethernet-pmd xmlns:oc-opt-types="http://openconfig.net/yang/transport-types">oc-opt-types:ETH_UNDEFINED</ethernet-pmd>
+            <serial-no>SL4V169094</serial-no>
+            <fault-condition>false</fault-condition>
+            <output-power>
+              <instant>-617</instant>
+            </output-power>
+            <input-power>
+              <instant>-691</instant>
+            </input-power>
+            <laser-bias-current>
+              <instant>0</instant>
+            </laser-bias-current>
+          </state>
+        </transceiver>
+      </component>
+      <component>
+        <name>TRANSCEIVER:GigabitEthernet0/2/11</name>
+        <config>
+          <name>TRANSCEIVER:GigabitEthernet0/2/11</name>
+        </config>
+        <transceiver xmlns="http://openconfig.net/yang/platform/transceiver">
+          <state>
+            <present>NOT_PRESENT</present>
+            <form-factor xmlns:oc-opt-types="http://openconfig.net/yang/transport-types">oc-opt-types:OTHER</form-factor>
+          </state>
+        </transceiver>
+      </component>
+      <component>
+        <name>TRANSCEIVER:GigabitEthernet0/2/12</name>
+        <config>
+          <name>TRANSCEIVER:GigabitEthernet0/2/12</name>
+        </config>
+        <transceiver xmlns="http://openconfig.net/yang/platform/transceiver">
+          <state>
+            <enabled>true</enabled>
+            <present>PRESENT</present>
+            <form-factor xmlns:oc-opt-types="http://openconfig.net/yang/transport-types">oc-opt-types:SFP</form-factor>
+            <connector-type xmlns:oc-opt-types="http://openconfig.net/yang/transport-types">oc-opt-types:LC_CONNECTOR</connector-type>
+            <vendor>HG GENUINE</vendor>
+            <ethernet-pmd xmlns:oc-opt-types="http://openconfig.net/yang/transport-types">oc-opt-types:ETH_UNDEFINED</ethernet-pmd>
+            <serial-no>2000043041225</serial-no>
+            <fault-condition>false</fault-condition>
+            <output-power>
+              <instant>-585</instant>
+            </output-power>
+            <input-power>
+              <instant>-796</instant>
+            </input-power>
+            <laser-bias-current>
+              <instant>0</instant>
+            </laser-bias-current>
+          </state>
+        </transceiver>
+      </component>
+      <component>
+        <name>TRANSCEIVER:GigabitEthernet0/2/13</name>
+        <config>
+          <name>TRANSCEIVER:GigabitEthernet0/2/13</name>
+        </config>
+        <transceiver xmlns="http://openconfig.net/yang/platform/transceiver">
+          <state>
+            <enabled>true</enabled>
+            <present>PRESENT</present>
+            <form-factor xmlns:oc-opt-types="http://openconfig.net/yang/transport-types">oc-opt-types:SFP</form-factor>
+            <connector-type xmlns:oc-opt-types="http://openconfig.net/yang/transport-types">oc-opt-types:LC_CONNECTOR</connector-type>
+            <vendor>HG GENUINE</vendor>
+            <ethernet-pmd xmlns:oc-opt-types="http://openconfig.net/yang/transport-types">oc-opt-types:ETH_UNDEFINED</ethernet-pmd>
+            <serial-no>2000043041240</serial-no>
+            <fault-condition>false</fault-condition>
+            <output-power>
+              <instant>-592</instant>
+            </output-power>
+            <input-power>
+              <instant>-692</instant>
+            </input-power>
+            <laser-bias-current>
+              <instant>0</instant>
+            </laser-bias-current>
+          </state>
+        </transceiver>
+      </component>
+      <component>
+        <name>TRANSCEIVER:GigabitEthernet0/2/14</name>
+        <config>
+          <name>TRANSCEIVER:GigabitEthernet0/2/14</name>
+        </config>
+        <transceiver xmlns="http://openconfig.net/yang/platform/transceiver">
+          <state>
+            <enabled>true</enabled>
+            <present>PRESENT</present>
+            <form-factor xmlns:oc-opt-types="http://openconfig.net/yang/transport-types">oc-opt-types:SFP</form-factor>
+            <connector-type xmlns:oc-opt-types="http://openconfig.net/yang/transport-types">oc-opt-types:LC_CONNECTOR</connector-type>
+            <vendor>HG GENUINE</vendor>
+            <ethernet-pmd xmlns:oc-opt-types="http://openconfig.net/yang/transport-types">oc-opt-types:ETH_UNDEFINED</ethernet-pmd>
+            <serial-no>2000043041222</serial-no>
+            <fault-condition>false</fault-condition>
+            <output-power>
+              <instant>-597</instant>
+            </output-power>
+            <input-power>
+              <instant>-623</instant>
+            </input-power>
+            <laser-bias-current>
+              <instant>0</instant>
+            </laser-bias-current>
+          </state>
+        </transceiver>
+      </component>
+      <component>
+        <name>TRANSCEIVER:GigabitEthernet0/2/15</name>
+        <config>
+          <name>TRANSCEIVER:GigabitEthernet0/2/15</name>
+        </config>
+        <transceiver xmlns="http://openconfig.net/yang/platform/transceiver">
+          <state>
+            <present>NOT_PRESENT</present>
+            <form-factor xmlns:oc-opt-types="http://openconfig.net/yang/transport-types">oc-opt-types:OTHER</form-factor>
+          </state>
+        </transceiver>
+      </component>
+      <component>
+        <name>TRANSCEIVER:GigabitEthernet0/2/16</name>
+        <config>
+          <name>TRANSCEIVER:GigabitEthernet0/2/16</name>
+        </config>
+        <transceiver xmlns="http://openconfig.net/yang/platform/transceiver">
+          <state>
+            <present>NOT_PRESENT</present>
+            <form-factor xmlns:oc-opt-types="http://openconfig.net/yang/transport-types">oc-opt-types:SFP</form-factor>
+          </state>
+        </transceiver>
+      </component>
+      <component>
+        <name>TRANSCEIVER:GigabitEthernet0/2/17</name>
+        <config>
+          <name>TRANSCEIVER:GigabitEthernet0/2/17</name>
+        </config>
+        <transceiver xmlns="http://openconfig.net/yang/platform/transceiver">
+          <state>
+            <present>NOT_PRESENT</present>
+            <form-factor xmlns:oc-opt-types="http://openconfig.net/yang/transport-types">oc-opt-types:SFP</form-factor>
+          </state>
+        </transceiver>
+      </component>
+      <component>
+        <name>TRANSCEIVER:GigabitEthernet0/2/18</name>
+        <config>
+          <name>TRANSCEIVER:GigabitEthernet0/2/18</name>
+        </config>
+        <transceiver xmlns="http://openconfig.net/yang/platform/transceiver">
+          <state>
+            <present>NOT_PRESENT</present>
+            <form-factor xmlns:oc-opt-types="http://openconfig.net/yang/transport-types">oc-opt-types:SFP</form-factor>
+          </state>
+        </transceiver>
+      </component>
+      <component>
+        <name>TRANSCEIVER:GigabitEthernet0/2/19</name>
+        <config>
+          <name>TRANSCEIVER:GigabitEthernet0/2/19</name>
+        </config>
+        <transceiver xmlns="http://openconfig.net/yang/platform/transceiver">
+          <state>
+            <present>NOT_PRESENT</present>
+            <form-factor xmlns:oc-opt-types="http://openconfig.net/yang/transport-types">oc-opt-types:SFP</form-factor>
+          </state>
+        </transceiver>
+      </component>
+      <component>
+        <name>TRANSCEIVER:GigabitEthernet0/2/20</name>
+        <config>
+          <name>TRANSCEIVER:GigabitEthernet0/2/20</name>
+        </config>
+        <transceiver xmlns="http://openconfig.net/yang/platform/transceiver">
+          <state>
+            <present>NOT_PRESENT</present>
+            <form-factor xmlns:oc-opt-types="http://openconfig.net/yang/transport-types">oc-opt-types:SFP</form-factor>
+          </state>
+        </transceiver>
+      </component>
+      <component>
+        <name>TRANSCEIVER:GigabitEthernet0/2/21</name>
+        <config>
+          <name>TRANSCEIVER:GigabitEthernet0/2/21</name>
+        </config>
+        <transceiver xmlns="http://openconfig.net/yang/platform/transceiver">
+          <state>
+            <present>NOT_PRESENT</present>
+            <form-factor xmlns:oc-opt-types="http://openconfig.net/yang/transport-types">oc-opt-types:SFP</form-factor>
+          </state>
+        </transceiver>
+      </component>
+      <component>
+        <name>TRANSCEIVER:GigabitEthernet0/2/22</name>
+        <config>
+          <name>TRANSCEIVER:GigabitEthernet0/2/22</name>
+        </config>
+        <transceiver xmlns="http://openconfig.net/yang/platform/transceiver">
+          <state>
+            <present>NOT_PRESENT</present>
+            <form-factor xmlns:oc-opt-types="http://openconfig.net/yang/transport-types">oc-opt-types:SFP</form-factor>
+          </state>
+        </transceiver>
+      </component>
+      <component>
+        <name>TRANSCEIVER:GigabitEthernet0/2/23</name>
+        <config>
+          <name>TRANSCEIVER:GigabitEthernet0/2/23</name>
+        </config>
+        <transceiver xmlns="http://openconfig.net/yang/platform/transceiver">
+          <state>
+            <present>NOT_PRESENT</present>
+            <form-factor xmlns:oc-opt-types="http://openconfig.net/yang/transport-types">oc-opt-types:SFP</form-factor>
+          </state>
+        </transceiver>
+      </component>
+      <component>
+        <name>TRANSCEIVER:GigabitEthernet0/2/24</name>
+        <config>
+          <name>TRANSCEIVER:GigabitEthernet0/2/24</name>
+        </config>
+        <transceiver xmlns="http://openconfig.net/yang/platform/transceiver">
+          <state>
+            <present>NOT_PRESENT</present>
+            <form-factor xmlns:oc-opt-types="http://openconfig.net/yang/transport-types">oc-opt-types:SFP</form-factor>
+          </state>
+        </transceiver>
+      </component>
+      <component>
+        <name>TRANSCEIVER:GigabitEthernet0/2/25</name>
+        <config>
+          <name>TRANSCEIVER:GigabitEthernet0/2/25</name>
+        </config>
+        <transceiver xmlns="http://openconfig.net/yang/platform/transceiver">
+          <state>
+            <present>NOT_PRESENT</present>
+            <form-factor xmlns:oc-opt-types="http://openconfig.net/yang/transport-types">oc-opt-types:SFP</form-factor>
+          </state>
+        </transceiver>
+      </component>
+      <component>
+        <name>TRANSCEIVER:GigabitEthernet0/2/26</name>
+        <config>
+          <name>TRANSCEIVER:GigabitEthernet0/2/26</name>
+        </config>
+        <transceiver xmlns="http://openconfig.net/yang/platform/transceiver">
+          <state>
+            <present>NOT_PRESENT</present>
+            <form-factor xmlns:oc-opt-types="http://openconfig.net/yang/transport-types">oc-opt-types:SFP</form-factor>
+          </state>
+        </transceiver>
+      </component>
+      <component>
+        <name>TRANSCEIVER:GigabitEthernet0/2/27</name>
+        <config>
+          <name>TRANSCEIVER:GigabitEthernet0/2/27</name>
+        </config>
+        <transceiver xmlns="http://openconfig.net/yang/platform/transceiver">
+          <state>
+            <present>PRESENT</present>
+            <form-factor xmlns:oc-opt-types="http://openconfig.net/yang/transport-types">oc-opt-types:SFP</form-factor>
+            <vendor>WTD</vendor>
+            <ethernet-pmd xmlns:oc-opt-types="http://openconfig.net/yang/transport-types">oc-opt-types:ETH_UNDEFINED</ethernet-pmd>
+            <serial-no>HR215200390065</serial-no>
+            <fault-condition>false</fault-condition>
+            <output-power>
+              <instant>0</instant>
+            </output-power>
+            <input-power>
+              <instant>0</instant>
+            </input-power>
+            <laser-bias-current>
+              <instant>0</instant>
+            </laser-bias-current>
+          </state>
+        </transceiver>
+      </component>
+    </components>
+  </data>
+</rpc-reply>

@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rpc-reply message-id="get-config-running" xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <data>
+    <interfaces xmlns="http://openconfig.net/yang/interfaces">
+      <interface>
+        <name>GigabitEthernet0/2/0</name>
+        <config>
+          <name>GigabitEthernet0/2/0</name>
+          <type xmlns:ianaift="urn:ietf:params:xml:ns:yang:iana-if-type">ianaift:ethernetCsmacd</type>
+          <loopback-mode>false</loopback-mode>
+          <description>Router Desc</description>
+          <enabled>true</enabled>
+          <tpid xmlns="http://openconfig.net/yang/vlan" xmlns:oc-vlan-types="http://openconfig.net/yang/vlan-types">oc-vlan-types:TPID_0X8100</tpid>
+        </config>
+        <state>
+          <name>GigabitEthernet0/2/0</name>
+          <type xmlns:ianaift="urn:ietf:params:xml:ns:yang:iana-if-type">ianaift:ethernetCsmacd</type>
+          <loopback-mode>false</loopback-mode>
+          <description>Router Desc</description>
+          <enabled>true</enabled>
+          <ifindex>5</ifindex>
+          <admin-status>UP</admin-status>
+          <oper-status>UP</oper-status>
+          <last-change>1745352208472000000</last-change>
+          <tpid xmlns="http://openconfig.net/yang/vlan" xmlns:oc-vlan-types="http://openconfig.net/yang/vlan-types">oc-vlan-types:TPID_0X8100</tpid>
+          <counters>
+            <in-octets>1224380092997713</in-octets>
+            <in-pkts>1270077048874</in-pkts>
+            <in-unicast-pkts>1270048002850</in-unicast-pkts>
+            <in-broadcast-pkts>20004776</in-broadcast-pkts>
+            <in-multicast-pkts>9041249</in-multicast-pkts>
+            <in-discards>0</in-discards>
+            <in-errors>0</in-errors>
+            <in-unknown-protos>0</in-unknown-protos>
+            <in-fcs-errors>0</in-fcs-errors>
+            <out-octets>124252306135213</out-octets>
+            <out-pkts>413628067164</out-pkts>
+            <out-unicast-pkts>413598866578</out-unicast-pkts>
+            <out-broadcast-pkts>20108974</out-broadcast-pkts>
+            <out-multicast-pkts>9091612</out-multicast-pkts>
+            <out-discards>0</out-discards>
+            <out-errors>0</out-errors>
+          </counters>
+        </state>
+        <subinterfaces>
+          <subinterface>
+            <index>0</index>
+            <config>
+              <index>0</index>
+              <description>Router Desc</description>
+              <enabled>true</enabled>
+            </config>
+            <state>
+              <index>0</index>
+              <description>Router Desc</description>
+              <enabled>true</enabled>
+              <name>GigabitEthernet0/2/0</name>
+              <ifindex>5</ifindex>
+              <admin-status>UP</admin-status>
+              <oper-status>UP</oper-status>
+              <last-change>1745352208472000000</last-change>
+            </state>
+            <ipv4 xmlns="http://openconfig.net/yang/interfaces/ip">
+              <addresses>
+                <address>
+                  <ip>11.110.2.167</ip>
+                  <config>
+                    <ip>11.110.2.167</ip>
+                    <prefix-length>31</prefix-length>
+                  </config>
+                  <state>
+                    <ip>11.110.2.167</ip>
+                    <prefix-length>31</prefix-length>
+                    <origin>STATIC</origin>
+                  </state>
+                </address>
+              </addresses>
+              <config>
+                <enabled>true</enabled>
+              </config>
+              <state>
+                <enabled>true</enabled>
+                <mtu>1500</mtu>
+                <counters>
+                  <in-pkts>41183511</in-pkts>
+                  <in-octets>5610543544</in-octets>
+                  <in-error-pkts>0</in-error-pkts>
+                  <in-forwarded-pkts>0</in-forwarded-pkts>
+                  <in-forwarded-octets>0</in-forwarded-octets>
+                  <in-discarded-pkts>0</in-discarded-pkts>
+                  <out-pkts>28630749</out-pkts>
+                  <out-octets>6801890992</out-octets>
+                  <out-error-pkts>0</out-error-pkts>
+                  <out-forwarded-pkts>0</out-forwarded-pkts>
+                  <out-forwarded-octets>0</out-forwarded-octets>
+                  <out-discarded-pkts>0</out-discarded-pkts>
+                </counters>
+              </state>
+            </ipv4>
+          </subinterface>
+        </subinterfaces>
+        <ethernet xmlns="http://openconfig.net/yang/interfaces/ethernet">
+          <config>
+            <auto-negotiate>false</auto-negotiate>
+          </config>
+          <state>
+            <counters>
+              <in-oversize-frames>0</in-oversize-frames>
+              <in-jabber-frames>0</in-jabber-frames>
+              <in-fragment-frames>0</in-fragment-frames>
+              <in-crc-errors>0</in-crc-errors>
+            </counters>
+          </state>
+        </ethernet>
+      </interface>
+    </interfaces>
+  </data>
+</rpc-reply>

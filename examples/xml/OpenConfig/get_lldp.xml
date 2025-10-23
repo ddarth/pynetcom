@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rpc message-id="get-config-running" xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+    <get>
+        <filter type="subtree">
+            <lldp xmlns="http://openconfig.net/yang/lldp">
+                <interfaces/>
+            </lldp>
+        </filter>
+    </get>
+</rpc>
+

@@ -1,0 +1,2950 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rpc-reply message-id="get-config-running" xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+    <data>
+        <components xmlns="http://openconfig.net/yang/platform" xmlns:nokia-attr="urn:nokia.com:sros:ns:yang:sr:attributes">
+            <component>
+                <name>system-software</name>
+                <state>
+                    <name>system-software</name>
+                    <type xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:OPERATING_SYSTEM</type>
+                    <id>system-software</id>
+                    <software-version>TiMOS-C-23.10.R6 cpm/x86hops64 Nokia 7250 IXR Copyright (c) 2000-2024 Nokia.\nAll rights reserved. All use subject to applicable license agreements.\nBuilt on Wed Aug 14 23:07:49 UTC 2024 by builder in /builds/2310B/R6/panos/main/sros</software-version>
+                </state>
+            </component>
+            <component>
+                <name>chassis 1</name>
+                <state>
+                    <name>chassis 1</name>
+                    <type xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:CHASSIS</type>
+                    <id>chassis 1</id>
+                    <location>1</location>
+                    <mfg-date>2024-10-09</mfg-date>
+                    <hardware-version>3HE14782AARC01</hardware-version>
+                    <serial-no>NK244032268</serial-no>
+                    <part-no>3HE14782AARC01</part-no>
+                    <removable>true</removable>
+                    <oper-status xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:ACTIVE</oper-status>
+                    <empty>false</empty>
+                </state>
+                <properties>
+                    <property>
+                        <name>chassis-type</name>
+                        <state>
+                            <name>chassis-type</name>
+                            <value>7250 IXR-e</value>
+                            <configurable>false</configurable>
+                        </state>
+                    </property>
+                </properties>
+                <subcomponents>
+                    <subcomponent>
+                        <name>power-supply 1/1</name>
+                        <state>
+                            <name>power-supply 1/1</name>
+                        </state>
+                    </subcomponent>
+                    <subcomponent>
+                        <name>power-supply 1/2</name>
+                        <state>
+                            <name>power-supply 1/2</name>
+                        </state>
+                    </subcomponent>
+                    <subcomponent>
+                        <name>fan-tray 1/1</name>
+                        <state>
+                            <name>fan-tray 1/1</name>
+                        </state>
+                    </subcomponent>
+                    <subcomponent>
+                        <name>card 1</name>
+                        <state>
+                            <name>card 1</name>
+                        </state>
+                    </subcomponent>
+                    <subcomponent>
+                        <name>cpm A</name>
+                        <state>
+                            <name>cpm A</name>
+                        </state>
+                    </subcomponent>
+                </subcomponents>
+            </component>
+            <component>
+                <name>power-supply 1/1</name>
+                <state>
+                    <name>power-supply 1/1</name>
+                    <type xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:POWER_SUPPLY</type>
+                    <id>power-supply 1/1</id>
+                    <location>1/1</location>
+                    <mfg-date>0807-20-24</mfg-date>
+                    <hardware-version>3HE14785AARB01  </hardware-version>
+                    <serial-no>NK242974428</serial-no>
+                    <part-no>3HE14785AARB01  </part-no>
+                    <removable>true</removable>
+                    <oper-status xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:ACTIVE</oper-status>
+                    <empty>false</empty>
+                    <parent>chassis 1</parent>
+                </state>
+                <power-supply>
+                    <state>
+                        <enabled xmlns="http://openconfig.net/yang/platform/psu">true</enabled>
+                    </state>
+                </power-supply>
+            </component>
+            <component>
+                <name>power-supply 1/2</name>
+                <state>
+                    <name>power-supply 1/2</name>
+                    <type xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:POWER_SUPPLY</type>
+                    <id>power-supply 1/2</id>
+                    <location>1/2</location>
+                    <mfg-date>0807-20-24</mfg-date>
+                    <hardware-version>3HE14785AARB01  </hardware-version>
+                    <serial-no>NK242974630</serial-no>
+                    <part-no>3HE14785AARB01  </part-no>
+                    <removable>true</removable>
+                    <oper-status xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:ACTIVE</oper-status>
+                    <empty>false</empty>
+                    <parent>chassis 1</parent>
+                </state>
+                <power-supply>
+                    <state>
+                        <enabled xmlns="http://openconfig.net/yang/platform/psu">true</enabled>
+                    </state>
+                </power-supply>
+            </component>
+            <component>
+                <name>fan-tray 1/1</name>
+                <state>
+                    <name>fan-tray 1/1</name>
+                    <type xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:FAN</type>
+                    <id>fan-tray 1/1</id>
+                    <location>1/1</location>
+                    <removable>true</removable>
+                    <oper-status xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:ACTIVE</oper-status>
+                    <empty>false</empty>
+                    <parent>chassis 1</parent>
+                </state>
+                <properties>
+                    <property>
+                        <name>speed-percent</name>
+                        <state>
+                            <name>speed-percent</name>
+                            <value>40</value>
+                            <configurable>false</configurable>
+                        </state>
+                    </property>
+                </properties>
+            </component>
+            <component>
+                <name>card 1</name>
+                <state>
+                    <name>card 1</name>
+                    <type xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:LINECARD</type>
+                    <id>card 1</id>
+                    <location>1</location>
+                    <mfg-date>2024-10-09</mfg-date>
+                    <hardware-version>3HE14782AARC01</hardware-version>
+                    <software-version>TiMOS-I-23.10.R6 iom/x86hops64 Nokia 7250 IXR Copyright (c) 2000-2024 Nokia.\nAll rights reserved. All use subject to applicable license agreements.\nBuilt on Wed Aug 14 23:07:49 UTC 2024 by builder in /builds/2310B/R6/panos/main/sros\n</software-version>
+                    <serial-no>NK244032268</serial-no>
+                    <part-no>3HE14782AARC01</part-no>
+                    <removable>true</removable>
+                    <oper-status xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:ACTIVE</oper-status>
+                    <empty>false</empty>
+                    <parent>chassis 1</parent>
+                    <temperature>
+                        <instant>76.0</instant>
+                        <alarm-threshold>94</alarm-threshold>
+                        <alarm-severity xmlns:openconfig-alarm-types="http://openconfig.net/yang/alarms/types">openconfig-alarm-types:WARNING</alarm-severity>
+                    </temperature>
+                    <memory>
+                        <available>4096000000</available>
+                    </memory>
+                </state>
+                <properties>
+                    <property>
+                        <name>provisioned-type</name>
+                        <state>
+                            <name>provisioned-type</name>
+                            <value>imm24-sfp++8-sfp28+2-qsfp28</value>
+                            <configurable>false</configurable>
+                        </state>
+                    </property>
+                    <property>
+                        <name>equipped-type</name>
+                        <state>
+                            <name>equipped-type</name>
+                            <value>imm24-sfp++8-sfp28+2-qsfp28</value>
+                            <configurable>false</configurable>
+                        </state>
+                    </property>
+                </properties>
+                <subcomponents>
+                    <subcomponent>
+                        <name>mda 1/1</name>
+                        <state>
+                            <name>mda 1/1</name>
+                        </state>
+                    </subcomponent>
+                </subcomponents>
+                <linecard xmlns="http://openconfig.net/yang/platform/linecard" xmlns:nokia-attr="urn:nokia.com:sros:ns:yang:sr:attributes">
+                    <state>
+                        <power-admin-state>POWER_ENABLED</power-admin-state>
+                        <slot-id>1</slot-id>
+                    </state>
+                </linecard>
+            </component>
+            <component>
+                <name>cpm A</name>
+                <state>
+                    <name>cpm A</name>
+                    <type xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:CONTROLLER_CARD</type>
+                    <id>cpm A</id>
+                    <location>A</location>
+                    <mfg-date>2024-10-09</mfg-date>
+                    <hardware-version>3HE14782AARC01</hardware-version>
+                    <software-version>TiMOS-C-23.10.R6 cpm/x86hops64 Nokia 7250 IXR Copyright (c) 2000-2024 Nokia.\nAll rights reserved. All use subject to applicable license agreements.\nBuilt on Wed Aug 14 23:07:49 UTC 2024 by builder in /builds/2310B/R6/panos/main/sros\n</software-version>
+                    <serial-no>NK244032268</serial-no>
+                    <part-no>3HE14782AARC01</part-no>
+                    <removable>true</removable>
+                    <oper-status xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:ACTIVE</oper-status>
+                    <empty>false</empty>
+                    <parent>chassis 1</parent>
+                    <temperature>
+                        <instant>76.0</instant>
+                        <alarm-threshold>94</alarm-threshold>
+                        <alarm-severity xmlns:openconfig-alarm-types="http://openconfig.net/yang/alarms/types">openconfig-alarm-types:WARNING</alarm-severity>
+                    </temperature>
+                    <memory>
+                        <available>4096000000</available>
+                    </memory>
+                </state>
+                <properties>
+                    <property>
+                        <name>provisioned-type</name>
+                        <state>
+                            <name>provisioned-type</name>
+                            <value>cpm-ixr-e</value>
+                            <configurable>false</configurable>
+                        </state>
+                    </property>
+                    <property>
+                        <name>equipped-type</name>
+                        <state>
+                            <name>equipped-type</name>
+                            <value>cpm-ixr-e</value>
+                            <configurable>false</configurable>
+                        </state>
+                    </property>
+                </properties>
+                <subcomponents>
+                    <subcomponent>
+                        <name>flash A/2</name>
+                        <state>
+                            <name>flash A/2</name>
+                        </state>
+                    </subcomponent>
+                    <subcomponent>
+                        <name>flash A/3</name>
+                        <state>
+                            <name>flash A/3</name>
+                        </state>
+                    </subcomponent>
+                    <subcomponent>
+                        <name>port A/1</name>
+                        <state>
+                            <name>port A/1</name>
+                        </state>
+                    </subcomponent>
+                </subcomponents>
+                <linecard xmlns="http://openconfig.net/yang/platform/linecard" xmlns:nokia-attr="urn:nokia.com:sros:ns:yang:sr:attributes">
+                    <state>
+                        <power-admin-state>POWER_ENABLED</power-admin-state>
+                        <slot-id>A</slot-id>
+                    </state>
+                </linecard>
+            </component>
+            <component>
+                <name>mda 1/1</name>
+                <state>
+                    <name>mda 1/1</name>
+                    <type xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:LINECARD</type>
+                    <id>mda 1/1</id>
+                    <location>1/1</location>
+                    <mfg-date>2024-10-09</mfg-date>
+                    <hardware-version>3HE14782AARC01</hardware-version>
+                    <serial-no>NK244032268</serial-no>
+                    <part-no>3HE14782AARC01</part-no>
+                    <removable>false</removable>
+                    <oper-status xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:ACTIVE</oper-status>
+                    <empty>false</empty>
+                    <parent>card 1</parent>
+                    <temperature>
+                        <instant>76.0</instant>
+                        <alarm-threshold>94</alarm-threshold>
+                        <alarm-severity xmlns:openconfig-alarm-types="http://openconfig.net/yang/alarms/types">openconfig-alarm-types:WARNING</alarm-severity>
+                    </temperature>
+                </state>
+                <properties>
+                    <property>
+                        <name>provisioned-type</name>
+                        <state>
+                            <name>provisioned-type</name>
+                            <value>m24-sfp++8-sfp28+2-qsfp28</value>
+                            <configurable>false</configurable>
+                        </state>
+                    </property>
+                    <property>
+                        <name>equipped-type</name>
+                        <state>
+                            <name>equipped-type</name>
+                            <value>m24-sfp++8-sfp28+2-qsfp28</value>
+                            <configurable>false</configurable>
+                        </state>
+                    </property>
+                </properties>
+                <subcomponents>
+                    <subcomponent>
+                        <name>port 1/1/1</name>
+                        <state>
+                            <name>port 1/1/1</name>
+                        </state>
+                    </subcomponent>
+                    <subcomponent>
+                        <name>port 1/1/2</name>
+                        <state>
+                            <name>port 1/1/2</name>
+                        </state>
+                    </subcomponent>
+                    <subcomponent>
+                        <name>port 1/1/3</name>
+                        <state>
+                            <name>port 1/1/3</name>
+                        </state>
+                    </subcomponent>
+                    <subcomponent>
+                        <name>port 1/1/4</name>
+                        <state>
+                            <name>port 1/1/4</name>
+                        </state>
+                    </subcomponent>
+                    <subcomponent>
+                        <name>port 1/1/5</name>
+                        <state>
+                            <name>port 1/1/5</name>
+                        </state>
+                    </subcomponent>
+                    <subcomponent>
+                        <name>port 1/1/6</name>
+                        <state>
+                            <name>port 1/1/6</name>
+                        </state>
+                    </subcomponent>
+                    <subcomponent>
+                        <name>port 1/1/7</name>
+                        <state>
+                            <name>port 1/1/7</name>
+                        </state>
+                    </subcomponent>
+                    <subcomponent>
+                        <name>port 1/1/8</name>
+                        <state>
+                            <name>port 1/1/8</name>
+                        </state>
+                    </subcomponent>
+                    <subcomponent>
+                        <name>port 1/1/9</name>
+                        <state>
+                            <name>port 1/1/9</name>
+                        </state>
+                    </subcomponent>
+                    <subcomponent>
+                        <name>port 1/1/10</name>
+                        <state>
+                            <name>port 1/1/10</name>
+                        </state>
+                    </subcomponent>
+                    <subcomponent>
+                        <name>port 1/1/11</name>
+                        <state>
+                            <name>port 1/1/11</name>
+                        </state>
+                    </subcomponent>
+                    <subcomponent>
+                        <name>port 1/1/12</name>
+                        <state>
+                            <name>port 1/1/12</name>
+                        </state>
+                    </subcomponent>
+                    <subcomponent>
+                        <name>port 1/1/13</name>
+                        <state>
+                            <name>port 1/1/13</name>
+                        </state>
+                    </subcomponent>
+                    <subcomponent>
+                        <name>port 1/1/14</name>
+                        <state>
+                            <name>port 1/1/14</name>
+                        </state>
+                    </subcomponent>
+                    <subcomponent>
+                        <name>port 1/1/15</name>
+                        <state>
+                            <name>port 1/1/15</name>
+                        </state>
+                    </subcomponent>
+                    <subcomponent>
+                        <name>port 1/1/16</name>
+                        <state>
+                            <name>port 1/1/16</name>
+                        </state>
+                    </subcomponent>
+                    <subcomponent>
+                        <name>port 1/1/17</name>
+                        <state>
+                            <name>port 1/1/17</name>
+                        </state>
+                    </subcomponent>
+                    <subcomponent>
+                        <name>port 1/1/18</name>
+                        <state>
+                            <name>port 1/1/18</name>
+                        </state>
+                    </subcomponent>
+                    <subcomponent>
+                        <name>port 1/1/19</name>
+                        <state>
+                            <name>port 1/1/19</name>
+                        </state>
+                    </subcomponent>
+                    <subcomponent>
+                        <name>port 1/1/20</name>
+                        <state>
+                            <name>port 1/1/20</name>
+                        </state>
+                    </subcomponent>
+                    <subcomponent>
+                        <name>port 1/1/21</name>
+                        <state>
+                            <name>port 1/1/21</name>
+                        </state>
+                    </subcomponent>
+                    <subcomponent>
+                        <name>port 1/1/22</name>
+                        <state>
+                            <name>port 1/1/22</name>
+                        </state>
+                    </subcomponent>
+                    <subcomponent>
+                        <name>port 1/1/23</name>
+                        <state>
+                            <name>port 1/1/23</name>
+                        </state>
+                    </subcomponent>
+                    <subcomponent>
+                        <name>port 1/1/24</name>
+                        <state>
+                            <name>port 1/1/24</name>
+                        </state>
+                    </subcomponent>
+                    <subcomponent>
+                        <name>port 1/1/25</name>
+                        <state>
+                            <name>port 1/1/25</name>
+                        </state>
+                    </subcomponent>
+                    <subcomponent>
+                        <name>port 1/1/26</name>
+                        <state>
+                            <name>port 1/1/26</name>
+                        </state>
+                    </subcomponent>
+                    <subcomponent>
+                        <name>port 1/1/27</name>
+                        <state>
+                            <name>port 1/1/27</name>
+                        </state>
+                    </subcomponent>
+                    <subcomponent>
+                        <name>port 1/1/28</name>
+                        <state>
+                            <name>port 1/1/28</name>
+                        </state>
+                    </subcomponent>
+                    <subcomponent>
+                        <name>port 1/1/29</name>
+                        <state>
+                            <name>port 1/1/29</name>
+                        </state>
+                    </subcomponent>
+                    <subcomponent>
+                        <name>port 1/1/30</name>
+                        <state>
+                            <name>port 1/1/30</name>
+                        </state>
+                    </subcomponent>
+                    <subcomponent>
+                        <name>port 1/1/31</name>
+                        <state>
+                            <name>port 1/1/31</name>
+                        </state>
+                    </subcomponent>
+                    <subcomponent>
+                        <name>port 1/1/32</name>
+                        <state>
+                            <name>port 1/1/32</name>
+                        </state>
+                    </subcomponent>
+                    <subcomponent>
+                        <name>port 1/1/c33</name>
+                        <state>
+                            <name>port 1/1/c33</name>
+                        </state>
+                    </subcomponent>
+                    <subcomponent>
+                        <name>port 1/1/c34</name>
+                        <state>
+                            <name>port 1/1/c34</name>
+                        </state>
+                    </subcomponent>
+                </subcomponents>
+                <linecard xmlns="http://openconfig.net/yang/platform/linecard" xmlns:nokia-attr="urn:nokia.com:sros:ns:yang:sr:attributes">
+                    <state>
+                        <power-admin-state>POWER_ENABLED</power-admin-state>
+                        <slot-id>1/1</slot-id>
+                    </state>
+                </linecard>
+            </component>
+            <component>
+                <name>flash A/2</name>
+                <state>
+                    <name>flash A/2</name>
+                    <type xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:STORAGE</type>
+                    <id>flash A/2</id>
+                    <location>A/2</location>
+                    <removable>true</removable>
+                    <oper-status xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:INACTIVE</oper-status>
+                    <empty>false</empty>
+                    <parent>cpm A</parent>
+                </state>
+            </component>
+            <component>
+                <name>flash A/3</name>
+                <state>
+                    <name>flash A/3</name>
+                    <type xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:STORAGE</type>
+                    <id>flash A/3</id>
+                    <location>A/3</location>
+                    <firmware-version>0.1</firmware-version>
+                    <serial-no>0x26bc3f5f 2017:03</serial-no>
+                    <part-no>VM 008GB</part-no>
+                    <removable>true</removable>
+                    <oper-status xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:ACTIVE</oper-status>
+                    <empty>false</empty>
+                    <parent>cpm A</parent>
+                </state>
+            </component>
+            <component>
+                <name>port 1/1/1</name>
+                <state>
+                    <name>port 1/1/1</name>
+                    <type xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:PORT</type>
+                    <id>port 1/1/1</id>
+                    <location>1/1/1</location>
+                    <description>Router Desc</description>
+                    <removable>false</removable>
+                    <oper-status xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:ACTIVE</oper-status>
+                    <empty>false</empty>
+                    <parent>mda 1/1</parent>
+                </state>
+                <properties>
+                    <property>
+                        <name>ifindex</name>
+                        <state>
+                            <name>ifindex</name>
+                            <value>1610891272</value>
+                            <configurable>false</configurable>
+                        </state>
+                    </property>
+                </properties>
+                <subcomponents>
+                    <subcomponent>
+                        <name>transceiver 1/1/1</name>
+                        <state>
+                            <name>transceiver 1/1/1</name>
+                        </state>
+                    </subcomponent>
+                </subcomponents>
+            </component>
+            <component>
+                <name>port 1/1/2</name>
+                <state>
+                    <name>port 1/1/2</name>
+                    <type xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:PORT</type>
+                    <id>port 1/1/2</id>
+                    <location>1/1/2</location>
+                    <description>Router Desc</description>
+                    <removable>false</removable>
+                    <oper-status xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:INACTIVE</oper-status>
+                    <empty>false</empty>
+                    <parent>mda 1/1</parent>
+                </state>
+                <properties>
+                    <property>
+                        <name>ifindex</name>
+                        <state>
+                            <name>ifindex</name>
+                            <value>1610891280</value>
+                            <configurable>false</configurable>
+                        </state>
+                    </property>
+                </properties>
+                <subcomponents>
+                    <subcomponent>
+                        <name>transceiver 1/1/2</name>
+                        <state>
+                            <name>transceiver 1/1/2</name>
+                        </state>
+                    </subcomponent>
+                </subcomponents>
+            </component>
+            <component>
+                <name>port 1/1/3</name>
+                <state>
+                    <name>port 1/1/3</name>
+                    <type xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:PORT</type>
+                    <id>port 1/1/3</id>
+                    <location>1/1/3</location>
+                    <description>Router Desc</description>
+                    <removable>false</removable>
+                    <oper-status xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:DISABLED</oper-status>
+                    <empty>false</empty>
+                    <parent>mda 1/1</parent>
+                </state>
+                <properties>
+                    <property>
+                        <name>ifindex</name>
+                        <state>
+                            <name>ifindex</name>
+                            <value>1610891288</value>
+                            <configurable>false</configurable>
+                        </state>
+                    </property>
+                </properties>
+                <subcomponents>
+                    <subcomponent>
+                        <name>transceiver 1/1/3</name>
+                        <state>
+                            <name>transceiver 1/1/3</name>
+                        </state>
+                    </subcomponent>
+                </subcomponents>
+            </component>
+            <component>
+                <name>port 1/1/4</name>
+                <state>
+                    <name>port 1/1/4</name>
+                    <type xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:PORT</type>
+                    <id>port 1/1/4</id>
+                    <location>1/1/4</location>
+                    <description>Router Desc</description>
+                    <removable>false</removable>
+                    <oper-status xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:INACTIVE</oper-status>
+                    <empty>false</empty>
+                    <parent>mda 1/1</parent>
+                </state>
+                <properties>
+                    <property>
+                        <name>ifindex</name>
+                        <state>
+                            <name>ifindex</name>
+                            <value>1610891296</value>
+                            <configurable>false</configurable>
+                        </state>
+                    </property>
+                </properties>
+                <subcomponents>
+                    <subcomponent>
+                        <name>transceiver 1/1/4</name>
+                        <state>
+                            <name>transceiver 1/1/4</name>
+                        </state>
+                    </subcomponent>
+                </subcomponents>
+            </component>
+            <component>
+                <name>port 1/1/5</name>
+                <state>
+                    <name>port 1/1/5</name>
+                    <type xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:PORT</type>
+                    <id>port 1/1/5</id>
+                    <location>1/1/5</location>
+                    <description>Router Desc</description>
+                    <removable>false</removable>
+                    <oper-status xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:ACTIVE</oper-status>
+                    <empty>false</empty>
+                    <parent>mda 1/1</parent>
+                </state>
+                <properties>
+                    <property>
+                        <name>ifindex</name>
+                        <state>
+                            <name>ifindex</name>
+                            <value>1610891304</value>
+                            <configurable>false</configurable>
+                        </state>
+                    </property>
+                </properties>
+                <subcomponents>
+                    <subcomponent>
+                        <name>transceiver 1/1/5</name>
+                        <state>
+                            <name>transceiver 1/1/5</name>
+                        </state>
+                    </subcomponent>
+                </subcomponents>
+            </component>
+            <component>
+                <name>port 1/1/6</name>
+                <state>
+                    <name>port 1/1/6</name>
+                    <type xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:PORT</type>
+                    <id>port 1/1/6</id>
+                    <location>1/1/6</location>
+                    <description>Router Desc</description>
+                    <removable>false</removable>
+                    <oper-status xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:DISABLED</oper-status>
+                    <empty>false</empty>
+                    <parent>mda 1/1</parent>
+                </state>
+                <properties>
+                    <property>
+                        <name>ifindex</name>
+                        <state>
+                            <name>ifindex</name>
+                            <value>1610891312</value>
+                            <configurable>false</configurable>
+                        </state>
+                    </property>
+                </properties>
+                <subcomponents>
+                    <subcomponent>
+                        <name>transceiver 1/1/6</name>
+                        <state>
+                            <name>transceiver 1/1/6</name>
+                        </state>
+                    </subcomponent>
+                </subcomponents>
+            </component>
+            <component>
+                <name>port 1/1/7</name>
+                <state>
+                    <name>port 1/1/7</name>
+                    <type xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:PORT</type>
+                    <id>port 1/1/7</id>
+                    <location>1/1/7</location>
+                    <description>Router Desc</description>
+                    <removable>false</removable>
+                    <oper-status xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:ACTIVE</oper-status>
+                    <empty>false</empty>
+                    <parent>mda 1/1</parent>
+                </state>
+                <properties>
+                    <property>
+                        <name>ifindex</name>
+                        <state>
+                            <name>ifindex</name>
+                            <value>1610891320</value>
+                            <configurable>false</configurable>
+                        </state>
+                    </property>
+                </properties>
+                <subcomponents>
+                    <subcomponent>
+                        <name>transceiver 1/1/7</name>
+                        <state>
+                            <name>transceiver 1/1/7</name>
+                        </state>
+                    </subcomponent>
+                </subcomponents>
+            </component>
+            <component>
+                <name>port 1/1/8</name>
+                <state>
+                    <name>port 1/1/8</name>
+                    <type xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:PORT</type>
+                    <id>port 1/1/8</id>
+                    <location>1/1/8</location>
+                    <description>Router Desc</description>
+                    <removable>false</removable>
+                    <oper-status xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:ACTIVE</oper-status>
+                    <empty>false</empty>
+                    <parent>mda 1/1</parent>
+                </state>
+                <properties>
+                    <property>
+                        <name>ifindex</name>
+                        <state>
+                            <name>ifindex</name>
+                            <value>1610891328</value>
+                            <configurable>false</configurable>
+                        </state>
+                    </property>
+                </properties>
+                <subcomponents>
+                    <subcomponent>
+                        <name>transceiver 1/1/8</name>
+                        <state>
+                            <name>transceiver 1/1/8</name>
+                        </state>
+                    </subcomponent>
+                </subcomponents>
+            </component>
+            <component>
+                <name>port 1/1/9</name>
+                <state>
+                    <name>port 1/1/9</name>
+                    <type xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:PORT</type>
+                    <id>port 1/1/9</id>
+                    <location>1/1/9</location>
+                    <description>Router Desc</description>
+                    <removable>false</removable>
+                    <oper-status xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:ACTIVE</oper-status>
+                    <empty>false</empty>
+                    <parent>mda 1/1</parent>
+                </state>
+                <properties>
+                    <property>
+                        <name>ifindex</name>
+                        <state>
+                            <name>ifindex</name>
+                            <value>1610891336</value>
+                            <configurable>false</configurable>
+                        </state>
+                    </property>
+                </properties>
+                <subcomponents>
+                    <subcomponent>
+                        <name>transceiver 1/1/9</name>
+                        <state>
+                            <name>transceiver 1/1/9</name>
+                        </state>
+                    </subcomponent>
+                </subcomponents>
+            </component>
+            <component>
+                <name>port 1/1/10</name>
+                <state>
+                    <name>port 1/1/10</name>
+                    <type xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:PORT</type>
+                    <id>port 1/1/10</id>
+                    <location>1/1/10</location>
+                    <description>Router Desc</description>
+                    <removable>false</removable>
+                    <oper-status xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:ACTIVE</oper-status>
+                    <empty>false</empty>
+                    <parent>mda 1/1</parent>
+                </state>
+                <properties>
+                    <property>
+                        <name>ifindex</name>
+                        <state>
+                            <name>ifindex</name>
+                            <value>1610891344</value>
+                            <configurable>false</configurable>
+                        </state>
+                    </property>
+                </properties>
+                <subcomponents>
+                    <subcomponent>
+                        <name>transceiver 1/1/10</name>
+                        <state>
+                            <name>transceiver 1/1/10</name>
+                        </state>
+                    </subcomponent>
+                </subcomponents>
+            </component>
+            <component>
+                <name>port 1/1/11</name>
+                <state>
+                    <name>port 1/1/11</name>
+                    <type xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:PORT</type>
+                    <id>port 1/1/11</id>
+                    <location>1/1/11</location>
+                    <description>Router Desc</description>
+                    <removable>false</removable>
+                    <oper-status xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:ACTIVE</oper-status>
+                    <empty>false</empty>
+                    <parent>mda 1/1</parent>
+                </state>
+                <properties>
+                    <property>
+                        <name>ifindex</name>
+                        <state>
+                            <name>ifindex</name>
+                            <value>1610891352</value>
+                            <configurable>false</configurable>
+                        </state>
+                    </property>
+                </properties>
+                <subcomponents>
+                    <subcomponent>
+                        <name>transceiver 1/1/11</name>
+                        <state>
+                            <name>transceiver 1/1/11</name>
+                        </state>
+                    </subcomponent>
+                </subcomponents>
+            </component>
+            <component>
+                <name>port 1/1/12</name>
+                <state>
+                    <name>port 1/1/12</name>
+                    <type xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:PORT</type>
+                    <id>port 1/1/12</id>
+                    <location>1/1/12</location>
+                    <description>Router Desc</description>
+                    <removable>false</removable>
+                    <oper-status xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:ACTIVE</oper-status>
+                    <empty>false</empty>
+                    <parent>mda 1/1</parent>
+                </state>
+                <properties>
+                    <property>
+                        <name>ifindex</name>
+                        <state>
+                            <name>ifindex</name>
+                            <value>1610891360</value>
+                            <configurable>false</configurable>
+                        </state>
+                    </property>
+                </properties>
+                <subcomponents>
+                    <subcomponent>
+                        <name>transceiver 1/1/12</name>
+                        <state>
+                            <name>transceiver 1/1/12</name>
+                        </state>
+                    </subcomponent>
+                </subcomponents>
+            </component>
+            <component>
+                <name>port 1/1/13</name>
+                <state>
+                    <name>port 1/1/13</name>
+                    <type xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:PORT</type>
+                    <id>port 1/1/13</id>
+                    <location>1/1/13</location>
+                    <description>Router Desc</description>
+                    <removable>false</removable>
+                    <oper-status xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:ACTIVE</oper-status>
+                    <empty>false</empty>
+                    <parent>mda 1/1</parent>
+                </state>
+                <properties>
+                    <property>
+                        <name>ifindex</name>
+                        <state>
+                            <name>ifindex</name>
+                            <value>1610891368</value>
+                            <configurable>false</configurable>
+                        </state>
+                    </property>
+                </properties>
+                <subcomponents>
+                    <subcomponent>
+                        <name>transceiver 1/1/13</name>
+                        <state>
+                            <name>transceiver 1/1/13</name>
+                        </state>
+                    </subcomponent>
+                </subcomponents>
+            </component>
+            <component>
+                <name>port 1/1/14</name>
+                <state>
+                    <name>port 1/1/14</name>
+                    <type xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:PORT</type>
+                    <id>port 1/1/14</id>
+                    <location>1/1/14</location>
+                    <description>Router Desc</description>
+                    <removable>false</removable>
+                    <oper-status xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:ACTIVE</oper-status>
+                    <empty>false</empty>
+                    <parent>mda 1/1</parent>
+                </state>
+                <properties>
+                    <property>
+                        <name>ifindex</name>
+                        <state>
+                            <name>ifindex</name>
+                            <value>1610891376</value>
+                            <configurable>false</configurable>
+                        </state>
+                    </property>
+                </properties>
+                <subcomponents>
+                    <subcomponent>
+                        <name>transceiver 1/1/14</name>
+                        <state>
+                            <name>transceiver 1/1/14</name>
+                        </state>
+                    </subcomponent>
+                </subcomponents>
+            </component>
+            <component>
+                <name>port 1/1/15</name>
+                <state>
+                    <name>port 1/1/15</name>
+                    <type xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:PORT</type>
+                    <id>port 1/1/15</id>
+                    <location>1/1/15</location>
+                    <description>Router Desc</description>
+                    <removable>false</removable>
+                    <oper-status xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:ACTIVE</oper-status>
+                    <empty>false</empty>
+                    <parent>mda 1/1</parent>
+                </state>
+                <properties>
+                    <property>
+                        <name>ifindex</name>
+                        <state>
+                            <name>ifindex</name>
+                            <value>1610891384</value>
+                            <configurable>false</configurable>
+                        </state>
+                    </property>
+                </properties>
+                <subcomponents>
+                    <subcomponent>
+                        <name>transceiver 1/1/15</name>
+                        <state>
+                            <name>transceiver 1/1/15</name>
+                        </state>
+                    </subcomponent>
+                </subcomponents>
+            </component>
+            <component>
+                <name>port 1/1/16</name>
+                <state>
+                    <name>port 1/1/16</name>
+                    <type xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:PORT</type>
+                    <id>port 1/1/16</id>
+                    <location>1/1/16</location>
+                    <description>Router Desc</description>
+                    <removable>false</removable>
+                    <oper-status xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:ACTIVE</oper-status>
+                    <empty>false</empty>
+                    <parent>mda 1/1</parent>
+                </state>
+                <properties>
+                    <property>
+                        <name>ifindex</name>
+                        <state>
+                            <name>ifindex</name>
+                            <value>1610891392</value>
+                            <configurable>false</configurable>
+                        </state>
+                    </property>
+                </properties>
+                <subcomponents>
+                    <subcomponent>
+                        <name>transceiver 1/1/16</name>
+                        <state>
+                            <name>transceiver 1/1/16</name>
+                        </state>
+                    </subcomponent>
+                </subcomponents>
+            </component>
+            <component>
+                <name>port 1/1/17</name>
+                <state>
+                    <name>port 1/1/17</name>
+                    <type xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:PORT</type>
+                    <id>port 1/1/17</id>
+                    <location>1/1/17</location>
+                    <description>Router Desc</description>
+                    <removable>false</removable>
+                    <oper-status xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:ACTIVE</oper-status>
+                    <empty>false</empty>
+                    <parent>mda 1/1</parent>
+                </state>
+                <properties>
+                    <property>
+                        <name>ifindex</name>
+                        <state>
+                            <name>ifindex</name>
+                            <value>1610891400</value>
+                            <configurable>false</configurable>
+                        </state>
+                    </property>
+                </properties>
+                <subcomponents>
+                    <subcomponent>
+                        <name>transceiver 1/1/17</name>
+                        <state>
+                            <name>transceiver 1/1/17</name>
+                        </state>
+                    </subcomponent>
+                </subcomponents>
+            </component>
+            <component>
+                <name>port 1/1/18</name>
+                <state>
+                    <name>port 1/1/18</name>
+                    <type xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:PORT</type>
+                    <id>port 1/1/18</id>
+                    <location>1/1/18</location>
+                    <description>Router Desc</description>
+                    <removable>false</removable>
+                    <oper-status xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:ACTIVE</oper-status>
+                    <empty>false</empty>
+                    <parent>mda 1/1</parent>
+                </state>
+                <properties>
+                    <property>
+                        <name>ifindex</name>
+                        <state>
+                            <name>ifindex</name>
+                            <value>1610891408</value>
+                            <configurable>false</configurable>
+                        </state>
+                    </property>
+                </properties>
+                <subcomponents>
+                    <subcomponent>
+                        <name>transceiver 1/1/18</name>
+                        <state>
+                            <name>transceiver 1/1/18</name>
+                        </state>
+                    </subcomponent>
+                </subcomponents>
+            </component>
+            <component>
+                <name>port 1/1/19</name>
+                <state>
+                    <name>port 1/1/19</name>
+                    <type xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:PORT</type>
+                    <id>port 1/1/19</id>
+                    <location>1/1/19</location>
+                    <description>Router Desc</description>
+                    <removable>false</removable>
+                    <oper-status xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:ACTIVE</oper-status>
+                    <empty>false</empty>
+                    <parent>mda 1/1</parent>
+                </state>
+                <properties>
+                    <property>
+                        <name>ifindex</name>
+                        <state>
+                            <name>ifindex</name>
+                            <value>1610891416</value>
+                            <configurable>false</configurable>
+                        </state>
+                    </property>
+                </properties>
+                <subcomponents>
+                    <subcomponent>
+                        <name>transceiver 1/1/19</name>
+                        <state>
+                            <name>transceiver 1/1/19</name>
+                        </state>
+                    </subcomponent>
+                </subcomponents>
+            </component>
+            <component>
+                <name>port 1/1/20</name>
+                <state>
+                    <name>port 1/1/20</name>
+                    <type xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:PORT</type>
+                    <id>port 1/1/20</id>
+                    <location>1/1/20</location>
+                    <description>Router Desc</description>
+                    <removable>false</removable>
+                    <oper-status xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:ACTIVE</oper-status>
+                    <empty>false</empty>
+                    <parent>mda 1/1</parent>
+                </state>
+                <properties>
+                    <property>
+                        <name>ifindex</name>
+                        <state>
+                            <name>ifindex</name>
+                            <value>1610891424</value>
+                            <configurable>false</configurable>
+                        </state>
+                    </property>
+                </properties>
+                <subcomponents>
+                    <subcomponent>
+                        <name>transceiver 1/1/20</name>
+                        <state>
+                            <name>transceiver 1/1/20</name>
+                        </state>
+                    </subcomponent>
+                </subcomponents>
+            </component>
+            <component>
+                <name>port 1/1/21</name>
+                <state>
+                    <name>port 1/1/21</name>
+                    <type xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:PORT</type>
+                    <id>port 1/1/21</id>
+                    <location>1/1/21</location>
+                    <description>Router Desc</description>
+                    <removable>false</removable>
+                    <oper-status xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:DISABLED</oper-status>
+                    <empty>false</empty>
+                    <parent>mda 1/1</parent>
+                </state>
+                <properties>
+                    <property>
+                        <name>ifindex</name>
+                        <state>
+                            <name>ifindex</name>
+                            <value>1610891432</value>
+                            <configurable>false</configurable>
+                        </state>
+                    </property>
+                </properties>
+                <subcomponents>
+                    <subcomponent>
+                        <name>transceiver 1/1/21</name>
+                        <state>
+                            <name>transceiver 1/1/21</name>
+                        </state>
+                    </subcomponent>
+                </subcomponents>
+            </component>
+            <component>
+                <name>port 1/1/22</name>
+                <state>
+                    <name>port 1/1/22</name>
+                    <type xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:PORT</type>
+                    <id>port 1/1/22</id>
+                    <location>1/1/22</location>
+                    <description>Router Desc</description>
+                    <removable>false</removable>
+                    <oper-status xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:ACTIVE</oper-status>
+                    <empty>false</empty>
+                    <parent>mda 1/1</parent>
+                </state>
+                <properties>
+                    <property>
+                        <name>ifindex</name>
+                        <state>
+                            <name>ifindex</name>
+                            <value>1610891440</value>
+                            <configurable>false</configurable>
+                        </state>
+                    </property>
+                </properties>
+                <subcomponents>
+                    <subcomponent>
+                        <name>transceiver 1/1/22</name>
+                        <state>
+                            <name>transceiver 1/1/22</name>
+                        </state>
+                    </subcomponent>
+                </subcomponents>
+            </component>
+            <component>
+                <name>port 1/1/23</name>
+                <state>
+                    <name>port 1/1/23</name>
+                    <type xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:PORT</type>
+                    <id>port 1/1/23</id>
+                    <location>1/1/23</location>
+                    <description>Router Desc</description>
+                    <removable>false</removable>
+                    <oper-status xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:ACTIVE</oper-status>
+                    <empty>false</empty>
+                    <parent>mda 1/1</parent>
+                </state>
+                <properties>
+                    <property>
+                        <name>ifindex</name>
+                        <state>
+                            <name>ifindex</name>
+                            <value>1610891448</value>
+                            <configurable>false</configurable>
+                        </state>
+                    </property>
+                </properties>
+                <subcomponents>
+                    <subcomponent>
+                        <name>transceiver 1/1/23</name>
+                        <state>
+                            <name>transceiver 1/1/23</name>
+                        </state>
+                    </subcomponent>
+                </subcomponents>
+            </component>
+            <component>
+                <name>port 1/1/24</name>
+                <state>
+                    <name>port 1/1/24</name>
+                    <type xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:PORT</type>
+                    <id>port 1/1/24</id>
+                    <location>1/1/24</location>
+                    <description>Router Desc</description>
+                    <removable>false</removable>
+                    <oper-status xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:ACTIVE</oper-status>
+                    <empty>false</empty>
+                    <parent>mda 1/1</parent>
+                </state>
+                <properties>
+                    <property>
+                        <name>ifindex</name>
+                        <state>
+                            <name>ifindex</name>
+                            <value>1610891456</value>
+                            <configurable>false</configurable>
+                        </state>
+                    </property>
+                </properties>
+                <subcomponents>
+                    <subcomponent>
+                        <name>transceiver 1/1/24</name>
+                        <state>
+                            <name>transceiver 1/1/24</name>
+                        </state>
+                    </subcomponent>
+                </subcomponents>
+            </component>
+            <component>
+                <name>port 1/1/25</name>
+                <state>
+                    <name>port 1/1/25</name>
+                    <type xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:PORT</type>
+                    <id>port 1/1/25</id>
+                    <location>1/1/25</location>
+                    <description>Router Desc</description>
+                    <removable>false</removable>
+                    <oper-status xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:DISABLED</oper-status>
+                    <empty>false</empty>
+                    <parent>mda 1/1</parent>
+                </state>
+                <properties>
+                    <property>
+                        <name>ifindex</name>
+                        <state>
+                            <name>ifindex</name>
+                            <value>1610891464</value>
+                            <configurable>false</configurable>
+                        </state>
+                    </property>
+                </properties>
+                <subcomponents>
+                    <subcomponent>
+                        <name>transceiver 1/1/25</name>
+                        <state>
+                            <name>transceiver 1/1/25</name>
+                        </state>
+                    </subcomponent>
+                </subcomponents>
+            </component>
+            <component>
+                <name>port 1/1/26</name>
+                <state>
+                    <name>port 1/1/26</name>
+                    <type xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:PORT</type>
+                    <id>port 1/1/26</id>
+                    <location>1/1/26</location>
+                    <description>Router Desc</description>
+                    <removable>false</removable>
+                    <oper-status xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:DISABLED</oper-status>
+                    <empty>false</empty>
+                    <parent>mda 1/1</parent>
+                </state>
+                <properties>
+                    <property>
+                        <name>ifindex</name>
+                        <state>
+                            <name>ifindex</name>
+                            <value>1610891472</value>
+                            <configurable>false</configurable>
+                        </state>
+                    </property>
+                </properties>
+                <subcomponents>
+                    <subcomponent>
+                        <name>transceiver 1/1/26</name>
+                        <state>
+                            <name>transceiver 1/1/26</name>
+                        </state>
+                    </subcomponent>
+                </subcomponents>
+            </component>
+            <component>
+                <name>port 1/1/27</name>
+                <state>
+                    <name>port 1/1/27</name>
+                    <type xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:PORT</type>
+                    <id>port 1/1/27</id>
+                    <location>1/1/27</location>
+                    <description>Router Desc</description>
+                    <removable>false</removable>
+                    <oper-status xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:DISABLED</oper-status>
+                    <empty>false</empty>
+                    <parent>mda 1/1</parent>
+                </state>
+                <properties>
+                    <property>
+                        <name>ifindex</name>
+                        <state>
+                            <name>ifindex</name>
+                            <value>1610891480</value>
+                            <configurable>false</configurable>
+                        </state>
+                    </property>
+                </properties>
+                <subcomponents>
+                    <subcomponent>
+                        <name>transceiver 1/1/27</name>
+                        <state>
+                            <name>transceiver 1/1/27</name>
+                        </state>
+                    </subcomponent>
+                </subcomponents>
+            </component>
+            <component>
+                <name>port 1/1/28</name>
+                <state>
+                    <name>port 1/1/28</name>
+                    <type xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:PORT</type>
+                    <id>port 1/1/28</id>
+                    <location>1/1/28</location>
+                    <description>Router Desc</description>
+                    <removable>false</removable>
+                    <oper-status xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:DISABLED</oper-status>
+                    <empty>false</empty>
+                    <parent>mda 1/1</parent>
+                </state>
+                <properties>
+                    <property>
+                        <name>ifindex</name>
+                        <state>
+                            <name>ifindex</name>
+                            <value>1610891488</value>
+                            <configurable>false</configurable>
+                        </state>
+                    </property>
+                </properties>
+                <subcomponents>
+                    <subcomponent>
+                        <name>transceiver 1/1/28</name>
+                        <state>
+                            <name>transceiver 1/1/28</name>
+                        </state>
+                    </subcomponent>
+                </subcomponents>
+            </component>
+            <component>
+                <name>port 1/1/29</name>
+                <state>
+                    <name>port 1/1/29</name>
+                    <type xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:PORT</type>
+                    <id>port 1/1/29</id>
+                    <location>1/1/29</location>
+                    <description>Router Desc</description>
+                    <removable>false</removable>
+                    <oper-status xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:ACTIVE</oper-status>
+                    <empty>false</empty>
+                    <parent>mda 1/1</parent>
+                </state>
+                <properties>
+                    <property>
+                        <name>ifindex</name>
+                        <state>
+                            <name>ifindex</name>
+                            <value>1610891496</value>
+                            <configurable>false</configurable>
+                        </state>
+                    </property>
+                </properties>
+                <subcomponents>
+                    <subcomponent>
+                        <name>transceiver 1/1/29</name>
+                        <state>
+                            <name>transceiver 1/1/29</name>
+                        </state>
+                    </subcomponent>
+                </subcomponents>
+            </component>
+            <component>
+                <name>port 1/1/30</name>
+                <state>
+                    <name>port 1/1/30</name>
+                    <type xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:PORT</type>
+                    <id>port 1/1/30</id>
+                    <location>1/1/30</location>
+                    <description>Router Desc</description>
+                    <removable>false</removable>
+                    <oper-status xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:ACTIVE</oper-status>
+                    <empty>false</empty>
+                    <parent>mda 1/1</parent>
+                </state>
+                <properties>
+                    <property>
+                        <name>ifindex</name>
+                        <state>
+                            <name>ifindex</name>
+                            <value>1610891504</value>
+                            <configurable>false</configurable>
+                        </state>
+                    </property>
+                </properties>
+                <subcomponents>
+                    <subcomponent>
+                        <name>transceiver 1/1/30</name>
+                        <state>
+                            <name>transceiver 1/1/30</name>
+                        </state>
+                    </subcomponent>
+                </subcomponents>
+            </component>
+            <component>
+                <name>port 1/1/31</name>
+                <state>
+                    <name>port 1/1/31</name>
+                    <type xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:PORT</type>
+                    <id>port 1/1/31</id>
+                    <location>1/1/31</location>
+                    <description>Router Desc</description>
+                    <removable>false</removable>
+                    <oper-status xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:ACTIVE</oper-status>
+                    <empty>false</empty>
+                    <parent>mda 1/1</parent>
+                </state>
+                <properties>
+                    <property>
+                        <name>ifindex</name>
+                        <state>
+                            <name>ifindex</name>
+                            <value>1610891512</value>
+                            <configurable>false</configurable>
+                        </state>
+                    </property>
+                </properties>
+                <subcomponents>
+                    <subcomponent>
+                        <name>transceiver 1/1/31</name>
+                        <state>
+                            <name>transceiver 1/1/31</name>
+                        </state>
+                    </subcomponent>
+                </subcomponents>
+            </component>
+            <component>
+                <name>port 1/1/32</name>
+                <state>
+                    <name>port 1/1/32</name>
+                    <type xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:PORT</type>
+                    <id>port 1/1/32</id>
+                    <location>1/1/32</location>
+                    <description>Router Desc</description>
+                    <removable>false</removable>
+                    <oper-status xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:ACTIVE</oper-status>
+                    <empty>false</empty>
+                    <parent>mda 1/1</parent>
+                </state>
+                <properties>
+                    <property>
+                        <name>ifindex</name>
+                        <state>
+                            <name>ifindex</name>
+                            <value>1610891520</value>
+                            <configurable>false</configurable>
+                        </state>
+                    </property>
+                </properties>
+                <subcomponents>
+                    <subcomponent>
+                        <name>transceiver 1/1/32</name>
+                        <state>
+                            <name>transceiver 1/1/32</name>
+                        </state>
+                    </subcomponent>
+                </subcomponents>
+            </component>
+            <component>
+                <name>port 1/1/c33</name>
+                <state>
+                    <name>port 1/1/c33</name>
+                    <type xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:PORT</type>
+                    <id>port 1/1/c33</id>
+                    <location>1/1/c33</location>
+                    <description>Router Desc</description>
+                    <removable>false</removable>
+                    <oper-status xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:DISABLED</oper-status>
+                    <empty>false</empty>
+                    <parent>mda 1/1</parent>
+                </state>
+                <properties>
+                    <property>
+                        <name>ifindex</name>
+                        <state>
+                            <name>ifindex</name>
+                            <value>1610901568</value>
+                            <configurable>false</configurable>
+                        </state>
+                    </property>
+                </properties>
+                <subcomponents>
+                    <subcomponent>
+                        <name>transceiver 1/1/c33</name>
+                        <state>
+                            <name>transceiver 1/1/c33</name>
+                        </state>
+                    </subcomponent>
+                </subcomponents>
+                <port>
+                    <breakout-mode xmlns="http://openconfig.net/yang/platform/port" xmlns:nokia-attr="urn:nokia.com:sros:ns:yang:sr:attributes">
+                        <groups>
+                            <group>
+                                <index>1</index>
+                                <state>
+                                    <index>1</index>
+                                    <num-breakouts>1</num-breakouts>
+                                    <breakout-speed xmlns:openconfig-if-ethernet="http://openconfig.net/yang/interfaces/ethernet">openconfig-if-ethernet:SPEED_100GB</breakout-speed>
+                                    <num-physical-channels>4</num-physical-channels>
+                                </state>
+                            </group>
+                        </groups>
+                    </breakout-mode>
+                </port>
+            </component>
+            <component>
+                <name>port 1/1/c33/1</name>
+                <state>
+                    <name>port 1/1/c33/1</name>
+                    <type xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:PORT</type>
+                    <id>port 1/1/c33/1</id>
+                    <location>1/1/c33/1</location>
+                    <description>Router Desc</description>
+                    <removable>false</removable>
+                    <oper-status xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:DISABLED</oper-status>
+                    <empty>false</empty>
+                    <parent>transceiver 1/1/c33</parent>
+                </state>
+                <properties>
+                    <property>
+                        <name>ifindex</name>
+                        <state>
+                            <name>ifindex</name>
+                            <value>1610901569</value>
+                            <configurable>false</configurable>
+                        </state>
+                    </property>
+                </properties>
+            </component>
+            <component>
+                <name>port 1/1/c34</name>
+                <state>
+                    <name>port 1/1/c34</name>
+                    <type xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:PORT</type>
+                    <id>port 1/1/c34</id>
+                    <location>1/1/c34</location>
+                    <description>Router Desc</description>
+                    <removable>false</removable>
+                    <oper-status xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:ACTIVE</oper-status>
+                    <empty>false</empty>
+                    <parent>mda 1/1</parent>
+                </state>
+                <properties>
+                    <property>
+                        <name>ifindex</name>
+                        <state>
+                            <name>ifindex</name>
+                            <value>1610901632</value>
+                            <configurable>false</configurable>
+                        </state>
+                    </property>
+                </properties>
+                <subcomponents>
+                    <subcomponent>
+                        <name>transceiver 1/1/c34</name>
+                        <state>
+                            <name>transceiver 1/1/c34</name>
+                        </state>
+                    </subcomponent>
+                </subcomponents>
+                <port>
+                    <breakout-mode xmlns="http://openconfig.net/yang/platform/port" xmlns:nokia-attr="urn:nokia.com:sros:ns:yang:sr:attributes">
+                        <groups>
+                            <group>
+                                <index>1</index>
+                                <state>
+                                    <index>1</index>
+                                    <num-breakouts>1</num-breakouts>
+                                    <breakout-speed xmlns:openconfig-if-ethernet="http://openconfig.net/yang/interfaces/ethernet">openconfig-if-ethernet:SPEED_100GB</breakout-speed>
+                                    <num-physical-channels>4</num-physical-channels>
+                                </state>
+                            </group>
+                        </groups>
+                    </breakout-mode>
+                </port>
+            </component>
+            <component>
+                <name>port 1/1/c34/1</name>
+                <state>
+                    <name>port 1/1/c34/1</name>
+                    <type xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:PORT</type>
+                    <id>port 1/1/c34/1</id>
+                    <location>1/1/c34/1</location>
+                    <description>Router Desc</description>
+                    <removable>false</removable>
+                    <oper-status xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:ACTIVE</oper-status>
+                    <empty>false</empty>
+                    <parent>transceiver 1/1/c34</parent>
+                </state>
+                <properties>
+                    <property>
+                        <name>ifindex</name>
+                        <state>
+                            <name>ifindex</name>
+                            <value>1610901633</value>
+                            <configurable>false</configurable>
+                        </state>
+                    </property>
+                </properties>
+            </component>
+            <component>
+                <name>port A/1</name>
+                <state>
+                    <name>port A/1</name>
+                    <type xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:PORT</type>
+                    <id>port A/1</id>
+                    <location>A/1</location>
+                    <description>Router Desc</description>
+                    <removable>false</removable>
+                    <oper-status xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:INACTIVE</oper-status>
+                    <empty>false</empty>
+                    <parent>cpm A</parent>
+                </state>
+                <properties>
+                    <property>
+                        <name>ifindex</name>
+                        <state>
+                            <name>ifindex</name>
+                            <value>1611137032</value>
+                            <configurable>false</configurable>
+                        </state>
+                    </property>
+                </properties>
+            </component>
+            <component>
+                <name>transceiver 1/1/1</name>
+                <state>
+                    <name>transceiver 1/1/1</name>
+                    <type xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:TRANSCEIVER</type>
+                    <id>transceiver 1/1/1</id>
+                    <location>1/1/1</location>
+                    <mfg-date>2011-09-20</mfg-date>
+                    <hardware-version>3HE00062CBAA01  ALA  IPUIBDYDAA</hardware-version>
+                    <serial-no>PLD0KWT         </serial-no>
+                    <part-no>FCLF8521P2BTL-A5</part-no>
+                    <removable>true</removable>
+                    <oper-status xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:ACTIVE</oper-status>
+                    <empty>false</empty>
+                    <parent>port 1/1/1</parent>
+                </state>
+                <transceiver xmlns="http://openconfig.net/yang/platform/transceiver" xmlns:nokia-attr="urn:nokia.com:sros:ns:yang:sr:attributes">
+                    <state>
+                        <enabled>true</enabled>
+                        <module-functional-type xmlns:openconfig-transport-types="http://openconfig.net/yang/transport-types">openconfig-transport-types:TYPE_STANDARD_OPTIC</module-functional-type>
+                        <present>PRESENT</present>
+                        <form-factor xmlns:openconfig-transport-types="http://openconfig.net/yang/transport-types">openconfig-transport-types:SFP</form-factor>
+                        <vendor>00:90:65</vendor>
+                        <vendor-part>FCLF8521P2BTL-A5</vendor-part>
+                        <serial-no>PLD0KWT         </serial-no>
+                        <date-code>2011-09-20T00:00:00Z+00:00</date-code>
+                    </state>
+                </transceiver>
+            </component>
+            <component>
+                <name>transceiver 1/1/2</name>
+                <state>
+                    <name>transceiver 1/1/2</name>
+                    <type xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:TRANSCEIVER</type>
+                    <id>transceiver 1/1/2</id>
+                    <location>1/1/2</location>
+                    <removable>true</removable>
+                    <oper-status xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:INACTIVE</oper-status>
+                    <empty>true</empty>
+                    <parent>port 1/1/2</parent>
+                </state>
+                <transceiver xmlns="http://openconfig.net/yang/platform/transceiver" xmlns:nokia-attr="urn:nokia.com:sros:ns:yang:sr:attributes">
+                    <state>
+                        <enabled>true</enabled>
+                        <module-functional-type xmlns:openconfig-transport-types="http://openconfig.net/yang/transport-types">openconfig-transport-types:TYPE_STANDARD_OPTIC</module-functional-type>
+                        <present>NOT_PRESENT</present>
+                        <form-factor xmlns:openconfig-transport-types="http://openconfig.net/yang/transport-types">openconfig-transport-types:OTHER</form-factor>
+                        <vendor>00:00:00</vendor>
+                    </state>
+                </transceiver>
+            </component>
+            <component>
+                <name>transceiver 1/1/3</name>
+                <state>
+                    <name>transceiver 1/1/3</name>
+                    <type xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:TRANSCEIVER</type>
+                    <id>transceiver 1/1/3</id>
+                    <location>1/1/3</location>
+                    <removable>true</removable>
+                    <oper-status xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:INACTIVE</oper-status>
+                    <empty>true</empty>
+                    <parent>port 1/1/3</parent>
+                </state>
+                <transceiver xmlns="http://openconfig.net/yang/platform/transceiver" xmlns:nokia-attr="urn:nokia.com:sros:ns:yang:sr:attributes">
+                    <state>
+                        <enabled>false</enabled>
+                        <module-functional-type xmlns:openconfig-transport-types="http://openconfig.net/yang/transport-types">openconfig-transport-types:TYPE_STANDARD_OPTIC</module-functional-type>
+                        <present>NOT_PRESENT</present>
+                        <form-factor xmlns:openconfig-transport-types="http://openconfig.net/yang/transport-types">openconfig-transport-types:OTHER</form-factor>
+                        <vendor>00:00:00</vendor>
+                    </state>
+                </transceiver>
+            </component>
+            <component>
+                <name>transceiver 1/1/4</name>
+                <state>
+                    <name>transceiver 1/1/4</name>
+                    <type xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:TRANSCEIVER</type>
+                    <id>transceiver 1/1/4</id>
+                    <location>1/1/4</location>
+                    <removable>true</removable>
+                    <oper-status xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:INACTIVE</oper-status>
+                    <empty>true</empty>
+                    <parent>port 1/1/4</parent>
+                </state>
+                <transceiver xmlns="http://openconfig.net/yang/platform/transceiver" xmlns:nokia-attr="urn:nokia.com:sros:ns:yang:sr:attributes">
+                    <state>
+                        <enabled>true</enabled>
+                        <module-functional-type xmlns:openconfig-transport-types="http://openconfig.net/yang/transport-types">openconfig-transport-types:TYPE_STANDARD_OPTIC</module-functional-type>
+                        <present>NOT_PRESENT</present>
+                        <form-factor xmlns:openconfig-transport-types="http://openconfig.net/yang/transport-types">openconfig-transport-types:OTHER</form-factor>
+                        <vendor>00:00:00</vendor>
+                    </state>
+                </transceiver>
+            </component>
+            <component>
+                <name>transceiver 1/1/5</name>
+                <state>
+                    <name>transceiver 1/1/5</name>
+                    <type xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:TRANSCEIVER</type>
+                    <id>transceiver 1/1/5</id>
+                    <location>1/1/5</location>
+                    <mfg-date>2011-09-19</mfg-date>
+                    <hardware-version>3HE00062CBAA01  ALA  IPUIBDYDAA</hardware-version>
+                    <serial-no>PLD0M1R         </serial-no>
+                    <part-no>FCLF8521P2BTL-A5</part-no>
+                    <removable>true</removable>
+                    <oper-status xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:ACTIVE</oper-status>
+                    <empty>false</empty>
+                    <parent>port 1/1/5</parent>
+                </state>
+                <transceiver xmlns="http://openconfig.net/yang/platform/transceiver" xmlns:nokia-attr="urn:nokia.com:sros:ns:yang:sr:attributes">
+                    <state>
+                        <enabled>true</enabled>
+                        <module-functional-type xmlns:openconfig-transport-types="http://openconfig.net/yang/transport-types">openconfig-transport-types:TYPE_STANDARD_OPTIC</module-functional-type>
+                        <present>PRESENT</present>
+                        <form-factor xmlns:openconfig-transport-types="http://openconfig.net/yang/transport-types">openconfig-transport-types:SFP</form-factor>
+                        <vendor>00:90:65</vendor>
+                        <vendor-part>FCLF8521P2BTL-A5</vendor-part>
+                        <serial-no>PLD0M1R         </serial-no>
+                        <date-code>2011-09-19T00:00:00Z+00:00</date-code>
+                    </state>
+                </transceiver>
+            </component>
+            <component>
+                <name>transceiver 1/1/6</name>
+                <state>
+                    <name>transceiver 1/1/6</name>
+                    <type xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:TRANSCEIVER</type>
+                    <id>transceiver 1/1/6</id>
+                    <location>1/1/6</location>
+                    <removable>true</removable>
+                    <oper-status xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:INACTIVE</oper-status>
+                    <empty>true</empty>
+                    <parent>port 1/1/6</parent>
+                </state>
+                <transceiver xmlns="http://openconfig.net/yang/platform/transceiver" xmlns:nokia-attr="urn:nokia.com:sros:ns:yang:sr:attributes">
+                    <state>
+                        <enabled>false</enabled>
+                        <module-functional-type xmlns:openconfig-transport-types="http://openconfig.net/yang/transport-types">openconfig-transport-types:TYPE_STANDARD_OPTIC</module-functional-type>
+                        <present>NOT_PRESENT</present>
+                        <form-factor xmlns:openconfig-transport-types="http://openconfig.net/yang/transport-types">openconfig-transport-types:OTHER</form-factor>
+                        <vendor>00:00:00</vendor>
+                    </state>
+                </transceiver>
+            </component>
+            <component>
+                <name>transceiver 1/1/7</name>
+                <state>
+                    <name>transceiver 1/1/7</name>
+                    <type xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:TRANSCEIVER</type>
+                    <id>transceiver 1/1/7</id>
+                    <location>1/1/7</location>
+                    <mfg-date>2018-04-10</mfg-date>
+                    <serial-no>AN1815ZEZJ      </serial-no>
+                    <part-no>ABCU-5710RZ     </part-no>
+                    <removable>true</removable>
+                    <oper-status xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:INACTIVE</oper-status>
+                    <empty>false</empty>
+                    <parent>port 1/1/7</parent>
+                </state>
+                <transceiver xmlns="http://openconfig.net/yang/platform/transceiver" xmlns:nokia-attr="urn:nokia.com:sros:ns:yang:sr:attributes">
+                    <state>
+                        <enabled>true</enabled>
+                        <module-functional-type xmlns:openconfig-transport-types="http://openconfig.net/yang/transport-types">openconfig-transport-types:TYPE_STANDARD_OPTIC</module-functional-type>
+                        <present>PRESENT</present>
+                        <form-factor xmlns:openconfig-transport-types="http://openconfig.net/yang/transport-types">openconfig-transport-types:SFP</form-factor>
+                        <vendor>00:17:6a</vendor>
+                        <vendor-part>ABCU-5710RZ     </vendor-part>
+                        <serial-no>AN1815ZEZJ      </serial-no>
+                        <date-code>2018-04-10T00:00:00Z+00:00</date-code>
+                    </state>
+                </transceiver>
+            </component>
+            <component>
+                <name>transceiver 1/1/8</name>
+                <state>
+                    <name>transceiver 1/1/8</name>
+                    <type xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:TRANSCEIVER</type>
+                    <id>transceiver 1/1/8</id>
+                    <location>1/1/8</location>
+                    <mfg-date>2018-07-25</mfg-date>
+                    <serial-no>AN1830ALNN      </serial-no>
+                    <part-no>ABCU-5710RZ     </part-no>
+                    <removable>true</removable>
+                    <oper-status xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:INACTIVE</oper-status>
+                    <empty>false</empty>
+                    <parent>port 1/1/8</parent>
+                </state>
+                <transceiver xmlns="http://openconfig.net/yang/platform/transceiver" xmlns:nokia-attr="urn:nokia.com:sros:ns:yang:sr:attributes">
+                    <state>
+                        <enabled>true</enabled>
+                        <module-functional-type xmlns:openconfig-transport-types="http://openconfig.net/yang/transport-types">openconfig-transport-types:TYPE_STANDARD_OPTIC</module-functional-type>
+                        <present>PRESENT</present>
+                        <form-factor xmlns:openconfig-transport-types="http://openconfig.net/yang/transport-types">openconfig-transport-types:SFP</form-factor>
+                        <vendor>00:17:6a</vendor>
+                        <vendor-part>ABCU-5710RZ     </vendor-part>
+                        <serial-no>AN1830ALNN      </serial-no>
+                        <date-code>2018-07-25T00:00:00Z+00:00</date-code>
+                    </state>
+                </transceiver>
+            </component>
+            <component>
+                <name>transceiver 1/1/9</name>
+                <state>
+                    <name>transceiver 1/1/9</name>
+                    <type xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:TRANSCEIVER</type>
+                    <id>transceiver 1/1/9</id>
+                    <location>1/1/9</location>
+                    <mfg-date>2016-12-20</mfg-date>
+                    <serial-no>SM16510210366   </serial-no>
+                    <part-no>MXPD-243S       </part-no>
+                    <removable>true</removable>
+                    <oper-status xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:INACTIVE</oper-status>
+                    <empty>false</empty>
+                    <parent>port 1/1/9</parent>
+                    <temperature>
+                        <instant>54.3</instant>
+                    </temperature>
+                </state>
+                <transceiver xmlns="http://openconfig.net/yang/platform/transceiver" xmlns:nokia-attr="urn:nokia.com:sros:ns:yang:sr:attributes">
+                    <state>
+                        <enabled>true</enabled>
+                        <module-functional-type xmlns:openconfig-transport-types="http://openconfig.net/yang/transport-types">openconfig-transport-types:TYPE_STANDARD_OPTIC</module-functional-type>
+                        <present>PRESENT</present>
+                        <form-factor xmlns:openconfig-transport-types="http://openconfig.net/yang/transport-types">openconfig-transport-types:SFP</form-factor>
+                        <vendor>00:00:00</vendor>
+                        <vendor-part>MXPD-243S       </vendor-part>
+                        <serial-no>SM16510210366   </serial-no>
+                        <date-code>2016-12-20T00:00:00Z+00:00</date-code>
+                        <output-power>
+                            <instant>-6.11</instant>
+                        </output-power>
+                        <input-power>
+                            <instant>-9.63</instant>
+                        </input-power>
+                        <laser-bias-current>
+                            <instant>9.1</instant>
+                        </laser-bias-current>
+                    </state>
+                </transceiver>
+            </component>
+            <component>
+                <name>transceiver 1/1/10</name>
+                <state>
+                    <name>transceiver 1/1/10</name>
+                    <type xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:TRANSCEIVER</type>
+                    <id>transceiver 1/1/10</id>
+                    <location>1/1/10</location>
+                    <mfg-date>2013-08-01</mfg-date>
+                    <hardware-version>3HE00028CAAA01  ALA  IPUIBDLDAA</hardware-version>
+                    <serial-no>D8V2008559      </serial-no>
+                    <part-no>SPGBLXIDFNAL    </part-no>
+                    <removable>true</removable>
+                    <oper-status xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:ACTIVE</oper-status>
+                    <empty>false</empty>
+                    <parent>port 1/1/10</parent>
+                    <temperature>
+                        <instant>60.1</instant>
+                    </temperature>
+                </state>
+                <transceiver xmlns="http://openconfig.net/yang/platform/transceiver" xmlns:nokia-attr="urn:nokia.com:sros:ns:yang:sr:attributes">
+                    <state>
+                        <enabled>true</enabled>
+                        <module-functional-type xmlns:openconfig-transport-types="http://openconfig.net/yang/transport-types">openconfig-transport-types:TYPE_STANDARD_OPTIC</module-functional-type>
+                        <present>PRESENT</present>
+                        <form-factor xmlns:openconfig-transport-types="http://openconfig.net/yang/transport-types">openconfig-transport-types:SFP</form-factor>
+                        <vendor>00:1f:22</vendor>
+                        <vendor-part>SPGBLXIDFNAL    </vendor-part>
+                        <serial-no>D8V2008559      </serial-no>
+                        <date-code>2013-08-01T00:00:00Z+00:00</date-code>
+                        <output-power>
+                            <instant>-5.23</instant>
+                        </output-power>
+                        <input-power>
+                            <instant>-7.93</instant>
+                        </input-power>
+                        <laser-bias-current>
+                            <instant>30.1</instant>
+                        </laser-bias-current>
+                    </state>
+                </transceiver>
+            </component>
+            <component>
+                <name>transceiver 1/1/11</name>
+                <state>
+                    <name>transceiver 1/1/11</name>
+                    <type xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:TRANSCEIVER</type>
+                    <id>transceiver 1/1/11</id>
+                    <location>1/1/11</location>
+                    <mfg-date>2021-02-10</mfg-date>
+                    <serial-no>PM1R274980      </serial-no>
+                    <part-no>EOLP-1396-10    </part-no>
+                    <removable>true</removable>
+                    <oper-status xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:INACTIVE</oper-status>
+                    <empty>false</empty>
+                    <parent>port 1/1/11</parent>
+                    <temperature>
+                        <instant>54.3</instant>
+                    </temperature>
+                </state>
+                <transceiver xmlns="http://openconfig.net/yang/platform/transceiver" xmlns:nokia-attr="urn:nokia.com:sros:ns:yang:sr:attributes">
+                    <state>
+                        <enabled>true</enabled>
+                        <module-functional-type xmlns:openconfig-transport-types="http://openconfig.net/yang/transport-types">openconfig-transport-types:TYPE_STANDARD_OPTIC</module-functional-type>
+                        <present>PRESENT</present>
+                        <form-factor xmlns:openconfig-transport-types="http://openconfig.net/yang/transport-types">openconfig-transport-types:SFP</form-factor>
+                        <vendor>00:00:00</vendor>
+                        <vendor-part>EOLP-1396-10    </vendor-part>
+                        <serial-no>PM1R274980      </serial-no>
+                        <date-code>2021-02-10T00:00:00Z+00:00</date-code>
+                        <output-power>
+                            <instant>-1.53</instant>
+                        </output-power>
+                        <input-power>
+                            <instant>-3.44</instant>
+                        </input-power>
+                        <laser-bias-current>
+                            <instant>41.5</instant>
+                        </laser-bias-current>
+                    </state>
+                </transceiver>
+            </component>
+            <component>
+                <name>transceiver 1/1/12</name>
+                <state>
+                    <name>transceiver 1/1/12</name>
+                    <type xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:TRANSCEIVER</type>
+                    <id>transceiver 1/1/12</id>
+                    <location>1/1/12</location>
+                    <mfg-date>2020-04-03</mfg-date>
+                    <serial-no>UJLA3V00DMQ     </serial-no>
+                    <part-no>LTF1305-BC+     </part-no>
+                    <removable>true</removable>
+                    <oper-status xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:INACTIVE</oper-status>
+                    <empty>false</empty>
+                    <parent>port 1/1/12</parent>
+                    <temperature>
+                        <instant>52.1</instant>
+                    </temperature>
+                </state>
+                <transceiver xmlns="http://openconfig.net/yang/platform/transceiver" xmlns:nokia-attr="urn:nokia.com:sros:ns:yang:sr:attributes">
+                    <state>
+                        <enabled>true</enabled>
+                        <module-functional-type xmlns:openconfig-transport-types="http://openconfig.net/yang/transport-types">openconfig-transport-types:TYPE_STANDARD_OPTIC</module-functional-type>
+                        <present>PRESENT</present>
+                        <form-factor xmlns:openconfig-transport-types="http://openconfig.net/yang/transport-types">openconfig-transport-types:SFP</form-factor>
+                        <vendor>00:00:00</vendor>
+                        <vendor-part>LTF1305-BC+     </vendor-part>
+                        <serial-no>UJLA3V00DMQ     </serial-no>
+                        <date-code>2020-04-03T00:00:00Z+00:00</date-code>
+                        <output-power>
+                            <instant>-2.0</instant>
+                        </output-power>
+                        <input-power>
+                            <instant>-2.89</instant>
+                        </input-power>
+                        <laser-bias-current>
+                            <instant>34.7</instant>
+                        </laser-bias-current>
+                    </state>
+                </transceiver>
+            </component>
+            <component>
+                <name>transceiver 1/1/13</name>
+                <state>
+                    <name>transceiver 1/1/13</name>
+                    <type xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:TRANSCEIVER</type>
+                    <id>transceiver 1/1/13</id>
+                    <location>1/1/13</location>
+                    <mfg-date>2016-08-24</mfg-date>
+                    <serial-no>EA163400421531  </serial-no>
+                    <part-no>RTXM191-400     </part-no>
+                    <removable>true</removable>
+                    <oper-status xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:INACTIVE</oper-status>
+                    <empty>false</empty>
+                    <parent>port 1/1/13</parent>
+                    <temperature>
+                        <instant>51.0</instant>
+                    </temperature>
+                </state>
+                <transceiver xmlns="http://openconfig.net/yang/platform/transceiver" xmlns:nokia-attr="urn:nokia.com:sros:ns:yang:sr:attributes">
+                    <state>
+                        <enabled>true</enabled>
+                        <module-functional-type xmlns:openconfig-transport-types="http://openconfig.net/yang/transport-types">openconfig-transport-types:TYPE_STANDARD_OPTIC</module-functional-type>
+                        <present>PRESENT</present>
+                        <form-factor xmlns:openconfig-transport-types="http://openconfig.net/yang/transport-types">openconfig-transport-types:SFP</form-factor>
+                        <vendor>00:1c:ad</vendor>
+                        <vendor-part>RTXM191-400     </vendor-part>
+                        <serial-no>EA163400421531  </serial-no>
+                        <date-code>2016-08-24T00:00:00Z+00:00</date-code>
+                        <output-power>
+                            <instant>-5.45</instant>
+                        </output-power>
+                        <input-power>
+                            <instant>-6.91</instant>
+                        </input-power>
+                        <laser-bias-current>
+                            <instant>13.5</instant>
+                        </laser-bias-current>
+                    </state>
+                </transceiver>
+            </component>
+            <component>
+                <name>transceiver 1/1/14</name>
+                <state>
+                    <name>transceiver 1/1/14</name>
+                    <type xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:TRANSCEIVER</type>
+                    <id>transceiver 1/1/14</id>
+                    <location>1/1/14</location>
+                    <mfg-date>2013-08-01</mfg-date>
+                    <hardware-version>3HE00028CAAA01  ALA  IPUIBDLDAA</hardware-version>
+                    <serial-no>D8V2008698      </serial-no>
+                    <part-no>SPGBLXIDFNAL    </part-no>
+                    <removable>true</removable>
+                    <oper-status xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:ACTIVE</oper-status>
+                    <empty>false</empty>
+                    <parent>port 1/1/14</parent>
+                    <temperature>
+                        <instant>58.8</instant>
+                    </temperature>
+                </state>
+                <transceiver xmlns="http://openconfig.net/yang/platform/transceiver" xmlns:nokia-attr="urn:nokia.com:sros:ns:yang:sr:attributes">
+                    <state>
+                        <enabled>true</enabled>
+                        <module-functional-type xmlns:openconfig-transport-types="http://openconfig.net/yang/transport-types">openconfig-transport-types:TYPE_STANDARD_OPTIC</module-functional-type>
+                        <present>PRESENT</present>
+                        <form-factor xmlns:openconfig-transport-types="http://openconfig.net/yang/transport-types">openconfig-transport-types:SFP</form-factor>
+                        <vendor>00:1f:22</vendor>
+                        <vendor-part>SPGBLXIDFNAL    </vendor-part>
+                        <serial-no>D8V2008698      </serial-no>
+                        <date-code>2013-08-01T00:00:00Z+00:00</date-code>
+                        <output-power>
+                            <instant>-5.29</instant>
+                        </output-power>
+                        <input-power>
+                            <instant>-6.92</instant>
+                        </input-power>
+                        <laser-bias-current>
+                            <instant>27.9</instant>
+                        </laser-bias-current>
+                    </state>
+                </transceiver>
+            </component>
+            <component>
+                <name>transceiver 1/1/15</name>
+                <state>
+                    <name>transceiver 1/1/15</name>
+                    <type xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:TRANSCEIVER</type>
+                    <id>transceiver 1/1/15</id>
+                    <location>1/1/15</location>
+                    <mfg-date>2021-01-11</mfg-date>
+                    <serial-no>2000002142602   </serial-no>
+                    <part-no>MTRS-1E31-01    </part-no>
+                    <removable>true</removable>
+                    <oper-status xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:INACTIVE</oper-status>
+                    <empty>false</empty>
+                    <parent>port 1/1/15</parent>
+                    <temperature>
+                        <instant>49.7</instant>
+                    </temperature>
+                </state>
+                <transceiver xmlns="http://openconfig.net/yang/platform/transceiver" xmlns:nokia-attr="urn:nokia.com:sros:ns:yang:sr:attributes">
+                    <state>
+                        <enabled>true</enabled>
+                        <module-functional-type xmlns:openconfig-transport-types="http://openconfig.net/yang/transport-types">openconfig-transport-types:TYPE_STANDARD_OPTIC</module-functional-type>
+                        <present>PRESENT</present>
+                        <form-factor xmlns:openconfig-transport-types="http://openconfig.net/yang/transport-types">openconfig-transport-types:SFP</form-factor>
+                        <vendor>00:00:00</vendor>
+                        <vendor-part>MTRS-1E31-01    </vendor-part>
+                        <serial-no>2000002142602   </serial-no>
+                        <date-code>2021-01-11T00:00:00Z+00:00</date-code>
+                        <output-power>
+                            <instant>-4.12</instant>
+                        </output-power>
+                        <input-power>
+                            <instant>-3.64</instant>
+                        </input-power>
+                        <laser-bias-current>
+                            <instant>34.6</instant>
+                        </laser-bias-current>
+                    </state>
+                </transceiver>
+            </component>
+            <component>
+                <name>transceiver 1/1/16</name>
+                <state>
+                    <name>transceiver 1/1/16</name>
+                    <type xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:TRANSCEIVER</type>
+                    <id>transceiver 1/1/16</id>
+                    <location>1/1/16</location>
+                    <mfg-date>2019-06-17</mfg-date>
+                    <serial-no>MA19250080162   </serial-no>
+                    <part-no>MTRS-1E31-01    </part-no>
+                    <removable>true</removable>
+                    <oper-status xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:INACTIVE</oper-status>
+                    <empty>false</empty>
+                    <parent>port 1/1/16</parent>
+                    <temperature>
+                        <instant>54.2</instant>
+                    </temperature>
+                </state>
+                <transceiver xmlns="http://openconfig.net/yang/platform/transceiver" xmlns:nokia-attr="urn:nokia.com:sros:ns:yang:sr:attributes">
+                    <state>
+                        <enabled>true</enabled>
+                        <module-functional-type xmlns:openconfig-transport-types="http://openconfig.net/yang/transport-types">openconfig-transport-types:TYPE_STANDARD_OPTIC</module-functional-type>
+                        <present>PRESENT</present>
+                        <form-factor xmlns:openconfig-transport-types="http://openconfig.net/yang/transport-types">openconfig-transport-types:SFP</form-factor>
+                        <vendor>00:00:00</vendor>
+                        <vendor-part>MTRS-1E31-01    </vendor-part>
+                        <serial-no>MA19250080162   </serial-no>
+                        <date-code>2019-06-17T00:00:00Z+00:00</date-code>
+                        <output-power>
+                            <instant>-2.02</instant>
+                        </output-power>
+                        <input-power>
+                            <instant>-1.41</instant>
+                        </input-power>
+                        <laser-bias-current>
+                            <instant>42.8</instant>
+                        </laser-bias-current>
+                    </state>
+                </transceiver>
+            </component>
+            <component>
+                <name>transceiver 1/1/17</name>
+                <state>
+                    <name>transceiver 1/1/17</name>
+                    <type xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:TRANSCEIVER</type>
+                    <id>transceiver 1/1/17</id>
+                    <location>1/1/17</location>
+                    <mfg-date>2015-12-11</mfg-date>
+                    <serial-no>HA15490522334   </serial-no>
+                    <part-no>MXPD-243S       </part-no>
+                    <removable>true</removable>
+                    <oper-status xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:INACTIVE</oper-status>
+                    <empty>false</empty>
+                    <parent>port 1/1/17</parent>
+                    <temperature>
+                        <instant>53.4</instant>
+                    </temperature>
+                </state>
+                <transceiver xmlns="http://openconfig.net/yang/platform/transceiver" xmlns:nokia-attr="urn:nokia.com:sros:ns:yang:sr:attributes">
+                    <state>
+                        <enabled>true</enabled>
+                        <module-functional-type xmlns:openconfig-transport-types="http://openconfig.net/yang/transport-types">openconfig-transport-types:TYPE_STANDARD_OPTIC</module-functional-type>
+                        <present>PRESENT</present>
+                        <form-factor xmlns:openconfig-transport-types="http://openconfig.net/yang/transport-types">openconfig-transport-types:SFP</form-factor>
+                        <vendor>00:00:00</vendor>
+                        <vendor-part>MXPD-243S       </vendor-part>
+                        <serial-no>HA15490522334   </serial-no>
+                        <date-code>2015-12-11T00:00:00Z+00:00</date-code>
+                        <output-power>
+                            <instant>-6.26</instant>
+                        </output-power>
+                        <input-power>
+                            <instant>-6.52</instant>
+                        </input-power>
+                        <laser-bias-current>
+                            <instant>23.2</instant>
+                        </laser-bias-current>
+                    </state>
+                </transceiver>
+            </component>
+            <component>
+                <name>transceiver 1/1/18</name>
+                <state>
+                    <name>transceiver 1/1/18</name>
+                    <type xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:TRANSCEIVER</type>
+                    <id>transceiver 1/1/18</id>
+                    <location>1/1/18</location>
+                    <mfg-date>2018-03-19</mfg-date>
+                    <serial-no>MA18111220908   </serial-no>
+                    <part-no>MXPD-243S       </part-no>
+                    <removable>true</removable>
+                    <oper-status xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:INACTIVE</oper-status>
+                    <empty>false</empty>
+                    <parent>port 1/1/18</parent>
+                    <temperature>
+                        <instant>53.0</instant>
+                    </temperature>
+                </state>
+                <transceiver xmlns="http://openconfig.net/yang/platform/transceiver" xmlns:nokia-attr="urn:nokia.com:sros:ns:yang:sr:attributes">
+                    <state>
+                        <enabled>true</enabled>
+                        <module-functional-type xmlns:openconfig-transport-types="http://openconfig.net/yang/transport-types">openconfig-transport-types:TYPE_STANDARD_OPTIC</module-functional-type>
+                        <present>PRESENT</present>
+                        <form-factor xmlns:openconfig-transport-types="http://openconfig.net/yang/transport-types">openconfig-transport-types:SFP</form-factor>
+                        <vendor>00:00:00</vendor>
+                        <vendor-part>MXPD-243S       </vendor-part>
+                        <serial-no>MA18111220908   </serial-no>
+                        <date-code>2018-03-19T00:00:00Z+00:00</date-code>
+                        <output-power>
+                            <instant>-5.08</instant>
+                        </output-power>
+                        <input-power>
+                            <instant>-6.36</instant>
+                        </input-power>
+                        <laser-bias-current>
+                            <instant>28.0</instant>
+                        </laser-bias-current>
+                    </state>
+                </transceiver>
+            </component>
+            <component>
+                <name>transceiver 1/1/19</name>
+                <state>
+                    <name>transceiver 1/1/19</name>
+                    <type xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:TRANSCEIVER</type>
+                    <id>transceiver 1/1/19</id>
+                    <location>1/1/19</location>
+                    <mfg-date>2020-06-30</mfg-date>
+                    <serial-no>WX20063019932   </serial-no>
+                    <part-no>WXTRPGEAS1E     </part-no>
+                    <removable>true</removable>
+                    <oper-status xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:INACTIVE</oper-status>
+                    <empty>false</empty>
+                    <parent>port 1/1/19</parent>
+                    <temperature>
+                        <instant>49.7</instant>
+                    </temperature>
+                </state>
+                <transceiver xmlns="http://openconfig.net/yang/platform/transceiver" xmlns:nokia-attr="urn:nokia.com:sros:ns:yang:sr:attributes">
+                    <state>
+                        <enabled>true</enabled>
+                        <module-functional-type xmlns:openconfig-transport-types="http://openconfig.net/yang/transport-types">openconfig-transport-types:TYPE_STANDARD_OPTIC</module-functional-type>
+                        <present>PRESENT</present>
+                        <form-factor xmlns:openconfig-transport-types="http://openconfig.net/yang/transport-types">openconfig-transport-types:SFP</form-factor>
+                        <vendor>00:00:00</vendor>
+                        <vendor-part>WXTRPGEAS1E     </vendor-part>
+                        <serial-no>WX20063019932   </serial-no>
+                        <date-code>2020-06-30T00:00:00Z+00:00</date-code>
+                        <output-power>
+                            <instant>-6.39</instant>
+                        </output-power>
+                        <input-power>
+                            <instant>-6.43</instant>
+                        </input-power>
+                        <laser-bias-current>
+                            <instant>18.8</instant>
+                        </laser-bias-current>
+                    </state>
+                </transceiver>
+            </component>
+            <component>
+                <name>transceiver 1/1/20</name>
+                <state>
+                    <name>transceiver 1/1/20</name>
+                    <type xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:TRANSCEIVER</type>
+                    <id>transceiver 1/1/20</id>
+                    <location>1/1/20</location>
+                    <mfg-date>2015-12-11</mfg-date>
+                    <serial-no>HA15490520910   </serial-no>
+                    <part-no>MXPD-243S       </part-no>
+                    <removable>true</removable>
+                    <oper-status xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:INACTIVE</oper-status>
+                    <empty>false</empty>
+                    <parent>port 1/1/20</parent>
+                    <temperature>
+                        <instant>49.3</instant>
+                    </temperature>
+                </state>
+                <transceiver xmlns="http://openconfig.net/yang/platform/transceiver" xmlns:nokia-attr="urn:nokia.com:sros:ns:yang:sr:attributes">
+                    <state>
+                        <enabled>true</enabled>
+                        <module-functional-type xmlns:openconfig-transport-types="http://openconfig.net/yang/transport-types">openconfig-transport-types:TYPE_STANDARD_OPTIC</module-functional-type>
+                        <present>PRESENT</present>
+                        <form-factor xmlns:openconfig-transport-types="http://openconfig.net/yang/transport-types">openconfig-transport-types:SFP</form-factor>
+                        <vendor>00:00:00</vendor>
+                        <vendor-part>MXPD-243S       </vendor-part>
+                        <serial-no>HA15490520910   </serial-no>
+                        <date-code>2015-12-11T00:00:00Z+00:00</date-code>
+                        <output-power>
+                            <instant>-6.2</instant>
+                        </output-power>
+                        <input-power>
+                            <instant>-10.92</instant>
+                        </input-power>
+                        <laser-bias-current>
+                            <instant>21.9</instant>
+                        </laser-bias-current>
+                    </state>
+                </transceiver>
+            </component>
+            <component>
+                <name>transceiver 1/1/21</name>
+                <state>
+                    <name>transceiver 1/1/21</name>
+                    <type xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:TRANSCEIVER</type>
+                    <id>transceiver 1/1/21</id>
+                    <location>1/1/21</location>
+                    <removable>true</removable>
+                    <oper-status xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:INACTIVE</oper-status>
+                    <empty>true</empty>
+                    <parent>port 1/1/21</parent>
+                </state>
+                <transceiver xmlns="http://openconfig.net/yang/platform/transceiver" xmlns:nokia-attr="urn:nokia.com:sros:ns:yang:sr:attributes">
+                    <state>
+                        <enabled>false</enabled>
+                        <module-functional-type xmlns:openconfig-transport-types="http://openconfig.net/yang/transport-types">openconfig-transport-types:TYPE_STANDARD_OPTIC</module-functional-type>
+                        <present>NOT_PRESENT</present>
+                        <form-factor xmlns:openconfig-transport-types="http://openconfig.net/yang/transport-types">openconfig-transport-types:OTHER</form-factor>
+                        <vendor>00:00:00</vendor>
+                    </state>
+                </transceiver>
+            </component>
+            <component>
+                <name>transceiver 1/1/22</name>
+                <state>
+                    <name>transceiver 1/1/22</name>
+                    <type xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:TRANSCEIVER</type>
+                    <id>transceiver 1/1/22</id>
+                    <location>1/1/22</location>
+                    <mfg-date>2013-08-01</mfg-date>
+                    <hardware-version>3HE00028CAAA01  ALA  IPUIBDLDAA</hardware-version>
+                    <serial-no>D8V2009978      </serial-no>
+                    <part-no>SPGBLXIDFNAL    </part-no>
+                    <removable>true</removable>
+                    <oper-status xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:ACTIVE</oper-status>
+                    <empty>false</empty>
+                    <parent>port 1/1/22</parent>
+                    <temperature>
+                        <instant>54.8</instant>
+                    </temperature>
+                </state>
+                <transceiver xmlns="http://openconfig.net/yang/platform/transceiver" xmlns:nokia-attr="urn:nokia.com:sros:ns:yang:sr:attributes">
+                    <state>
+                        <enabled>true</enabled>
+                        <module-functional-type xmlns:openconfig-transport-types="http://openconfig.net/yang/transport-types">openconfig-transport-types:TYPE_STANDARD_OPTIC</module-functional-type>
+                        <present>PRESENT</present>
+                        <form-factor xmlns:openconfig-transport-types="http://openconfig.net/yang/transport-types">openconfig-transport-types:SFP</form-factor>
+                        <vendor>00:1f:22</vendor>
+                        <vendor-part>SPGBLXIDFNAL    </vendor-part>
+                        <serial-no>D8V2009978      </serial-no>
+                        <date-code>2013-08-01T00:00:00Z+00:00</date-code>
+                        <output-power>
+                            <instant>-5.25</instant>
+                        </output-power>
+                        <input-power>
+                            <instant>-6.84</instant>
+                        </input-power>
+                        <laser-bias-current>
+                            <instant>25.8</instant>
+                        </laser-bias-current>
+                    </state>
+                </transceiver>
+            </component>
+            <component>
+                <name>transceiver 1/1/23</name>
+                <state>
+                    <name>transceiver 1/1/23</name>
+                    <type xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:TRANSCEIVER</type>
+                    <id>transceiver 1/1/23</id>
+                    <location>1/1/23</location>
+                    <mfg-date>2017-12-03</mfg-date>
+                    <hardware-version>3HE04823AAAA01  NOK  IPU3ANKEAA</hardware-version>
+                    <serial-no>AYN1ECY         </serial-no>
+                    <part-no>FTLX1471D3BCL-A5</part-no>
+                    <removable>true</removable>
+                    <oper-status xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:ACTIVE</oper-status>
+                    <empty>false</empty>
+                    <parent>port 1/1/23</parent>
+                    <temperature>
+                        <instant>45.3</instant>
+                    </temperature>
+                </state>
+                <transceiver xmlns="http://openconfig.net/yang/platform/transceiver" xmlns:nokia-attr="urn:nokia.com:sros:ns:yang:sr:attributes">
+                    <state>
+                        <enabled>true</enabled>
+                        <module-functional-type xmlns:openconfig-transport-types="http://openconfig.net/yang/transport-types">openconfig-transport-types:TYPE_STANDARD_OPTIC</module-functional-type>
+                        <present>PRESENT</present>
+                        <form-factor xmlns:openconfig-transport-types="http://openconfig.net/yang/transport-types">openconfig-transport-types:SFP</form-factor>
+                        <vendor>00:90:65</vendor>
+                        <vendor-part>FTLX1471D3BCL-A5</vendor-part>
+                        <serial-no>AYN1ECY         </serial-no>
+                        <date-code>2017-12-03T00:00:00Z+00:00</date-code>
+                        <output-power>
+                            <instant>-1.67</instant>
+                        </output-power>
+                        <input-power>
+                            <instant>-1.55</instant>
+                        </input-power>
+                        <laser-bias-current>
+                            <instant>46.9</instant>
+                        </laser-bias-current>
+                    </state>
+                </transceiver>
+            </component>
+            <component>
+                <name>transceiver 1/1/24</name>
+                <state>
+                    <name>transceiver 1/1/24</name>
+                    <type xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:TRANSCEIVER</type>
+                    <id>transceiver 1/1/24</id>
+                    <location>1/1/24</location>
+                    <mfg-date>2021-03-01</mfg-date>
+                    <serial-no>PM1R312690      </serial-no>
+                    <part-no>EOLP-1396-10    </part-no>
+                    <removable>true</removable>
+                    <oper-status xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:INACTIVE</oper-status>
+                    <empty>false</empty>
+                    <parent>port 1/1/24</parent>
+                    <temperature>
+                        <instant>50.1</instant>
+                    </temperature>
+                </state>
+                <transceiver xmlns="http://openconfig.net/yang/platform/transceiver" xmlns:nokia-attr="urn:nokia.com:sros:ns:yang:sr:attributes">
+                    <state>
+                        <enabled>true</enabled>
+                        <module-functional-type xmlns:openconfig-transport-types="http://openconfig.net/yang/transport-types">openconfig-transport-types:TYPE_STANDARD_OPTIC</module-functional-type>
+                        <present>PRESENT</present>
+                        <form-factor xmlns:openconfig-transport-types="http://openconfig.net/yang/transport-types">openconfig-transport-types:SFP</form-factor>
+                        <vendor>00:00:00</vendor>
+                        <vendor-part>EOLP-1396-10    </vendor-part>
+                        <serial-no>PM1R312690      </serial-no>
+                        <date-code>2021-03-01T00:00:00Z+00:00</date-code>
+                        <output-power>
+                            <instant>-2.37</instant>
+                        </output-power>
+                        <input-power>
+                            <instant>-4.08</instant>
+                        </input-power>
+                        <laser-bias-current>
+                            <instant>41.6</instant>
+                        </laser-bias-current>
+                    </state>
+                </transceiver>
+            </component>
+            <component>
+                <name>transceiver 1/1/25</name>
+                <state>
+                    <name>transceiver 1/1/25</name>
+                    <type xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:TRANSCEIVER</type>
+                    <id>transceiver 1/1/25</id>
+                    <location>1/1/25</location>
+                    <removable>true</removable>
+                    <oper-status xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:INACTIVE</oper-status>
+                    <empty>true</empty>
+                    <parent>port 1/1/25</parent>
+                </state>
+                <transceiver xmlns="http://openconfig.net/yang/platform/transceiver" xmlns:nokia-attr="urn:nokia.com:sros:ns:yang:sr:attributes">
+                    <state>
+                        <enabled>false</enabled>
+                        <module-functional-type xmlns:openconfig-transport-types="http://openconfig.net/yang/transport-types">openconfig-transport-types:TYPE_STANDARD_OPTIC</module-functional-type>
+                        <present>NOT_PRESENT</present>
+                        <form-factor xmlns:openconfig-transport-types="http://openconfig.net/yang/transport-types">openconfig-transport-types:OTHER</form-factor>
+                        <vendor>00:00:00</vendor>
+                    </state>
+                </transceiver>
+            </component>
+            <component>
+                <name>transceiver 1/1/26</name>
+                <state>
+                    <name>transceiver 1/1/26</name>
+                    <type xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:TRANSCEIVER</type>
+                    <id>transceiver 1/1/26</id>
+                    <location>1/1/26</location>
+                    <removable>true</removable>
+                    <oper-status xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:INACTIVE</oper-status>
+                    <empty>true</empty>
+                    <parent>port 1/1/26</parent>
+                </state>
+                <transceiver xmlns="http://openconfig.net/yang/platform/transceiver" xmlns:nokia-attr="urn:nokia.com:sros:ns:yang:sr:attributes">
+                    <state>
+                        <enabled>false</enabled>
+                        <module-functional-type xmlns:openconfig-transport-types="http://openconfig.net/yang/transport-types">openconfig-transport-types:TYPE_STANDARD_OPTIC</module-functional-type>
+                        <present>NOT_PRESENT</present>
+                        <form-factor xmlns:openconfig-transport-types="http://openconfig.net/yang/transport-types">openconfig-transport-types:OTHER</form-factor>
+                        <vendor>00:00:00</vendor>
+                    </state>
+                </transceiver>
+            </component>
+            <component>
+                <name>transceiver 1/1/27</name>
+                <state>
+                    <name>transceiver 1/1/27</name>
+                    <type xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:TRANSCEIVER</type>
+                    <id>transceiver 1/1/27</id>
+                    <location>1/1/27</location>
+                    <removable>true</removable>
+                    <oper-status xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:INACTIVE</oper-status>
+                    <empty>true</empty>
+                    <parent>port 1/1/27</parent>
+                </state>
+                <transceiver xmlns="http://openconfig.net/yang/platform/transceiver" xmlns:nokia-attr="urn:nokia.com:sros:ns:yang:sr:attributes">
+                    <state>
+                        <enabled>false</enabled>
+                        <module-functional-type xmlns:openconfig-transport-types="http://openconfig.net/yang/transport-types">openconfig-transport-types:TYPE_STANDARD_OPTIC</module-functional-type>
+                        <present>NOT_PRESENT</present>
+                        <form-factor xmlns:openconfig-transport-types="http://openconfig.net/yang/transport-types">openconfig-transport-types:OTHER</form-factor>
+                        <vendor>00:00:00</vendor>
+                    </state>
+                </transceiver>
+            </component>
+            <component>
+                <name>transceiver 1/1/28</name>
+                <state>
+                    <name>transceiver 1/1/28</name>
+                    <type xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:TRANSCEIVER</type>
+                    <id>transceiver 1/1/28</id>
+                    <location>1/1/28</location>
+                    <removable>true</removable>
+                    <oper-status xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:INACTIVE</oper-status>
+                    <empty>true</empty>
+                    <parent>port 1/1/28</parent>
+                </state>
+                <transceiver xmlns="http://openconfig.net/yang/platform/transceiver" xmlns:nokia-attr="urn:nokia.com:sros:ns:yang:sr:attributes">
+                    <state>
+                        <enabled>false</enabled>
+                        <module-functional-type xmlns:openconfig-transport-types="http://openconfig.net/yang/transport-types">openconfig-transport-types:TYPE_STANDARD_OPTIC</module-functional-type>
+                        <present>NOT_PRESENT</present>
+                        <form-factor xmlns:openconfig-transport-types="http://openconfig.net/yang/transport-types">openconfig-transport-types:OTHER</form-factor>
+                        <vendor>00:00:00</vendor>
+                    </state>
+                </transceiver>
+            </component>
+            <component>
+                <name>transceiver 1/1/29</name>
+                <state>
+                    <name>transceiver 1/1/29</name>
+                    <type xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:TRANSCEIVER</type>
+                    <id>transceiver 1/1/29</id>
+                    <location>1/1/29</location>
+                    <mfg-date>2019-06-21</mfg-date>
+                    <hardware-version>3HE04823AAAA01  NOK  IPU3ANKEAA</hardware-version>
+                    <serial-no>EC192500231263  </serial-no>
+                    <part-no>RTXM228-401-C82 </part-no>
+                    <removable>true</removable>
+                    <oper-status xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:ACTIVE</oper-status>
+                    <empty>false</empty>
+                    <parent>port 1/1/29</parent>
+                    <temperature>
+                        <instant>48.9</instant>
+                    </temperature>
+                </state>
+                <transceiver xmlns="http://openconfig.net/yang/platform/transceiver" xmlns:nokia-attr="urn:nokia.com:sros:ns:yang:sr:attributes">
+                    <state>
+                        <enabled>true</enabled>
+                        <module-functional-type xmlns:openconfig-transport-types="http://openconfig.net/yang/transport-types">openconfig-transport-types:TYPE_STANDARD_OPTIC</module-functional-type>
+                        <present>PRESENT</present>
+                        <form-factor xmlns:openconfig-transport-types="http://openconfig.net/yang/transport-types">openconfig-transport-types:SFP</form-factor>
+                        <vendor>00:1c:ad</vendor>
+                        <vendor-part>RTXM228-401-C82 </vendor-part>
+                        <serial-no>EC192500231263  </serial-no>
+                        <date-code>2019-06-21T00:00:00Z+00:00</date-code>
+                        <output-power>
+                            <instant>-2.83</instant>
+                        </output-power>
+                        <input-power>
+                            <instant>-11.6</instant>
+                        </input-power>
+                        <laser-bias-current>
+                            <instant>33.8</instant>
+                        </laser-bias-current>
+                    </state>
+                </transceiver>
+            </component>
+            <component>
+                <name>transceiver 1/1/30</name>
+                <state>
+                    <name>transceiver 1/1/30</name>
+                    <type xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:TRANSCEIVER</type>
+                    <id>transceiver 1/1/30</id>
+                    <location>1/1/30</location>
+                    <mfg-date>2019-06-21</mfg-date>
+                    <hardware-version>3HE04823AAAA01  NOK  IPU3ANKEAA</hardware-version>
+                    <serial-no>EC192500231264  </serial-no>
+                    <part-no>RTXM228-401-C82 </part-no>
+                    <removable>true</removable>
+                    <oper-status xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:ACTIVE</oper-status>
+                    <empty>false</empty>
+                    <parent>port 1/1/30</parent>
+                    <temperature>
+                        <instant>51.7</instant>
+                    </temperature>
+                </state>
+                <transceiver xmlns="http://openconfig.net/yang/platform/transceiver" xmlns:nokia-attr="urn:nokia.com:sros:ns:yang:sr:attributes">
+                    <state>
+                        <enabled>true</enabled>
+                        <module-functional-type xmlns:openconfig-transport-types="http://openconfig.net/yang/transport-types">openconfig-transport-types:TYPE_STANDARD_OPTIC</module-functional-type>
+                        <present>PRESENT</present>
+                        <form-factor xmlns:openconfig-transport-types="http://openconfig.net/yang/transport-types">openconfig-transport-types:SFP</form-factor>
+                        <vendor>00:1c:ad</vendor>
+                        <vendor-part>RTXM228-401-C82 </vendor-part>
+                        <serial-no>EC192500231264  </serial-no>
+                        <date-code>2019-06-21T00:00:00Z+00:00</date-code>
+                        <output-power>
+                            <instant>-3.86</instant>
+                        </output-power>
+                        <input-power>
+                            <instant>-9.18</instant>
+                        </input-power>
+                        <laser-bias-current>
+                            <instant>42.0</instant>
+                        </laser-bias-current>
+                    </state>
+                </transceiver>
+            </component>
+            <component>
+                <name>transceiver 1/1/31</name>
+                <state>
+                    <name>transceiver 1/1/31</name>
+                    <type xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:TRANSCEIVER</type>
+                    <id>transceiver 1/1/31</id>
+                    <location>1/1/31</location>
+                    <mfg-date>2017-05-13</mfg-date>
+                    <serial-no>INHAQ0146539    </serial-no>
+                    <part-no>TR-PX13L-N00    </part-no>
+                    <removable>true</removable>
+                    <oper-status xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:INACTIVE</oper-status>
+                    <empty>false</empty>
+                    <parent>port 1/1/31</parent>
+                    <temperature>
+                        <instant>49.2</instant>
+                    </temperature>
+                </state>
+                <transceiver xmlns="http://openconfig.net/yang/platform/transceiver" xmlns:nokia-attr="urn:nokia.com:sros:ns:yang:sr:attributes">
+                    <state>
+                        <enabled>true</enabled>
+                        <module-functional-type xmlns:openconfig-transport-types="http://openconfig.net/yang/transport-types">openconfig-transport-types:TYPE_STANDARD_OPTIC</module-functional-type>
+                        <present>PRESENT</present>
+                        <form-factor xmlns:openconfig-transport-types="http://openconfig.net/yang/transport-types">openconfig-transport-types:SFP</form-factor>
+                        <vendor>44:7c:7f</vendor>
+                        <vendor-part>TR-PX13L-N00    </vendor-part>
+                        <serial-no>INHAQ0146539    </serial-no>
+                        <date-code>2017-05-13T00:00:00Z+00:00</date-code>
+                        <output-power>
+                            <instant>-2.98</instant>
+                        </output-power>
+                        <input-power>
+                            <instant>-2.86</instant>
+                        </input-power>
+                        <laser-bias-current>
+                            <instant>32.7</instant>
+                        </laser-bias-current>
+                    </state>
+                </transceiver>
+            </component>
+            <component>
+                <name>transceiver 1/1/32</name>
+                <state>
+                    <name>transceiver 1/1/32</name>
+                    <type xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:TRANSCEIVER</type>
+                    <id>transceiver 1/1/32</id>
+                    <location>1/1/32</location>
+                    <mfg-date>2021-12-18</mfg-date>
+                    <serial-no>UJLB8V01RXA     </serial-no>
+                    <part-no>LTF1305-BC+     </part-no>
+                    <removable>true</removable>
+                    <oper-status xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:INACTIVE</oper-status>
+                    <empty>false</empty>
+                    <parent>port 1/1/32</parent>
+                    <temperature>
+                        <instant>46.2</instant>
+                    </temperature>
+                </state>
+                <transceiver xmlns="http://openconfig.net/yang/platform/transceiver" xmlns:nokia-attr="urn:nokia.com:sros:ns:yang:sr:attributes">
+                    <state>
+                        <enabled>true</enabled>
+                        <module-functional-type xmlns:openconfig-transport-types="http://openconfig.net/yang/transport-types">openconfig-transport-types:TYPE_STANDARD_OPTIC</module-functional-type>
+                        <present>PRESENT</present>
+                        <form-factor xmlns:openconfig-transport-types="http://openconfig.net/yang/transport-types">openconfig-transport-types:SFP</form-factor>
+                        <vendor>00:00:00</vendor>
+                        <vendor-part>LTF1305-BC+     </vendor-part>
+                        <serial-no>UJLB8V01RXA     </serial-no>
+                        <date-code>2021-12-18T00:00:00Z+00:00</date-code>
+                        <output-power>
+                            <instant>-2.81</instant>
+                        </output-power>
+                        <input-power>
+                            <instant>-3.67</instant>
+                        </input-power>
+                        <laser-bias-current>
+                            <instant>34.2</instant>
+                        </laser-bias-current>
+                    </state>
+                </transceiver>
+            </component>
+            <component>
+                <name>transceiver 1/1/c33</name>
+                <state>
+                    <name>transceiver 1/1/c33</name>
+                    <type xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:TRANSCEIVER</type>
+                    <id>transceiver 1/1/c33</id>
+                    <location>1/1/c33</location>
+                    <removable>true</removable>
+                    <oper-status xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:INACTIVE</oper-status>
+                    <empty>true</empty>
+                    <parent>port 1/1/c33</parent>
+                </state>
+                <subcomponents>
+                    <subcomponent>
+                        <name>port 1/1/c33/1</name>
+                        <state>
+                            <name>port 1/1/c33/1</name>
+                        </state>
+                    </subcomponent>
+                </subcomponents>
+                <transceiver xmlns="http://openconfig.net/yang/platform/transceiver" xmlns:nokia-attr="urn:nokia.com:sros:ns:yang:sr:attributes">
+                    <state>
+                        <enabled>false</enabled>
+                        <module-functional-type xmlns:openconfig-transport-types="http://openconfig.net/yang/transport-types">openconfig-transport-types:TYPE_STANDARD_OPTIC</module-functional-type>
+                        <present>NOT_PRESENT</present>
+                        <form-factor xmlns:openconfig-transport-types="http://openconfig.net/yang/transport-types">openconfig-transport-types:OTHER</form-factor>
+                        <vendor>00:00:00</vendor>
+                    </state>
+                </transceiver>
+            </component>
+            <component>
+                <name>transceiver 1/1/c34</name>
+                <state>
+                    <name>transceiver 1/1/c34</name>
+                    <type xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:TRANSCEIVER</type>
+                    <id>transceiver 1/1/c34</id>
+                    <location>1/1/c34</location>
+                    <mfg-date>2024-07-03</mfg-date>
+                    <hardware-version>3HE11239AARA01  NOK  IPUIBZ8DAA</hardware-version>
+                    <serial-no>NK2427N00BC     </serial-no>
+                    <part-no>SPQCEERCDFMAL   </part-no>
+                    <removable>true</removable>
+                    <oper-status xmlns:openconfig-platform-types="http://openconfig.net/yang/platform-types">openconfig-platform-types:ACTIVE</oper-status>
+                    <empty>false</empty>
+                    <parent>port 1/1/c34</parent>
+                    <temperature>
+                        <instant>55.7</instant>
+                    </temperature>
+                </state>
+                <subcomponents>
+                    <subcomponent>
+                        <name>port 1/1/c34/1</name>
+                        <state>
+                            <name>port 1/1/c34/1</name>
+                        </state>
+                    </subcomponent>
+                </subcomponents>
+                <transceiver xmlns="http://openconfig.net/yang/platform/transceiver" xmlns:nokia-attr="urn:nokia.com:sros:ns:yang:sr:attributes">
+                    <state>
+                        <enabled>true</enabled>
+                        <module-functional-type xmlns:openconfig-transport-types="http://openconfig.net/yang/transport-types">openconfig-transport-types:TYPE_STANDARD_OPTIC</module-functional-type>
+                        <present>PRESENT</present>
+                        <form-factor xmlns:openconfig-transport-types="http://openconfig.net/yang/transport-types">openconfig-transport-types:QSFP28</form-factor>
+                        <vendor>00:1f:22</vendor>
+                        <vendor-part>SPQCEERCDFMAL   </vendor-part>
+                        <serial-no>NK2427N00BC     </serial-no>
+                        <date-code>2024-07-03T00:00:00Z+00:00</date-code>
+                    </state>
+                    <physical-channels>
+                        <channel>
+                            <index>0</index>
+                            <state>
+                                <index>0</index>
+                                <output-power>
+                                    <instant>2.05</instant>
+                                </output-power>
+                                <input-power>
+                                    <instant>-15.67</instant>
+                                </input-power>
+                                <laser-bias-current>
+                                    <instant>53.5</instant>
+                                </laser-bias-current>
+                            </state>
+                        </channel>
+                        <channel>
+                            <index>1</index>
+                            <state>
+                                <index>1</index>
+                                <output-power>
+                                    <instant>2.61</instant>
+                                </output-power>
+                                <input-power>
+                                    <instant>-14.65</instant>
+                                </input-power>
+                                <laser-bias-current>
+                                    <instant>47.5</instant>
+                                </laser-bias-current>
+                            </state>
+                        </channel>
+                        <channel>
+                            <index>2</index>
+                            <state>
+                                <index>2</index>
+                                <output-power>
+                                    <instant>1.56</instant>
+                                </output-power>
+                                <input-power>
+                                    <instant>-14.2</instant>
+                                </input-power>
+                                <laser-bias-current>
+                                    <instant>54.0</instant>
+                                </laser-bias-current>
+                            </state>
+                        </channel>
+                        <channel>
+                            <index>3</index>
+                            <state>
+                                <index>3</index>
+                                <output-power>
+                                    <instant>1.55</instant>
+                                </output-power>
+                                <input-power>
+                                    <instant>-13.91</instant>
+                                </input-power>
+                                <laser-bias-current>
+                                    <instant>53.5</instant>
+                                </laser-bias-current>
+                            </state>
+                        </channel>
+                    </physical-channels>
+                </transceiver>
+            </component>
+        </components>
+    </data>
+</rpc-reply>

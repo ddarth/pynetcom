@@ -1,0 +1,7 @@
+<rpc message-id="202" xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <get>
+    <filter type="subtree">
+      <qos xmlns="http://openconfig.net/yang/qos"/>
+    </filter>
+  </get>
+</rpc>

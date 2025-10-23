@@ -60,89 +60,113 @@ class NetconfClient:
     
     def get(self, request_filter):
         self.logger.debug(f'Get request with filter: {request_filter}')
-        response = self.session.get(("subtree", request_filter))
-        # print(response)
-        return xmltodict.parse(response.data_xml)
+        try:
+            response = self.session.get(("subtree", request_filter))
+            return xmltodict.parse(response.data_xml)
+        except Exception as e:
+            # ncclient/lxml can't parse multi-root XML fragments for subtree filters.
+            # Fall back to a raw <get> that embeds the fragment as-is under <filter>.
+            self.logger.warning(f'Standard NETCONF get() failed, falling back to raw get(): {e}')
+            raw_xml = self.get_raw(request_filter)
+            if not raw_xml:
+                raise
+            raw_dict = xmltodict.parse(raw_xml)
+            # Normalize to { 'data': ... } like xmltodict.parse(response.data_xml)
+            rpc_key = None
+            if isinstance(raw_dict, dict):
+                if 'rpc-reply' in raw_dict:
+                    rpc_key = 'rpc-reply'
+                else:
+                    # try to find key that ends with 'rpc-reply' (namespaced)
+                    for k in raw_dict.keys():
+                        if k.endswith('rpc-reply') or k.endswith(':rpc-reply'):
+                            rpc_key = k
+                            break
+            data_payload = None
+            data_key_found = False
+            if rpc_key and isinstance(raw_dict.get(rpc_key), dict):
+                rpc_section = raw_dict[rpc_key]
+                # Find 'data' key with optional namespace prefix
+                for k in rpc_section.keys():
+                    if k.split(':')[-1] == 'data':
+                        data_key_found = True
+                        data_payload = rpc_section[k]
+                        break
+                # If no data, check for rpc-error and raise with details
+                if data_payload is None:
+                    rpc_error = None
+                    for k in rpc_section.keys():
+                        if k.split(':')[-1] == 'rpc-error':
+                            rpc_error = rpc_section[k]
+                            break
+                    if rpc_error is not None:
+                        # Extract common fields if present
+                        etype = rpc_error.get('error-type') if isinstance(rpc_error, dict) else None
+                        etag = rpc_error.get('error-tag') if isinstance(rpc_error, dict) else None
+                        eseve = rpc_error.get('error-severity') if isinstance(rpc_error, dict) else None
+                        emsg = rpc_error.get('error-message') if isinstance(rpc_error, dict) else None
+                        einfo = rpc_error.get('error-info') if isinstance(rpc_error, dict) else None
+                        self.logger.error(f'NETCONF rpc-error: type={etype}, tag={etag}, severity={eseve}, msg={emsg}, info={einfo}')
+                        raise RuntimeError(f"NETCONF rpc-error: tag={etag}, severity={eseve}, message={emsg}")
+                    # Some servers may return <ok/> (unusual for <get>); treat as empty data
+                    for k in rpc_section.keys():
+                        if k.split(':')[-1] == 'ok':
+                            return {'data': {}}
+                    # If <data> key exists but empty/null, return empty data
+                    if data_key_found:
+                        self.logger.warning('NETCONF <get> returned empty <data>; returning empty object.')
+                        return {'data': {}}
+                    # Otherwise, no <data> and no explicit error → return empty with warning
+                    snippet = raw_xml[:400] if isinstance(raw_xml, str) else ''
+                    self.logger.warning(f'NETCONF <get> reply contained no <data> and no <rpc-error>. Returning empty object. Reply snippet: {snippet}')
+                    return {'data': {}}
+            return {'data': data_payload}
 
     def get_raw(self, request_filter):
         """
-        Used for debug, if some parse error occurs
-        
-        Send a raw NETCONF <rpc><get> with subtree filter and capture the raw
-        <rpc-reply> using a temporary SessionListener to avoid any XML parsing.
+        Build a minimal <get> RPC with a subtree <filter> that can include
+        multiple top-level elements, and send it via ncclient.dispatch.
+        Returns raw <rpc-reply> XML as string.
         """
-        # Localized imports and helpers to keep debug-only logic out of module scope
-        import re
-        import threading
-        from ncclient.transport import SessionListener
-        import ncclient.xml_ as nc_xml
-        from ncclient.operations import rpc as nc_rpc
+        base_ns = "urn:ietf:params:xml:ns:netconf:base:1.0"
+        # Build NETCONF <get> and <filter> using lxml directly with Clark notation
+        get_el = etree.Element(f"{{{base_ns}}}get")
+        filter_el = etree.SubElement(get_el, f"{{{base_ns}}}filter")
+        filter_el.set("type", "subtree")
 
-        invalid_xml10 = re.compile(r"[\x00-\x08\x0B\x0C\x0E-\x1F\x7F\u0080-\u0084\u0086-\u009F]")
+        # Normalize request_filter to string and parse. If multi-root, wrap then append children.
+        if isinstance(request_filter, bytes):
+            rf_str = request_filter.decode('utf-8', 'ignore')
+        else:
+            rf_str = str(request_filter)
 
-        # Temporarily monkeypatch to sanitize invalid chars and avoid parse crashes
-        orig_to_ele = nc_xml.to_ele
-        def to_ele_sanitized(x, huge_tree=False):
-            if isinstance(x, (str, bytes)):
-                if isinstance(x, bytes):
-                    x = x.decode('utf-8', 'ignore')
-                x = invalid_xml10.sub("", x)
-            return orig_to_ele(x, huge_tree=huge_tree)
-
-        orig_parse = nc_rpc.RPCReply.parse
-        def safe_parse(self):
-            try:
-                return orig_parse(self)
-            except Exception as e:
-                # Record parse error but keep raw available
-                self._parse_error = e
-                self._root = None
-                return
-
-        nc_xml.to_ele = to_ele_sanitized
-        nc_rpc.RPCReply.parse = safe_parse
-        message_id = "pynetcom-raw-1"
-        rpc_envelope = (
-            f'<rpc message-id="{message_id}" xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">'
-            '<get>'
-            '<filter type="subtree">'
-            f"{request_filter}"
-            '</filter>'
-            '</get>'
-            '</rpc>'
-        )
-
-        class _RawListener(SessionListener):
-            def __init__(self, mid: str):
-                self.mid = mid
-                self.event = threading.Event()
-                self.raw = None
-            def callback(self, root, raw):
-                # Match by message-id in raw; works even if root is None
-                if raw and f'message-id="{self.mid}"' in raw:
-                    self.raw = raw
-                    self.event.set()
-
-        listener = _RawListener(message_id)
-        sess = self.session._session
         try:
-            sess.add_listener(listener)
-            sess.send(rpc_envelope)
-            # wait up to manager timeout (default 120s)
-            timeout = getattr(self.session, 'timeout', 120)
-            listener.event.wait(timeout)
-            return listener.raw
-        finally:
+            # Try as a single well-formed element
+            one = etree.fromstring(rf_str)
+            filter_el.append(one)
+        except Exception:
+            # Fallback: wrap to allow multiple top-level elements, then append each child
+            wrapped = etree.fromstring(f"<root>{rf_str}</root>")
+            for child in list(wrapped):
+                # Detach from wrapper before appending
+                wrapped.remove(child)
+                filter_el.append(child)
+
+        # Send via ncclient (manager) and robustly convert reply to raw XML string
+        reply = self.session.rpc(get_el)
+        # Prefer common attributes first
+        if hasattr(reply, 'xml') and isinstance(getattr(reply, 'xml'), str):
+            return reply.xml
+        if hasattr(reply, 'data_xml') and isinstance(getattr(reply, 'data_xml'), str):
+            return reply.data_xml
+        # Fallback to ncclient xml helper or lxml serialization
+        try:
+            return to_xml(reply)  # ncclient.xml_ helper
+        except Exception:
             try:
-                sess.remove_listener(listener)
+                return etree.tostring(reply, encoding='unicode')
             except Exception:
-                pass
-            # Restore monkeypatches
-            try:
-                nc_xml.to_ele = orig_to_ele
-                nc_rpc.RPCReply.parse = orig_parse
-            except Exception:
-                pass
+                return str(reply)
     
     def rpc(self, rpc_command):
         self.logger.debug(f'Send request with filter: {rpc_command}')

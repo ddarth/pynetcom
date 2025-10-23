@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rpc-reply message-id="get-config-running" xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+    <data>
+        <interfaces xmlns="http://openconfig.net/yang/interfaces" xmlns:nokia-attr="urn:nokia.com:sros:ns:yang:sr:attributes">
+            <interface>
+                <name>1/1/31</name>
+                <state>
+                    <name>1/1/31</name>
+                    <type xmlns:iana-if-type="urn:ietf:params:xml:ns:yang:iana-if-type">iana-if-type:ethernetCsmacd</type>
+                    <mtu>9212</mtu>
+                    <description>Router Desc</description>
+                    <enabled>true</enabled>
+                    <ifindex>1610891512</ifindex>
+                    <admin-status>UP</admin-status>
+                    <oper-status>UP</oper-status>
+                    <last-change>16112056370000000</last-change>
+                    <logical>false</logical>
+                    <management>false</management>
+                    <cpu>false</cpu>
+                    <hardware-port xmlns="http://openconfig.net/yang/platform/port">port 1/1/31</hardware-port>
+                    <counters>
+                        <in-octets>5631297839287</in-octets>
+                        <in-unicast-pkts>5305020625</in-unicast-pkts>
+                        <in-broadcast-pkts>3</in-broadcast-pkts>
+                        <in-multicast-pkts>9866845</in-multicast-pkts>
+                        <in-discards>0</in-discards>
+                        <in-errors>0</in-errors>
+                        <in-unknown-protos>0</in-unknown-protos>
+                        <in-fcs-errors>0</in-fcs-errors>
+                        <out-octets>1443867254091</out-octets>
+                        <out-unicast-pkts>4255200186</out-unicast-pkts>
+                        <out-broadcast-pkts>14</out-broadcast-pkts>
+                        <out-multicast-pkts>22515713</out-multicast-pkts>
+                        <out-discards>0</out-discards>
+                        <out-errors>0</out-errors>
+                        <last-clear>1743532518800000000</last-clear>
+                    </counters>
+                </state>
+                <hold-time>
+                    <state>
+                        <up>0</up>
+                        <down>0</down>
+                    </state>
+                </hold-time>
+                <ethernet xmlns="http://openconfig.net/yang/interfaces/ethernet" xmlns:nokia-attr="urn:nokia.com:sros:ns:yang:sr:attributes">
+                    <state>
+                        <mac-address>01:23:45:67:89:ab</mac-address>
+                        <auto-negotiate>false</auto-negotiate>
+                        <port-speed>SPEED_10GB</port-speed>
+                        <fec-mode>FEC_DISABLED</fec-mode>
+                        <hw-mac-address>01:23:45:67:89:ab</hw-mac-address>
+                        <negotiated-duplex-mode>FULL</negotiated-duplex-mode>
+                        <negotiated-port-speed>SPEED_10GB</negotiated-port-speed>
+                        <counters>
+                            <in-mac-pause-frames>0</in-mac-pause-frames>
+                            <in-oversize-frames>0</in-oversize-frames>
+                            <in-jabber-frames>0</in-jabber-frames>
+                            <in-fragment-frames>0</in-fragment-frames>
+                            <in-crc-errors>0</in-crc-errors>
+                            <out-mac-pause-frames>0</out-mac-pause-frames>
+                        </counters>
+                    </state>
+                </ethernet>
+            </interface>
+        </interfaces>
+    </data>
+</rpc-reply>

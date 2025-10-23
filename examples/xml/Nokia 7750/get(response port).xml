@@ -6,7 +6,7 @@
                 <port-id>1/1/24</port-id>
                 <down-reason></down-reason>
                 <far-end-port-id></far-end-port-id>
-                <hardware-mac-address>8c:0c:87:18:42:c0</hardware-mac-address>
+                <hardware-mac-address>01:23:45:67:89:ab</hardware-mac-address>
                 <interface-group-handler-index>0</interface-group-handler-index>
                 <number-of-channels>0</number-of-channels>
                 <oper-state>up</oper-state>
@@ -27,7 +27,7 @@
                     <diagnostics-capable>true</diagnostics-capable>
                     <equipped>true</equipped>
                     <laser-wavelength>1550</laser-wavelength>
-                    <link-length-information>28:ff:00:00:00:00</link-length-information>
+                    <link-length-information>01:23:45:67:89:ab</link-length-information>
                     <media>ethernet</media>
                     <model-number>3HE05036AAAA01  NOK  IPU3ASLEAA</model-number>
                     <number-of-lanes>0</number-of-lanes>
@@ -449,7 +449,7 @@
                         <statistics>
                             <received>
                                 <bad-eap-length-frames>0</bad-eap-length-frames>
-                                <last-source-mac-address>00:00:00:00:00:00</last-source-mac-address>
+                                <last-source-mac-address>01:23:45:67:89:ab</last-source-mac-address>
                                 <last-version>0</last-version>
                                 <logoff-frames>0</logoff-frames>
                                 <response-frames>0</response-frames>
@@ -507,7 +507,7 @@
                                 <remote-time-mark>11663</remote-time-mark>
                                 <remote-index>3</remote-index>
                                 <age>2956455</age>
-                                <chassis-id>8C:F7:73:56:0D:29</chassis-id>
+                                <chassis-id>01:23:45:67:89:ab</chassis-id>
                                 <chassis-id-subtype>mac-address</chassis-id-subtype>
                                 <remote-port-id>36536320</remote-port-id>
                                 <remote-port-id-subtype>local</remote-port-id-subtype>
@@ -515,7 +515,7 @@
                                 <system-enabled-capabilities>bridge router</system-enabled-capabilities>
                                 <system-supported-capabilities>bridge router</system-supported-capabilities>
                                 <system-description>TiMOS-B-11.0.R7 both/hops Nokia SAS-Mxp 22F2C 4SFP+ 7210 Copyright (c) 2000-2020 Nokia.\nAll rights reserved. All use subject to applicable license agreements.\nBuilt on Thu Feb 27 17:02:46 IST 2020 by sasbuild in /home/sasbuild/11.0B1/R7/panos/main\n</system-description>
-                                <system-name>Oc.OtAdr.AC_01</system-name>
+                                <system-name>FarRouter</system-name>
                                 <mgmt-address>
                                     <mgmt-address-subtype>ipv4</mgmt-address-subtype>
                                     <mgmt-address>172.28.200.18</mgmt-address>

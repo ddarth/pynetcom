@@ -1,4 +1,6 @@
 examples/config.py
+examples/huawei_router_netconf_test.py
+examples/nokia_router_netconf_test.py
 nce_token.txt
 nsp_token.txt
 .venv/
