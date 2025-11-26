@@ -22,11 +22,29 @@ class OpenconfigInterfaceRPCRequest():
         </component>
     </components>
     """
+    # lldp : str = """
+    # <lldp xmlns="http://openconfig.net/yang/lldp">
+    #     <interfaces>
+    #         <interface>
+    #             <name>$port</name>
+    #         </interface>
+    #     </interfaces>
+    # </lldp>
+    # """
     lldp : str = """
     <lldp xmlns="http://openconfig.net/yang/lldp">
         <interfaces>
             <interface>
                 <name>$port</name>
+                <state>
+                    <enabled/>
+                </state>
+                <neighbors>
+                    <neighbor>
+                        <id/>
+                        <state/>
+                    </neighbor>
+                </neighbors>
             </interface>
         </interfaces>
     </lldp>
@@ -50,8 +68,16 @@ class HuaweiInterfaceRPCRequest(OpenconfigInterfaceRPCRequest):
             <ports>
                 <port>
                     <position>$position</position>
-                        <optical-module xmlns="urn:huawei:yang:huawei-pic">
+                    <optical-module xmlns="urn:huawei:yang:huawei-pic">
                     </optical-module>
+                    <!-- Request Ethernet state (speed/duplex/negotiation) from Huawei PIC model -->
+                    <ethernet xmlns="urn:huawei:yang:huawei-pic">
+                        <speed/>
+                        <duplex-status/>
+                        <negotiation/>
+                        <negotiation-mode/>
+                    </ethernet>
+                    <physical-bandwidth/>
                 </port>
             </ports>
         </devm>

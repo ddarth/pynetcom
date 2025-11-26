@@ -46,6 +46,32 @@ class HuaweiPhysicalChannels(PhysicalChannels):
         self.physical_channels = [HuaweiPhysicalChannel(channel) for channel in self.physical_channels] if self.physical_channels else []
 
 @dataclass
+class HuaweiInterfaceEthernet(RPCDataContainer):
+    """
+    Huawei-specific Ethernet state mapper.
+    Fills OpenConfig-like fields from Huawei PIC model:
+    devm -> ports -> port -> ethernet (huawei-pic)
+    """
+    prefix = ['devm', 'ports', 'port']
+    field_mapping = {
+        'auto_negotate': ['ethernet', 'negotiation'],   # 'enabled'/'disabled'
+        'port_speed': ['physical-bandwidth'],            # e.g. '1000M'
+        'duplex_mode': ['ethernet', 'duplex-status'],          # 'full'/'half'
+    }
+    auto_negotate = None
+    port_speed = None
+    duplex_mode = None
+    def __init__(self, data: dict):
+        self.populate_from_data(data)
+        # Normalize negotiation to boolean if possible, otherwise keep raw value
+        if isinstance(self.auto_negotate, str):
+            val = self.auto_negotate.strip().lower()
+            if val in ('enabled', 'enable', 'true', 'yes'):
+                self.auto_negotate = True
+            elif val in ('disabled', 'disable', 'false', 'no'):
+                self.auto_negotate = False
+
+@dataclass
 class HuaweiTransceiverThresholdCritical(OpenconfigTransceiverThreshold):
     prefix = ['devm', 'ports', 'port', 'optical-module']
     field_mapping = OpenconfigTransceiverThreshold.field_mapping.copy()
@@ -140,6 +166,11 @@ class HuaweiInterface(OpenconfigInterface):
         # Fallback: merge missing from OpenConfig
         oc = OpenconfigInterface(data)
         self.merge_missing_fields_from(oc)
+
+        # Merge Huawei-specific Ethernet values into OpenConfig Ethernet if missing
+        if getattr(self, 'ethernet', None) is not None:
+            h_eth = HuaweiInterfaceEthernet(data)
+            self.ethernet.merge_missing_fields_from(h_eth, keys=['auto_negotate', 'port_speed', 'duplex_mode'])
 
         self.transeiver = HuaweiTransceiver(data)
 

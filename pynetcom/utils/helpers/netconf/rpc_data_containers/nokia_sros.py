@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from .openconfig import OpenconfigLLDPNeighborState, OpenconfigInterfaceLLDP, OpenconfigInterface, OpenconfigTranseiver
 from typing import List
 from .openconfig import OpenconfigTransceiverThresholdsList, OpenconfigTransceiverThreshold, PhysicalChannel, PhysicalChannels, Severity
+from .openconfig import RPCDataContainer
 
 
 @dataclass
@@ -42,6 +43,70 @@ class NokiaLLDP(OpenconfigInterfaceLLDP):
         if isinstance(neighbors_raw, dict):
             neighbors_raw = [neighbors_raw]
         self.neighbors = [NokiaLLDPNeighborState(neighbor) for neighbor in neighbors_raw]
+
+def _deep_merge_dicts(primary: dict, secondary: dict) -> dict:
+    """
+    Merge two dictionaries shallowly with nested dict support.
+    Values from 'secondary' are added only if missing in 'primary'.
+    For nested dicts, merge recursively.
+    """
+    result = dict(primary) if isinstance(primary, dict) else {}
+    if not isinstance(secondary, dict):
+        return result
+    for k, v in secondary.items():
+        if k in result and isinstance(result[k], dict) and isinstance(v, dict):
+            result[k] = _deep_merge_dicts(result[k], v)
+        elif k not in result:
+            result[k] = v
+    return result
+
+def _build_merged_nokia_port_view(raw_data: dict) -> dict:
+    """
+    Nokia SROS specific:
+    - Responses contain multiple 'state.port' entries: connector (physical, transceiver)
+      and breakout (logical, ethernet/lldp).
+    - We construct a synthetic view where 'state.port' is a single dict that merges:
+        - 'transceiver' from connector entry
+        - 'ethernet' (incl. lldp, shaping) from breakout entry
+    This allows downstream field mappings to work as if everything lived under one port.
+    """
+    cleaner = RPCDataContainer()
+    data = cleaner.remove_namespaces(raw_data)
+    state = data.get('state') or {}
+    ports = state.get('port')
+    if not isinstance(ports, list):
+        # Already a single port or unexpected shape; return as-is
+        return data
+
+    connector_port = None
+    breakout_port = None
+    for p in ports:
+        if isinstance(p, dict):
+            if 'transceiver' in p:
+                connector_port = p
+            if 'ethernet' in p:
+                breakout_port = p
+
+    # Base: prefer breakout (to keep correct port-id for logical side), then connector
+    merged_port = {}
+    if breakout_port:
+        merged_port = dict(breakout_port)
+    if connector_port:
+        # Add physical/transceiver info from connector
+        merged_port = _deep_merge_dicts(merged_port, {'transceiver': connector_port.get('transceiver')})
+        # Preserve connector-specific attributes if missing (like if-index)
+        merged_port = _deep_merge_dicts(merged_port, {k: v for k, v in connector_port.items() if k not in ('ethernet', 'transceiver')})
+
+    # If neither identified, return original data
+    if not merged_port:
+        return data
+
+    # Assemble merged data tree
+    merged_data = dict(data)
+    merged_state = dict(state)
+    merged_state['port'] = merged_port
+    merged_data['state'] = merged_state
+    return merged_data
 
 class NokiaPhysicalChannel(PhysicalChannel):
     prefix = ['state', 'port', 'transceiver', 'digital-diagnostic-monitoring', 'physical-channels', 'physical-channel']
@@ -171,9 +236,13 @@ class NokiaInterface(OpenconfigInterface):
     transeiver : NokiaTransceiver = None
     def __init__(self, data: dict):
         super().__init__(data)
-        self.populate_from_data(data)
+        # Nokia-specific: merge connector+breakout into a unified 'state.port' view
+        merged = _build_merged_nokia_port_view(data)
+        # Populate Nokia-specific fields (e.g. shaping) from merged view
+        self.populate_from_data(merged)
         # Fallback: merge missing from OpenConfig
         oc = OpenconfigInterface(data)
         self.merge_missing_fields_from(oc)
-        self.lldp = NokiaLLDP(data)
-        self.transeiver = NokiaTransceiver(data)
+        # Build sub-containers from merged view to ensure LLDP and thresholds are present
+        self.lldp = NokiaLLDP(merged)
+        self.transeiver = NokiaTransceiver(merged)
