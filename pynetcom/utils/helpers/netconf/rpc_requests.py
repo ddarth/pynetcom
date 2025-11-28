@@ -63,11 +63,13 @@ class OpenconfigInterfaceRPCRequest():
 
 class HuaweiInterfaceRPCRequest(OpenconfigInterfaceRPCRequest):
     """Class for Huawei interface RPC request"""
-    huawei_interface : str = """
+    huawei_interface: str = """
         <devm xmlns="urn:huawei:yang:huawei-devm">
             <ports>
                 <port>
                     <position>$position</position>
+                    <last-up-time/>
+                    <last-down-time/>
                     <optical-module xmlns="urn:huawei:yang:huawei-pic">
                     </optical-module>
                     <!-- Request Ethernet state (speed/duplex/negotiation) from Huawei PIC model -->
@@ -92,10 +94,34 @@ class HuaweiInterfaceRPCRequest(OpenconfigInterfaceRPCRequest):
             </interfaces>
         </ifm>
     """
+    # OpenConfig-only filter for Eth-Trunk (LAG) interfaces
+    eth_trunk_interface: str = """
+<interfaces xmlns="http://openconfig.net/yang/interfaces">
+  <interface>
+    <name>$port</name>
+    <state>
+    </state>
+    <aggregation xmlns="http://openconfig.net/yang/interfaces/aggregate">
+    </aggregation>
+  </interface>
+</interfaces>
+"""
+
     def __init__(self, port: str):
+        # Eth-Trunk interfaces: use simplified OpenConfig filter with aggregation info only
+        if isinstance(port, str) and port.lower().startswith('eth-trunk'):
+            self.port = port
+            self.transceiver_prefix = 'TRANSCEIVER:'
+            self.request_filter = Template(self.eth_trunk_interface.strip()).substitute(port=self.port)
+            return
+
         self.port = port
         self.transceiver_prefix = 'TRANSCEIVER:'
-        self.request_filter = self.get_template().substitute(port=self.port, transceiver_prefix=self.transceiver_prefix, position=self.get_position())
+        self.request_filter = self.get_template().substitute(
+            port=self.port,
+            transceiver_prefix=self.transceiver_prefix,
+            position=self.get_position(),
+        )
 
     def get_template(self) -> Template:
         return Template(self.interface + self.transceiver + self.lldp + self.huawei_interface)
@@ -115,6 +141,7 @@ class NokiaInterfaceRPCRequest(OpenconfigInterfaceRPCRequest):
         </port>
         <port>
             <port-id>$breakout_port</port-id>
+            <oper-state-last-changed/>
             <ethernet>
                 <oper-egress-rate/>
                 <lldp>
@@ -127,6 +154,17 @@ class NokiaInterfaceRPCRequest(OpenconfigInterfaceRPCRequest):
         </port>
     </state>
     """
+    lag_interface : str = """
+<interfaces xmlns="http://openconfig.net/yang/interfaces">
+  <interface>
+    <name>$port</name>
+    <state>
+    </state>
+    <aggregation  xmlns="http://openconfig.net/yang/interfaces/aggregate">
+    </aggregation>
+  </interface>
+</interfaces>
+"""
 
     def get_connector_port(self) -> str:
         # First check format with /c
@@ -145,6 +183,13 @@ class NokiaInterfaceRPCRequest(OpenconfigInterfaceRPCRequest):
         raise ValueError(f"Unexpected port format: {self.port}")
 
     def __init__(self, port: str):
+        # LAG interfaces: use simplified OpenConfig filter with aggregation info only
+        if re.match(r"^lag-\d+$", port, re.IGNORECASE):
+            self.port = port
+            self.transceiver_prefix = 'transceiver '
+            self.request_filter = Template(self.lag_interface).substitute(port=self.port)
+            return
+
         self.port = port
         self.transceiver_prefix = 'transceiver '
 
@@ -157,7 +202,33 @@ class NokiaInterfaceRPCRequest(OpenconfigInterfaceRPCRequest):
             connector_port=connector_port,
             breakout_port=breakout_port
         )
-        print(self.request_filter)
+        # print(self.request_filter)
 
     def get_template(self) -> Template:
         return Template(self.interface + self.transceiver + self.lldp + self.nokia_interface)
+
+
+class OpenconfigInterfacesBriefListRPCRequest:
+    """Builds RPC filter to fetch all interface names and descriptions using OpenConfig (state-only)."""
+    template: Template = Template(
+        """
+<interfaces xmlns="http://openconfig.net/yang/interfaces">
+  <interface>
+    <name/>
+    <state>
+      <name/>
+      <description/>
+    </state>
+  </interface>
+</interfaces>
+""".strip()
+    )
+
+    def __init__(self):
+        self.request_filter = self.get_template().substitute()
+
+    def get_template(self) -> Template:
+        return self.template
+
+    def get_request_filter(self):
+        return self.request_filter

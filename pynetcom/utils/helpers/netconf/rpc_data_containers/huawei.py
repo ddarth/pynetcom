@@ -1,11 +1,17 @@
 from dataclasses import dataclass
-from .openconfig import RPCDataContainer
-from .openconfig import OpenconfigTranseiver, OpenconfigInterface
-from .openconfig import DDM
-from .openconfig import PhysicalChannel, PhysicalChannels
-from .openconfig import OpenconfigTransceiverThreshold, OpenconfigTransceiverThresholdsList
-from .openconfig import Severity
 from typing import List
+from .openconfig import (
+    RPCDataContainer,
+    OpenconfigTranseiver,
+    OpenconfigInterface,
+    DDM,
+    PhysicalChannel,
+    PhysicalChannels,
+    OpenconfigTransceiverThreshold,
+    OpenconfigTransceiverThresholdsList,
+    Severity,
+    parse_utc_datetime,
+)
 
 
 @dataclass
@@ -157,9 +163,13 @@ class HuaweiInterface(OpenconfigInterface):
     field_mapping = OpenconfigInterface.field_mapping.copy()
     field_mapping.update({
         'shaping': ['ifm', 'interfaces', 'interface', 'qos', 'port-shapings', 'port-shaping', 'shaping-value'],
+        'last_up_time': ['devm', 'ports', 'port', 'last-up-time'],
+        'last_down_time': ['devm', 'ports', 'port', 'last-down-time'],
     })
     transeiver: HuaweiTransceiver = None
     shaping: int = None
+    last_up_time = None
+    last_down_time = None
     def __init__(self, data: dict):
         super().__init__(data)
         self.populate_from_data(data)
@@ -173,6 +183,15 @@ class HuaweiInterface(OpenconfigInterface):
             self.ethernet.merge_missing_fields_from(h_eth, keys=['auto_negotate', 'port_speed', 'duplex_mode'])
 
         self.transeiver = HuaweiTransceiver(data)
+
+        # Compute last_state_change based on Huawei-specific devm times, if available
+        candidates = [
+            parse_utc_datetime(self.last_up_time),
+            parse_utc_datetime(self.last_down_time),
+        ]
+        candidates = [dt for dt in candidates if dt is not None]
+        if candidates:
+            self.last_state_change = max(candidates)
 
     def __str__(self):
         return (super().__str__() + f"""

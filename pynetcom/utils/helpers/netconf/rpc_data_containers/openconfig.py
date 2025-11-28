@@ -1,8 +1,11 @@
-from typing import Dict, List
+from typing import Dict, List, Optional
 from enum import Enum
 from dataclasses import dataclass
 from datetime import datetime, timezone, timedelta
 import json
+
+
+ASIA_BISHKEK_TZ = timezone(timedelta(hours=6))
 
 
 class RPCDataContainer():
@@ -28,7 +31,7 @@ class RPCDataContainer():
     def remove_namespaces(self, data):
         """
         Recursively removes all keys starting with '@xmlns'
-        из словаря или списка любой вложенности.
+        from a dictionary or list of any nesting depth.
         """
         if isinstance(data, dict):
             # Create new dictionary without @xmlns keys and with cleaned tag names
@@ -140,6 +143,60 @@ class RPCDataContainer():
     def get_json(self) -> str:
         """Serializes container to JSON with support for Enum and nested containers."""
         return json.dumps(self.to_dict(), ensure_ascii=False, indent=4)
+
+
+def parse_utc_datetime(value) -> Optional[datetime]:
+    """
+    Universal parser of date/time values into UTC.
+
+    Supported formats:
+    - datetime: returned as-is (normalized to UTC if necessary);
+    - integer / float / numeric string: nanoseconds since the UNIX epoch;
+    - ISO 8601 string, including 'Z' and fractional seconds
+      (for example, '2025-10-05T06:09:33.9Z').
+    """
+    if value is None:
+        return None
+
+    # Already a datetime instance
+    if isinstance(value, datetime):
+        dt = value
+    else:
+        ts_int = None
+        if isinstance(value, (int, float)):
+            ts_int = int(value)
+        elif isinstance(value, str):
+            v = value.strip()
+            # First, try to interpret as a number
+            try:
+                ts_int = int(v)
+            except ValueError:
+                ts_int = None
+
+                # Not a number — try ISO 8601 string
+                text = v[:-1] + "+00:00" if v.endswith("Z") else v
+                try:
+                    dt = datetime.fromisoformat(text)
+                except ValueError:
+                    return None
+        else:
+            # Unknown type
+            return None
+
+        if ts_int is not None:
+            # Numeric value is interpreted as nanoseconds since the epoch
+            seconds = ts_int / 1_000_000_000
+            try:
+                dt = datetime.fromtimestamp(seconds, tz=timezone.utc)
+            except (OverflowError, OSError, ValueError):
+                return None
+
+    # Normalize timezone to UTC
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    else:
+        dt = dt.astimezone(timezone.utc)
+    return dt
 
 @dataclass
 class DDM(RPCDataContainer):
@@ -269,6 +326,25 @@ class OpenconfigTranseiver(RPCDataContainer):
                 PhysicalChannels: {self.physical_channels},
                 Thresholds: {self.thresholds}
                 """)
+    
+    def get_json(self) -> str:
+        """
+        Returns JSON representation of the transceiver.
+
+        If present == "NOT_PRESENT", keeps only the "present" and "form_factor" fields.
+        """
+        base_dict = self.to_dict()
+        present = base_dict.get('present')
+
+        if present == 'NOT_PRESENT' or present is None:
+            filtered = {}
+            if 'present' in base_dict:
+                filtered['present'] = base_dict['present']
+            if 'form_factor' in base_dict:
+                filtered['form_factor'] = base_dict['form_factor']
+            base_dict = filtered
+
+        return json.dumps(base_dict, ensure_ascii=False, indent=4)
 
 @dataclass
 class OpenconfigInterfaceCounters(RPCDataContainer):
@@ -397,6 +473,32 @@ class OpenconfigInterfaceLLDP(RPCDataContainer):
                 )
 
 @dataclass
+class OpenconfigInterfaceAggregation(RPCDataContainer):
+    """
+    Aggregation state for LAG interfaces (OpenConfig interfaces/aggregate).
+    Contains only meaningful state fields; if all fields are empty/None,
+    the aggregation block can be omitted from output.
+    """
+    prefix = ['interfaces', 'interface', 'aggregation', 'state']
+    field_mapping = {
+        'lag_speed': ['lag-speed'],
+        'member': ['member'],
+    }
+    lag_speed = None
+    member: List[str] = None
+
+    def __init__(self, data: dict):
+        self.populate_from_data(data)
+
+    def has_data(self) -> bool:
+        """Returns True if aggregation contains any meaningful data."""
+        return any(
+            value not in (None, {}, [])
+            for value in (self.lag_speed, self.member)
+        )
+
+
+@dataclass
 class OpenconfigInterface(RPCDataContainer):
     prefix = ['interfaces', 'interface']
     field_mapping = {
@@ -406,6 +508,9 @@ class OpenconfigInterface(RPCDataContainer):
         'oper_status': ['state', 'oper-status'],
         'last_state_change': ['state', 'last-change'],
     }
+    # Do not serialize aggregation automatically via to_dict; it will be added
+    # manually in get_json only when it has meaningful data.
+    serialization_exclude = RPCDataContainer.serialization_exclude | {'aggregation'}
     name = None
     description = None
     admin_status = None
@@ -415,22 +520,18 @@ class OpenconfigInterface(RPCDataContainer):
     ethernet : OpenconfigInterfaceEthernet = None
     transeiver : OpenconfigTranseiver = None
     lldp : OpenconfigInterfaceLLDP = None
+    aggregation: OpenconfigInterfaceAggregation = None
     def __init__(self, data: dict):
         self.populate_from_data(data)
         self.counters = OpenconfigInterfaceCounters(data)
         self.ethernet = OpenconfigInterfaceEthernet(data)
         self.transeiver = OpenconfigTranseiver(data)
         self.lldp = OpenconfigInterfaceLLDP(data)
+        self.aggregation = OpenconfigInterfaceAggregation(data)
 
     def get_last_change(self) -> datetime:
-        """Преобразует значение last-change из микросекунд в datetime"""
-        # print(self.last_state_change, type(self.last_state_change))
-        if self.last_state_change is None:
-            return None
-        if isinstance(self.last_state_change, str):
-            timestamp = int(self.last_state_change.strip())
-        timestamp = timestamp / 1_000_000_000
-        return datetime.fromtimestamp(timestamp, tz=timezone.utc)
+        """Returns last_state_change as a datetime in UTC (or None)."""
+        return parse_utc_datetime(self.last_state_change)
 
     def __str__(self):
         return (f"""Name: {self.name}, 
@@ -446,7 +547,144 @@ class OpenconfigInterface(RPCDataContainer):
                 )
 
     def get_json(self):
-        return json.dumps(self.to_dict(), ensure_ascii=False, indent=4)
+        """
+        Returns JSON representation of the interface.
+
+        Features:
+        - For the 'transeiver' field, uses the logic of OpenconfigTranseiver.get_json().
+        - For the 'aggregation' (LAG) field, adds only the state if it contains data;
+          otherwise the 'aggregation' key is omitted from the output.
+        - Adds the 'last_state_change_human' field with a human-readable time of the
+          last interface state change in ISO 8601 format (UTC), if the value can be parsed.
+        """
+        data = self.to_dict()
+
+        # Remove the raw last_state_change field from JSON output,
+        # leaving only the human-readable representation.
+        data.pop('last_state_change', None)
+
+        if self.transeiver is not None:
+            try:
+                tr_json = self.transeiver.get_json()
+                tr_data = json.loads(tr_json)
+                data['transeiver'] = tr_data
+            except Exception:
+                # In case of any error, keep the original value from to_dict()
+                pass
+
+        # Handle aggregation (LAG)
+        agg = getattr(self, 'aggregation', None)
+        if isinstance(agg, OpenconfigInterfaceAggregation) and agg.has_data():
+            # Insert only the flat aggregation state (lag_speed, member, etc.)
+            data['aggregation'] = agg.to_dict()
+
+        # Human-readable representation of last_state_change
+        try:
+            last_change_dt = self.get_last_change()
+            if last_change_dt is not None:
+                # Convert to local time Asia/Bishkek (UTC+6)
+                local_dt = last_change_dt.astimezone(ASIA_BISHKEK_TZ)
+                # Format: "YYYY-MM-DDTHH:MM:SS" (without timezone and microseconds),
+                # for example: "2025-04-01T19:04:48"
+                naive_dt = local_dt.replace(tzinfo=None)
+                data['last_state_change_human'] = naive_dt.isoformat(timespec='seconds')
+        except Exception:
+            # In case of any error, do not break the rest of the JSON
+            pass
+
+        return json.dumps(data, ensure_ascii=False, indent=4)
     
 
 
+@dataclass
+class OpenconfigInterfaceBrief(RPCDataContainer):
+    """Container for brief interface information (name and description)."""
+    
+    prefix = ['state']
+    field_mapping = {
+        'name': ['name'],
+        'description': ['description'],
+    }
+    name = None
+    description = None
+    
+    def __init__(self, data: dict):
+        self.populate_from_data(data)
+    
+    def __str__(self):
+        return f"Name: {self.name}, Description: {self.description}"
+
+
+class OpenconfigInterfacesBriefList(RPCDataContainer):
+    """Container for list of brief interface information with filtering capabilities."""
+    
+    # Filter constants
+    EXCLUDE_PREFIXES_PORT = ('NULL', 'Ethernet0/0/0', 'GigabitEthernet0/0/0', 'LoopBack', 'Tunnel', 'A/', 'B/', 'Virtual-Template', 'Virtual-Ethernet', 'Global-VE', 'HP-GE')
+    
+    # Data mapping configuration
+    prefix = ['interfaces']
+    field_mapping = {
+        'interfaces': ['interface'],
+    }
+    interfaces: List[OpenconfigInterfaceBrief] = []
+    
+    def __init__(self, data: dict):
+        data = self._unwrap_data_node(data)
+        self.populate_from_data(data)
+        self._normalize_interfaces()
+    
+    def _normalize_interfaces(self):
+        """Normalizes interface data ensuring it's always a list of OpenconfigInterfaceBrief objects."""
+        items = self.interfaces or []
+        if isinstance(items, dict):
+            items = [items]
+        self.interfaces = [OpenconfigInterfaceBrief(itf) for itf in items]
+    
+    def _unwrap_data_node(self, data: dict):
+        """
+        Accepts different NETCONF response shapes and returns the payload that
+        contains 'interfaces'. Supports:
+        - {'data': {...}}
+        - {'rpc-reply': {'data': {...}}}
+        - already-unwrapped dict with 'interfaces' at top-level
+        """
+        if not isinstance(data, dict):
+            return data
+        node = data
+        if 'rpc-reply' in node and isinstance(node.get('rpc-reply'), dict):
+            node = node['rpc-reply']
+        if 'data' in node and isinstance(node.get('data'), dict):
+            node = node['data']
+        return node
+    
+    def __str__(self):
+        if not self.interfaces:
+            return "[]"
+        return "\n\t- " + "\n\t- ".join(str(itf).strip() for itf in self.interfaces)
+    
+    def get_filtered_interfaces(self, filter: str = 'port') -> List[OpenconfigInterfaceBrief]:
+        """Returns filtered list of interfaces.
+        
+        Args:
+            filter: Filter mode - 'port' (default) excludes system interfaces, 'all' returns everything.
+        
+        Returns:
+            List of filtered OpenconfigInterfaceBrief objects.
+        """
+        if not self.interfaces:
+            return []
+        
+        mode = (filter or 'port').lower()
+        if mode == 'all':
+            return self.interfaces
+        
+        return self._filter_by_prefix_exclusion()
+    
+    def _filter_by_prefix_exclusion(self) -> List[OpenconfigInterfaceBrief]:
+        """Filters out interfaces with names matching excluded prefixes."""
+        result: List[OpenconfigInterfaceBrief] = []
+        for itf in self.interfaces:
+            name = getattr(itf, 'name', None) or ''
+            if name and not name.startswith(self.EXCLUDE_PREFIXES_PORT):
+                result.append(itf)
+        return result

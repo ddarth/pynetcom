@@ -26,10 +26,25 @@ class NokiaLLDPNeighborState(OpenconfigLLDPNeighborState):
         self.populate_from_data(data)
         self._parse_port_description()
     def _parse_port_description(self) -> None:
-        # "port-description": "1/1/24, 100Mb/1-Gig/10-Gig Ethernet, \"Oc.RRS26.AC_01 MMM 1/1/22 (RTN980 1/17/3)\"",
-        if isinstance(self.port_description, str):
-            self.port_id = self.port_description.split(', ')[0].strip()
-            self.port_description = self.port_description.split(', ')[2].strip().replace('\"', '')
+        # Example of a full format:
+        # "1/1/24, 100Mb/1-Gig/10-Gig Ethernet, \"Oc.RRS26.AC_01 MMM 1/1/22 (RTN980 1/17/3)\""
+        # In practice, the string may be shorter and without commas.
+        if not isinstance(self.port_description, str):
+            return
+
+        parts = [p.strip().replace('"', '') for p in self.port_description.split(',')]
+        if not parts:
+            return
+
+        # Always use the first part as port_id
+        self.port_id = parts[0]
+
+        # If there is a textual description (third part) — take it,
+        # otherwise keep the last available part (or the original string).
+        if len(parts) >= 3:
+            self.port_description = parts[2]
+        else:
+            self.port_description = parts[-1]
 
 class NokiaLLDP(OpenconfigInterfaceLLDP):
     prefix = ['state', 'port', 'ethernet', 'lldp']
@@ -229,6 +244,7 @@ class NokiaInterface(OpenconfigInterface):
     prefix = []
     field_mapping = OpenconfigInterface.field_mapping.copy()
     field_mapping.update({
+        'last_state_change': ['state', 'port', 'oper-state-last-changed'],
         'shaping': ['state', 'port', 'ethernet', 'oper-egress-rate'],
     })
     lldp : NokiaLLDP = None
