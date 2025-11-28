@@ -68,9 +68,27 @@ class RPCDataContainer():
         # Primitive types return as is
         return data
 
+    def _unwrap_data_node(self, data: dict):
+        """
+        Extracts the NETCONF payload regardless of whether the response
+        is shaped as {'rpc-reply': {'data': {...}}}, {'data': {...}},
+        or already contains the payload at the top level.
+        """
+        if not isinstance(data, dict):
+            return data
+        node = data
+        rpc_reply = node.get('rpc-reply')
+        if isinstance(rpc_reply, dict):
+            node = rpc_reply
+        data_node = node.get('data')
+        if isinstance(data_node, dict):
+            node = data_node
+        return node
+
     
     def populate_from_data(self, data: dict):
         """Automatically populates fields based on field_mapping"""
+        data = self._unwrap_data_node(data)
         data = self.remove_namespaces(data)
         for attr_name, path in self.field_mapping.items():
             setattr(self, attr_name, self.extract_value(data, path))
@@ -326,8 +344,8 @@ class OpenconfigTranseiver(RPCDataContainer):
                 PhysicalChannels: {self.physical_channels},
                 Thresholds: {self.thresholds}
                 """)
-    
-    def get_json(self) -> str:
+
+    def to_output_dict(self) -> dict:
         """
         Returns JSON representation of the transceiver.
 
@@ -342,9 +360,28 @@ class OpenconfigTranseiver(RPCDataContainer):
                 filtered['present'] = base_dict['present']
             if 'form_factor' in base_dict:
                 filtered['form_factor'] = base_dict['form_factor']
-            base_dict = filtered
+            return filtered
 
-        return json.dumps(base_dict, ensure_ascii=False, indent=4)
+        # Reorder keys for readable output:
+        # 1) present, 2) input_power, 3) physical_channels, 4) thresholds, 5) everything else
+        preferred_order = ['present', 'input_power', 'physical_channels', 'thresholds']
+        ordered: Dict[str, object] = {}
+
+        for key in preferred_order:
+            if key in base_dict:
+                ordered[key] = base_dict[key]
+
+        for key, value in base_dict.items():
+            if key not in ordered:
+                ordered[key] = value
+
+        return ordered
+    
+    def get_json(self) -> str:
+        """
+        Returns JSON representation of the transceiver using to_output_dict().
+        """
+        return json.dumps(self.to_output_dict(), ensure_ascii=False, indent=4)
 
 @dataclass
 class OpenconfigInterfaceCounters(RPCDataContainer):
@@ -546,9 +583,9 @@ class OpenconfigInterface(RPCDataContainer):
                 """
                 )
 
-    def get_json(self):
+    def to_output_dict(self) -> dict:
         """
-        Returns JSON representation of the interface.
+        Builds a JSON-ready dictionary representation of the interface.
 
         Features:
         - For the 'transeiver' field, uses the logic of OpenconfigTranseiver.get_json().
@@ -592,7 +629,13 @@ class OpenconfigInterface(RPCDataContainer):
             # In case of any error, do not break the rest of the JSON
             pass
 
-        return json.dumps(data, ensure_ascii=False, indent=4)
+        return data
+
+    def get_json(self) -> str:
+        """
+        Returns JSON string representation of the interface using to_output_dict().
+        """
+        return json.dumps(self.to_output_dict(), ensure_ascii=False, indent=4)
     
 
 
@@ -629,7 +672,6 @@ class OpenconfigInterfacesBriefList(RPCDataContainer):
     interfaces: List[OpenconfigInterfaceBrief] = []
     
     def __init__(self, data: dict):
-        data = self._unwrap_data_node(data)
         self.populate_from_data(data)
         self._normalize_interfaces()
     
@@ -639,23 +681,6 @@ class OpenconfigInterfacesBriefList(RPCDataContainer):
         if isinstance(items, dict):
             items = [items]
         self.interfaces = [OpenconfigInterfaceBrief(itf) for itf in items]
-    
-    def _unwrap_data_node(self, data: dict):
-        """
-        Accepts different NETCONF response shapes and returns the payload that
-        contains 'interfaces'. Supports:
-        - {'data': {...}}
-        - {'rpc-reply': {'data': {...}}}
-        - already-unwrapped dict with 'interfaces' at top-level
-        """
-        if not isinstance(data, dict):
-            return data
-        node = data
-        if 'rpc-reply' in node and isinstance(node.get('rpc-reply'), dict):
-            node = node['rpc-reply']
-        if 'data' in node and isinstance(node.get('data'), dict):
-            node = node['data']
-        return node
     
     def __str__(self):
         if not self.interfaces:
