@@ -176,4 +176,4 @@ class NetconfClient:
 
 
     def close(self):
-        self.session.close()
+        self.session.close_session()
