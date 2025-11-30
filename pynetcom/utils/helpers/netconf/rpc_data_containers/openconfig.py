@@ -570,6 +570,23 @@ class OpenconfigInterface(RPCDataContainer):
         """Returns last_state_change as a datetime in UTC (or None)."""
         return parse_utc_datetime(self.last_state_change)
 
+    def get_last_change_human(self) -> Optional[str]:
+        """
+        Returns human-readable time of the last interface state change
+        in Asia/Bishkek local time (YYYY-MM-DDTHH:MM:SS), or None.
+        """
+        try:
+            last_change_dt = self.get_last_change()
+            if last_change_dt is None:
+                return None
+            # Convert to local time Asia/Bishkek (UTC+6)
+            local_dt = last_change_dt.astimezone(ASIA_BISHKEK_TZ)
+            # Drop timezone info and microseconds, keep seconds precision
+            naive_dt = local_dt.replace(tzinfo=None)
+            return naive_dt.isoformat(timespec='seconds')
+        except Exception:
+            return None
+
     def __str__(self):
         return (f"""Name: {self.name}, 
                 Admin: {self.admin_status}, 
@@ -616,18 +633,9 @@ class OpenconfigInterface(RPCDataContainer):
             data['aggregation'] = agg.to_dict()
 
         # Human-readable representation of last_state_change
-        try:
-            last_change_dt = self.get_last_change()
-            if last_change_dt is not None:
-                # Convert to local time Asia/Bishkek (UTC+6)
-                local_dt = last_change_dt.astimezone(ASIA_BISHKEK_TZ)
-                # Format: "YYYY-MM-DDTHH:MM:SS" (without timezone and microseconds),
-                # for example: "2025-04-01T19:04:48"
-                naive_dt = local_dt.replace(tzinfo=None)
-                data['last_state_change_human'] = naive_dt.isoformat(timespec='seconds')
-        except Exception:
-            # In case of any error, do not break the rest of the JSON
-            pass
+        last_change_human = self.get_last_change_human()
+        if last_change_human is not None:
+            data['last_state_change_human'] = last_change_human
 
         return data
 
@@ -641,21 +649,25 @@ class OpenconfigInterface(RPCDataContainer):
 
 @dataclass
 class OpenconfigInterfaceBrief(RPCDataContainer):
-    """Container for brief interface information (name and description)."""
+    """Container for brief interface information (name, description, and status)."""
     
     prefix = ['state']
     field_mapping = {
         'name': ['name'],
         'description': ['description'],
+        'oper_status': ['oper-status'],
+        'admin_status': ['admin-status'],
     }
     name = None
     description = None
+    oper_status = None
+    admin_status = None
     
     def __init__(self, data: dict):
         self.populate_from_data(data)
     
     def __str__(self):
-        return f"Name: {self.name}, Description: {self.description}"
+        return f"Name: {self.name}, Description: {self.description}, OperStatus: {self.oper_status}, AdminStatus: {self.admin_status}"
 
 
 class OpenconfigInterfacesBriefList(RPCDataContainer):

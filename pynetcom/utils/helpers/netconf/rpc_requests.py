@@ -218,6 +218,8 @@ class OpenconfigInterfacesBriefListRPCRequest:
     <state>
       <name/>
       <description/>
+      <oper-status/>
+      <admin-status/>
     </state>
   </interface>
 </interfaces>
