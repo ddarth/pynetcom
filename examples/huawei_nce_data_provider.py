@@ -12,7 +12,7 @@ import logging
 from datetime import datetime, timedelta
 
 from pynetcom import RestNCE, NceDataProvider, RestNMSDataFilter, NCEAuthenticationError
-from config import API_NCE_HOST, API_NCE_USER, API_NCE_PASS, API_NCE_NE_NAME
+from config import API_NCE_HOST, API_NCE_USER, API_NCE_PASS, API_NCE_NE_NAME, API_NCE_SUBNET_NAME
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -256,10 +256,51 @@ def example_get_subnets():
                 break
 
 
+def example_get_alarms_by_subnet():
+    """Get alarms for all NEs in a subnet."""
+    print("\n" + "=" * 70)
+    print("Example 12: Get alarms by subnet")
+    print("=" * 70)
+    
+    client = RestNCE(API_NCE_HOST, API_NCE_USER, API_NCE_PASS)
+    provider = NceDataProvider(client)
+    
+    # Target subnet name from config
+    target_subnet_name = API_NCE_SUBNET_NAME
+    
+    # Find subnet by name
+    subnets = provider.get_subnets()
+    subnet = None
+    for s in subnets:
+        if s.get('name') == target_subnet_name and s.get('node-class') == 'subnet':
+            subnet = s
+            break
+    
+    if not subnet:
+        print(f"Subnet '{target_subnet_name}' not found")
+        return
+    
+    subnet_id = subnet.get('res-id')
+    subnet_name = subnet.get('name')
+    
+    print(f"Getting alarms for subnet: {subnet_name} (ID: {subnet_id})")
+    
+    # Get alarms for the subnet (server-side filtering by NE resource IDs)
+    alarms = provider.get_alarms(
+        subnet_id=subnet_id,
+        severity=['major', 'critical'],
+        is_cleared=False
+    )
+    
+    print(f"\nActive major/critical alarms in subnet: {len(alarms)}")
+    for alarm in alarms[:5]:
+        print(f"  {alarm.brief()}")
+
+
 def example_export_to_dict():
     """Export alarm data to dictionary/JSON."""
     print("\n" + "=" * 70)
-    print("Example 12: Export to dict/JSON")
+    print("Example 13: Export to dict/JSON")
     print("=" * 70)
     
     client = RestNCE(API_NCE_HOST, API_NCE_USER, API_NCE_PASS)
@@ -295,6 +336,7 @@ if __name__ == "__main__":
         example_get_network_element_by_name()
         example_network_element_details()
         example_get_subnets()
+        example_get_alarms_by_subnet()
         example_export_to_dict()
     except NCEAuthenticationError as e:
         # Handle NCE authentication errors (locked account, expired password, etc.)

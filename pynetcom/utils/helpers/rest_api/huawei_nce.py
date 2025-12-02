@@ -123,6 +123,7 @@ class NceDataProvider:
         self,
         name: Optional[str] = None,
         resource: Optional[str] = None,
+        subnet_id: Optional[str] = None,
         is_cleared: Optional[bool] = None,
         severity: Optional[List[str]] = None,
         start_time: Optional[datetime] = None,
@@ -137,6 +138,7 @@ class NceDataProvider:
             name: Filter by network element name. Will first lookup NE to get resource ID
                   for efficient server-side filtering.
             resource: Filter by resource ID (server-side).
+            subnet_id: Filter by subnet ID. Will get all NEs in subnet and fetch their alarms.
             is_cleared: Filter by cleared status (server-side).
             severity: Filter by severity levels (server-side). 
                       Values: 'critical', 'major', 'minor', 'warning'.
@@ -148,6 +150,19 @@ class NceDataProvider:
         Returns:
             List of NceAlarm objects.
         """
+        # If subnet_id is provided, get alarms for all NEs in the subnet
+        if subnet_id and not resource and not name:
+            logger.debug(f"Fetching alarms for subnet '{subnet_id}'")
+            return self._get_alarms_by_subnet(
+                subnet_id=subnet_id,
+                is_cleared=is_cleared,
+                severity=severity,
+                start_time=start_time,
+                end_time=end_time,
+                filters=filters,
+                page_size=page_size
+            )
+        
         # If name is provided but resource is not, lookup NE first to get resource ID
         if name and not resource:
             logger.debug(f"Looking up NE '{name}' to get resource ID for alarm filtering")
@@ -204,6 +219,85 @@ class NceDataProvider:
         
         logger.info(f"Retrieved {len(alarms)} alarms")
         return alarms
+    
+    def _get_alarms_by_subnet(
+        self,
+        subnet_id: str,
+        is_cleared: Optional[bool] = None,
+        severity: Optional[List[str]] = None,
+        start_time: Optional[datetime] = None,
+        end_time: Optional[datetime] = None,
+        filters: Optional[RestNMSDataFilter] = None,
+        page_size: int = 1000
+    ) -> List[NceAlarm]:
+        """
+        Get alarms for all NEs in a subnet.
+        
+        Args:
+            subnet_id: Subnet resource ID (ref-parent-subnet).
+            Other args: Same as get_alarms.
+        
+        Returns:
+            List of NceAlarm objects for all NEs in the subnet.
+        """
+        # Get all NEs in the subnet
+        elements = self.get_network_elements_by_subnet(subnet_id)
+        
+        if not elements:
+            logger.warning(f"No NEs found in subnet '{subnet_id}'")
+            return []
+        
+        logger.info(f"Found {len(elements)} NEs in subnet '{subnet_id}'")
+        
+        # Collect alarms for all NEs
+        all_alarms = []
+        for ne in elements:
+            if ne.res_id:
+                ne_alarms = self.get_alarms(
+                    resource=ne.res_id,
+                    is_cleared=is_cleared,
+                    severity=severity,
+                    start_time=start_time,
+                    end_time=end_time,
+                    page_size=page_size
+                )
+                all_alarms.extend(ne_alarms)
+        
+        # Apply client-side filters
+        if filters:
+            all_alarms = filters.apply(all_alarms)
+        
+        logger.info(f"Retrieved {len(all_alarms)} alarms for subnet '{subnet_id}'")
+        return all_alarms
+    
+    def get_network_elements_by_subnet(
+        self,
+        subnet_id: str,
+        page_size: int = 1000
+    ) -> List[NceNetworkElement]:
+        """
+        Get all network elements in a subnet.
+        
+        Args:
+            subnet_id: Subnet resource ID (ref-parent-subnet).
+            page_size: Number of records per page.
+        
+        Returns:
+            List of NceNetworkElement objects in the subnet.
+        """
+        logger.debug(f"Fetching NEs for subnet: {subnet_id}")
+        
+        # Get all NEs and filter by ref-parent-subnet
+        all_elements = self.get_network_elements(page_size=page_size)
+        
+        # Filter by subnet
+        subnet_elements = [
+            ne for ne in all_elements 
+            if ne.ref_parent_subnet == subnet_id
+        ]
+        
+        logger.info(f"Found {len(subnet_elements)} NEs in subnet '{subnet_id}'")
+        return subnet_elements
     
     def get_alarms_raw(
         self,
