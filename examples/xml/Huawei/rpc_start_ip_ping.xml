@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="131">
+  <diagnostic-tools:ipv4-start-ip-ping xmlns:diagnostic-tools="urn:huawei:yang:huawei-diagnostic-tools">
+    <diagnostic-tools:test-name>test_min1</diagnostic-tools:test-name>
+    <diagnostic-tools:dest-addr>10.122.202.21</diagnostic-tools:dest-addr>
+    <diagnostic-tools:source-address>10.122.202.10</diagnostic-tools:source-address>
+    <diagnostic-tools:vrf-name>VPRN_UMTS</diagnostic-tools:vrf-name>
+  </diagnostic-tools:ipv4-start-ip-ping>
+</rpc>

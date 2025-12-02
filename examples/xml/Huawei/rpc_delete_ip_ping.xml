@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="">
+  <diagnostic-tools:ipv4-delete-ip-ping xmlns:diagnostic-tools="urn:huawei:yang:huawei-diagnostic-tools">
+    <diagnostic-tools:test-name>ipv4</diagnostic-tools:test-name>
+  </diagnostic-tools:ipv4-delete-ip-ping>
+</rpc>
+ 

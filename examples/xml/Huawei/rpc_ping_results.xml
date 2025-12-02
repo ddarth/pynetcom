@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="132">
+  <get>
+    <filter type="subtree">
+      <diagnostic-tools:diagnostic-tools xmlns:diagnostic-tools="urn:huawei:yang:huawei-diagnostic-tools">
+        <diagnostic-tools:ipv4>
+          <diagnostic-tools:ping-results/>
+        </diagnostic-tools:ipv4>
+      </diagnostic-tools:diagnostic-tools>
+    </filter>
+  </get>
+</rpc>
