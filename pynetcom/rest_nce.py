@@ -6,6 +6,37 @@ import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 # logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 
+
+class NCEAuthenticationError(Exception):
+    """Exception raised when NCE authentication fails."""
+    
+    # Known error codes and their descriptions
+    ERROR_MESSAGES = {
+        'user.user.policy_violation_lock': 'User account is LOCKED due to too many failed login attempts. Wait {0} minutes or contact NCE administrator.',
+        'user.user.policy_violation_stop': 'User account is DISABLED on NCE. Contact NCE administrator to enable the account.',
+        'user.pwd.expired': 'User password has EXPIRED. Change password on NCE before using API.',
+        'user.pwd.wrong': 'Invalid username or password.',
+        'user.user.not_exist': 'User does not exist on NCE.',
+    }
+    
+    def __init__(self, exception_id: str, response_json: dict = None):
+        self.exception_id = exception_id
+        self.response_json = response_json or {}
+        self.detail_args = self.response_json.get('descArgs', [])
+        
+        # Get human-readable message
+        if exception_id in self.ERROR_MESSAGES:
+            message = self.ERROR_MESSAGES[exception_id]
+            if self.detail_args:
+                message = message.format(*self.detail_args)
+        else:
+            message = f"Authentication failed: {exception_id}"
+            if self.detail_args:
+                message += f" (details: {self.detail_args})"
+        
+        super().__init__(message)
+
+
 class RestNCE(object):
     """
     This is low level class used to get data from NCE by sending requests
@@ -54,7 +85,10 @@ class RestNCE(object):
 
     def __auth(self):
         """
-        Request token for authorization
+        Request token for authorization.
+        
+        Raises:
+            NCEAuthenticationError: If authentication fails due to policy or credentials issues.
         """
         payload = { "grantType": "password", "userName": self.API_NCE_USER, "value": self.API_NCE_PASS }
 
@@ -66,19 +100,32 @@ class RestNCE(object):
             verify=False
         )
         logging.debug('POSTING response.status_code: %d', response.status_code)
-        logging.debug('POSTING response.json: %s', response.json())
-        response_json = response.json()
+        
+        try:
+            response_json = response.json()
+            logging.debug('POSTING response.json: %s', response_json)
+        except json.JSONDecodeError:
+            response_json = {}
+        
         if response.status_code == 200:
             logging.info("SUCCESSFUL AUTHORIZATION")
         else:
-            logging.error("POST: ERROR. Token not received: %d", response.status_code)
-            if response_json['exceptionId'] == 'user.user.policy_violation_stop':
-                logging.error('Check used status on NCE. May be it disabled')
-            if response_json['exceptionId'] == 'user.pwd.expired':
-                logging.error('Check used status on NCE. User password is expiried')
-            return False
+            exception_id = response_json.get('exceptionId', 'unknown_error')
+            logging.error("NCE Authentication failed: %s", exception_id)
+            
+            # Remove invalid token file if exists
+            if os.path.exists(self.token_filename):
+                try:
+                    os.remove(self.token_filename)
+                    logging.debug("Removed invalid token file: %s", self.token_filename)
+                except OSError:
+                    pass
+            
+            # Raise descriptive exception
+            raise NCEAuthenticationError(exception_id, response_json)
+        
         # Get token from received data
-        self.token = response_json ["accessSession"]
+        self.token = response_json["accessSession"]
         self.__write_token()
         self.__update_request_header()
         logging.debug('token: %s', self.token)
@@ -92,6 +139,9 @@ class RestNCE(object):
         :param get_params: Additional get parameters (after ? for example filter=10)
         :param data: Body of request
         :return: data in JSON format
+        
+        Raises:
+            NCEAuthenticationError: If re-authentication fails.
         """
         logging.info('send_request')
         self.url = self.API_NCE_HOST + rest_url
@@ -101,13 +151,20 @@ class RestNCE(object):
         if get_params != '':
             self.url += "&" + get_params
         logging.debug(f"url: {self.url}")
-        response = requests.get (self.url, headers=self.header, data=data, verify=False)
+        response = requests.get(self.url, headers=self.header, data=data, verify=False)
 
         if response.status_code == 401:
-            logging.warning('Unauthorized')
+            logging.warning('Unauthorized - token expired or invalid, re-authenticating...')
+            # Remove old token file
+            if os.path.exists(self.token_filename):
+                try:
+                    os.remove(self.token_filename)
+                except OSError:
+                    pass
+            # Re-authenticate (may raise NCEAuthenticationError)
             self.__auth()
-            # По хорошему тут нужна рекурсия, но пока и так сойдет
-            response = requests.get (self.url, headers=self.header, data=data, verify=False)
+            # Retry request with new token
+            response = requests.get(self.url, headers=self.header, data=data, verify=False)
         else:
             logging.debug('SUCCESS AUTHENTICATE USING EXISTING TOKEN')
 
@@ -115,7 +172,10 @@ class RestNCE(object):
             logging.info("GET REQUEST IS OK")
         else:
             logging.error("GET REQUEST RETURN ERROR: %d", response.status_code)
-            logging.debug(response.json())
+            try:
+                logging.debug(response.json())
+            except json.JSONDecodeError:
+                logging.debug(response.text)
             return False
         # Look the header. It contain pagination flag which indicate that
         # the data is croped and also contain link to "next request".
@@ -123,9 +183,9 @@ class RestNCE(object):
         response_header = response.headers
         # print(response.json())
         # print(response_header)
-        self.data.append( response.json() )
+        self.data.append(response.json())
         
-        if response_header["is-truncated"] == "true":
+        if response_header.get("is-truncated") == "true":
             self.is_trunked = True
             self.send_request(response_header["next-page"])
         else:

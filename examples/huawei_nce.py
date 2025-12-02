@@ -1,6 +1,6 @@
 from pynetcom import RestNCE
 import json
-from config import API_NCE_HOST, API_NCE_USER, API_NCE_PASS
+from config import API_NCE_HOST, API_NCE_USER, API_NCE_PASS, API_NCE_NE_NAME
 import logging
 
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -57,7 +57,7 @@ nce.clear_data()
 
 #########################################################################
 # Get hosts by hostname
-nce.send_request("/restconf/v2/data/huawei-nce-resource-inventory:network-elements", 'name=Bc.MSC4_.N8k02')
+nce.send_request("/restconf/v2/data/huawei-nce-resource-inventory:network-elements", f'name={API_NCE_NE_NAME}')
 """
 Return the following object
 {
