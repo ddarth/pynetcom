@@ -81,19 +81,17 @@ def example_get_active_alarms():
 
 
 def example_filter_by_severity():
-    """Get alarms excluding certain severities."""
+    """Get alarms filtered by severity (server-side)."""
     print("\n" + "=" * 70)
-    print("Example 4: Filter alarms by severity")
+    print("Example 4: Filter alarms by severity (server-side)")
     print("=" * 70)
     
     client = RestNCE(API_NCE_HOST, API_NCE_USER, API_NCE_PASS)
     provider = NceDataProvider(client)
     
-    # Create filter to include only major and critical alarms
-    alarm_filter = RestNMSDataFilter()
-    alarm_filter.include(severity=['major', 'critical'])
-    
-    alarms = provider.get_alarms(filters=alarm_filter)
+    # Server-side severity filter - more efficient
+    # alarms = provider.get_alarms(severity=['major', 'critical'])
+    alarms = provider.get_alarms(severity=['major'])
     
     print(f"Major/Critical alarms: {len(alarms)}")
     for alarm in alarms[:5]:
@@ -101,22 +99,20 @@ def example_filter_by_severity():
 
 
 def example_filter_by_time_range():
-    """Get alarms within a time range."""
+    """Get alarms within a time range (server-side filtering)."""
     print("\n" + "=" * 70)
-    print("Example 5: Filter alarms by time range")
+    print("Example 5: Filter alarms by time range (server-side)")
     print("=" * 70)
     
     client = RestNCE(API_NCE_HOST, API_NCE_USER, API_NCE_PASS)
     provider = NceDataProvider(client)
     
-    # Get alarms from the last 7 days
+    # Get alarms from the last 7 days - SERVER-SIDE filtering
     end_time = datetime.now()
     start_time = end_time - timedelta(days=7)
     
-    alarm_filter = RestNMSDataFilter()
-    alarm_filter.time_range(time_created=(start_time, end_time))
-    
-    alarms = provider.get_alarms(filters=alarm_filter)
+    # Use server-side time filtering (more efficient)
+    alarms = provider.get_alarms(start_time=start_time, end_time=end_time)
     
     print(f"Alarms in last 7 days: {len(alarms)}")
     for alarm in alarms[:5]:
@@ -124,26 +120,27 @@ def example_filter_by_time_range():
 
 
 def example_combined_filters():
-    """Use multiple filter conditions."""
+    """Use multiple server-side filter conditions."""
     print("\n" + "=" * 70)
-    print("Example 6: Combined filters")
+    print("Example 6: Combined server-side filters")
     print("=" * 70)
     
     client = RestNCE(API_NCE_HOST, API_NCE_USER, API_NCE_PASS)
     provider = NceDataProvider(client)
     
-    # Complex filter:
-    # - Include only major and critical
-    # - From the last 30 days
+    # All filters are server-side:
+    # - severity: major and critical
+    # - time: last 30 days
+    # - is_cleared: False (active only)
     end_time = datetime.now()
     start_time = end_time - timedelta(days=30)
     
-    alarm_filter = RestNMSDataFilter()
-    alarm_filter.include(severity=['major', 'critical'])
-    alarm_filter.time_range(time_created=(start_time, end_time))
-    
-    # Get active alarms with additional filter
-    alarms = provider.get_active_alarms(filters=alarm_filter)
+    alarms = provider.get_alarms(
+        severity=['major', 'critical'],
+        start_time=start_time,
+        end_time=end_time,
+        is_cleared=False
+    )
     
     print(f"Active major/critical alarms (last 30 days): {len(alarms)}")
     for alarm in alarms[:5]:
@@ -237,10 +234,26 @@ def example_get_subnets():
     subnets = provider.get_subnets()
     
     print(f"Total subnets: {len(subnets)}")
-    print("\nSubnets:")
-    for subnet in subnets[:10]:
+    
+    # Count by node-class
+    node_classes = {}
+    for subnet in subnets:
+        nc = subnet.get('node-class', 'unknown')
+        node_classes[nc] = node_classes.get(nc, 0) + 1
+    
+    print("\nBy node-class:")
+    for nc, count in sorted(node_classes.items()):
+        print(f"  {nc}: {count}")
+    
+    # Show first 10 subnets (node-class == 'subnet')
+    print("\nFirst 10 subnets (node-class='subnet'):")
+    shown = 0
+    for subnet in subnets:
         if subnet.get('node-class') == 'subnet':
             print(f"  {subnet.get('name')} (ID: {subnet.get('res-id')})")
+            shown += 1
+            if shown >= 10:
+                break
 
 
 def example_export_to_dict():

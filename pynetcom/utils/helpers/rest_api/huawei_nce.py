@@ -6,6 +6,7 @@ from Huawei NCE with filtering and pagination support.
 """
 
 from typing import List, Optional
+from datetime import datetime
 import logging
 
 from pynetcom.rest_nce import RestNCE
@@ -107,11 +108,25 @@ class NceDataProvider:
                         elements.extend(ne_list)
         return elements
     
+    def _format_datetime_for_api(self, dt: datetime) -> str:
+        """Format datetime for NCE API (UTC with Z suffix)."""
+        from datetime import timezone
+        # Convert to UTC if timezone-aware, otherwise assume local time
+        if dt.tzinfo is not None:
+            dt_utc = dt.astimezone(timezone.utc)
+        else:
+            # Assume local time, convert to UTC
+            dt_utc = dt
+        return dt_utc.strftime('%Y-%m-%dT%H:%M:%SZ')
+    
     def get_alarms(
         self,
         name: Optional[str] = None,
         resource: Optional[str] = None,
         is_cleared: Optional[bool] = None,
+        severity: Optional[List[str]] = None,
+        start_time: Optional[datetime] = None,
+        end_time: Optional[datetime] = None,
         filters: Optional[RestNMSDataFilter] = None,
         page_size: int = 1000
     ) -> List[NceAlarm]:
@@ -119,19 +134,41 @@ class NceDataProvider:
         Get alarms from Huawei NCE.
         
         Args:
-            name: Filter by network element name (ne-name).
-            resource: Filter by resource ID.
-            is_cleared: Filter by cleared status.
+            name: Filter by network element name. Will first lookup NE to get resource ID
+                  for efficient server-side filtering.
+            resource: Filter by resource ID (server-side).
+            is_cleared: Filter by cleared status (server-side).
+            severity: Filter by severity levels (server-side). 
+                      Values: 'critical', 'major', 'minor', 'warning'.
+            start_time: Start time for alarm query period (server-side, UTC).
+            end_time: End time for alarm query period (server-side, UTC).
             filters: RestNMSDataFilter instance for additional client-side filtering.
             page_size: Number of records per page.
         
         Returns:
             List of NceAlarm objects.
         """
-        # Build query parameters
+        # If name is provided but resource is not, lookup NE first to get resource ID
+        if name and not resource:
+            logger.debug(f"Looking up NE '{name}' to get resource ID for alarm filtering")
+            elements = self.get_network_elements(name=name)
+            if elements:
+                resource = elements[0].res_id
+                logger.debug(f"Found NE resource ID: {resource}")
+            else:
+                logger.warning(f"NE '{name}' not found, will fetch all alarms")
+        
+        # Build query parameters (server-side filters)
         params = []
         if resource:
             params.append(f"resource={resource}")
+        if severity:
+            for sev in severity:
+                params.append(f"perceived-severity={sev}")
+        if start_time:
+            params.append(f"start-time={self._format_datetime_for_api(start_time)}")
+        if end_time:
+            params.append(f"end-time={self._format_datetime_for_api(end_time)}")
         
         params_str = '&'.join(params) if params else ''
         
@@ -141,6 +178,8 @@ class NceDataProvider:
             body = {'is-cleared': is_cleared}
         
         logger.debug(f"Fetching alarms from: {self.ALARMS_ENDPOINT}")
+        if params_str:
+            logger.debug(f"With server-side filter: {params_str}")
         
         # Set page size
         original_limit = self.client.limit
@@ -158,10 +197,6 @@ class NceDataProvider:
         
         # Convert to NceAlarm objects
         alarms = [NceAlarm(item) for item in alarm_dicts]
-        
-        # Filter by NE name if specified (client-side)
-        if name:
-            alarms = [a for a in alarms if a.ne_name and name.lower() in a.ne_name.lower()]
         
         # Apply client-side filters
         if filters:
