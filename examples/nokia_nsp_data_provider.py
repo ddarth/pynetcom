@@ -2,10 +2,13 @@
 Example: Using NspDataProvider for Nokia NSP alarm and network element management.
 
 This example demonstrates:
-- Getting alarms with filtering by name, severity, time range
+- Getting alarms with server-side filtering (name, severity, is_cleared)
+- Getting alarms with client-side filtering (time range, RestNMSDataFilter)
 - Getting network elements
-- Using RestNMSDataFilter for client-side filtering
 - Using brief() and details() methods for display
+
+Note: NSP API supports server-side filtering for severity, is_cleared, name, ne_id.
+      Time range filtering is done client-side via RestNMSDataFilter.
 """
 
 import logging
@@ -56,21 +59,19 @@ def example_get_alarms_by_name():
 
 
 def example_filter_by_severity():
-    """Get alarms excluding certain severities."""
+    """Get alarms filtered by severity (server-side filtering)."""
     print("\n" + "=" * 70)
-    print("Example 3: Filter alarms by severity")
+    print("Example 3: Filter alarms by severity (server-side)")
     print("=" * 70)
     
     client = RestNSP(API_NSP_HOST, API_NSP_USER, API_NSP_PASS)
     provider = NspDataProvider(client)
     
-    # Create filter to exclude cleared and warning alarms
-    alarm_filter = RestNMSDataFilter()
-    alarm_filter.exclude(severity=['cleared', 'warning'])
+    # Server-side severity filter - more efficient than client-side
+    # Get only major and critical alarms
+    alarms = provider.get_alarms(severity=['major', 'critical'])
     
-    alarms = provider.get_alarms(filters=alarm_filter)
-    
-    print(f"Active alarms (excluding cleared/warning): {len(alarms)}")
+    print(f"Major/Critical alarms: {len(alarms)}")
     
     # Group by severity
     severity_counts = {}
@@ -84,66 +85,100 @@ def example_filter_by_severity():
 
 
 def example_filter_by_time_range():
-    """Get alarms within a time range."""
+    """Get alarms within a time range (client-side filtering)."""
     print("\n" + "=" * 70)
-    print("Example 4: Filter alarms by time range")
+    print("Example 4: Filter alarms by time range (client-side)")
     print("=" * 70)
     
     client = RestNSP(API_NSP_HOST, API_NSP_USER, API_NSP_PASS)
     provider = NspDataProvider(client)
     
-    # Get alarms from the last 24 hours
+    # Get alarms from the last 7 days
+    # Note: time filtering is done client-side for NSP
     end_time = datetime.now()
-    start_time = end_time - timedelta(hours=24)
+    start_time = end_time - timedelta(days=7)
     
-    alarm_filter = RestNMSDataFilter()
-    alarm_filter.time_range(last_time_detected=(start_time, end_time))
+    # Use built-in start_time/end_time parameters
+    alarms = provider.get_alarms(start_time=start_time, end_time=end_time)
     
-    alarms = provider.get_alarms(filters=alarm_filter)
-    
-    print(f"Alarms in last 24 hours: {len(alarms)}")
+    print(f"Alarms in last 7 days: {len(alarms)}")
     for alarm in alarms[:5]:
         print(f"  {alarm.brief()}")
 
 
 def example_combined_filters():
-    """Use multiple filter conditions."""
+    """Use combined server-side and client-side filters."""
     print("\n" + "=" * 70)
-    print("Example 5: Combined filters")
+    print("Example 5: Combined server-side and client-side filters")
     print("=" * 70)
     
     client = RestNSP(API_NSP_HOST, API_NSP_USER, API_NSP_PASS)
     provider = NspDataProvider(client)
     
-    # Complex filter:
-    # - Exclude cleared and warning alarms
-    # - Exclude LinkDown alarms
-    # - Only from the last 7 days
+    # Complex filter combining:
+    # SERVER-SIDE (efficient):
+    # - severity: only major and critical
+    # - is_cleared: only active alarms
+    # CLIENT-SIDE (via RestNMSDataFilter):
+    # - time range: last 30 days
+    # - exclude specific alarm names
+    
     end_time = datetime.now()
-    start_time = end_time - timedelta(days=7)
+    start_time = end_time - timedelta(days=30)
     
+    # Client-side filter for additional filtering
     alarm_filter = RestNMSDataFilter()
-    alarm_filter.exclude(severity=['cleared', 'warning'])
     alarm_filter.exclude(alarm_name=['LinkDown'])
-    alarm_filter.time_range(last_time_detected=(start_time, end_time))
     
-    alarms = provider.get_alarms(filters=alarm_filter)
+    alarms = provider.get_alarms(
+        severity=['major', 'critical'],  # Server-side
+        is_cleared=False,                 # Server-side
+        start_time=start_time,            # Client-side
+        end_time=end_time,                # Client-side
+        filters=alarm_filter              # Client-side (exclude LinkDown)
+    )
     
-    print(f"Filtered alarms: {len(alarms)}")
+    print(f"Active major/critical alarms (last 30 days, excl. LinkDown): {len(alarms)}")
     for alarm in alarms[:5]:
         print(f"\n{alarm.brief()}")
+
+
+def example_get_active_alarms():
+    """Get only active (non-cleared) alarms using server-side filtering."""
+    print("\n" + "=" * 70)
+    print("Example 6: Get active alarms (server-side is_cleared filter)")
+    print("=" * 70)
+    
+    client = RestNSP(API_NSP_HOST, API_NSP_USER, API_NSP_PASS)
+    provider = NspDataProvider(client)
+    
+    # get_active_alarms() uses server-side is_cleared=False filter
+    # This is more efficient than client-side filtering
+    alarms = provider.get_active_alarms()
+    
+    print(f"Active alarms: {len(alarms)}")
+    
+    # Group by severity
+    severity_counts = {}
+    for alarm in alarms:
+        sev = alarm.severity or 'unknown'
+        severity_counts[sev] = severity_counts.get(sev, 0) + 1
+    
+    print("\nBy severity:")
+    for sev, count in sorted(severity_counts.items()):
+        print(f"  {sev}: {count}")
 
 
 def example_alarm_details():
     """Show detailed alarm information."""
     print("\n" + "=" * 70)
-    print("Example 6: Alarm details")
+    print("Example 7: Alarm details")
     print("=" * 70)
     
     client = RestNSP(API_NSP_HOST, API_NSP_USER, API_NSP_PASS)
     provider = NspDataProvider(client)
     
-    # Get active alarms
+    # Get active alarms (server-side filtering)
     alarms = provider.get_active_alarms()
     
     if alarms:
@@ -156,7 +191,7 @@ def example_alarm_details():
 def example_get_network_elements():
     """Get network elements from NSP."""
     print("\n" + "=" * 70)
-    print("Example 7: Get network elements")
+    print("Example 8: Get network elements")
     print("=" * 70)
     
     client = RestNSP(API_NSP_HOST, API_NSP_USER, API_NSP_PASS)
@@ -173,7 +208,7 @@ def example_get_network_elements():
 def example_network_element_details():
     """Show detailed network element information."""
     print("\n" + "=" * 70)
-    print("Example 8: Network element details")
+    print("Example 9: Network element details")
     print("=" * 70)
     
     client = RestNSP(API_NSP_HOST, API_NSP_USER, API_NSP_PASS)
@@ -191,7 +226,7 @@ def example_network_element_details():
 def example_export_to_dict():
     """Export alarm data to dictionary/JSON."""
     print("\n" + "=" * 70)
-    print("Example 9: Export to dict/JSON")
+    print("Example 10: Export to dict/JSON")
     print("=" * 70)
     
     client = RestNSP(API_NSP_HOST, API_NSP_USER, API_NSP_PASS)
@@ -221,6 +256,7 @@ if __name__ == "__main__":
         example_filter_by_severity()
         example_filter_by_time_range()
         example_combined_filters()
+        example_get_active_alarms()
         example_alarm_details()
         example_get_network_elements()
         example_network_element_details()

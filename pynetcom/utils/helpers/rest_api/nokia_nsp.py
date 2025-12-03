@@ -6,7 +6,9 @@ from Nokia NSP with filtering and pagination support.
 """
 
 from typing import List, Optional
+from datetime import datetime
 import logging
+from urllib.parse import quote
 
 from pynetcom.rest_nsp import RestNSP
 from pynetcom.utils.helpers.rest_api.base import RestNMSDataFilter
@@ -55,10 +57,75 @@ class NspDataProvider:
         """
         self.client = client
     
+    def _build_alarm_filter(
+        self,
+        name: Optional[str] = None,
+        ne_id: Optional[str] = None,
+        is_cleared: Optional[bool] = None,
+        severity: Optional[List[str]] = None
+    ) -> Optional[str]:
+        """
+        Build NSP alarmFilter query string for server-side filtering.
+        
+        Args:
+            name: Filter by network element name (neName).
+            ne_id: Filter by network element ID (neId).
+            is_cleared: Filter by cleared status.
+            severity: Filter by severity levels (critical, major, minor, warning, cleared).
+        
+        Returns:
+            URL-encoded alarmFilter string or None if no filters.
+        
+        Example filters:
+            severity='major'
+            (severity='critical' or severity='major')
+            neName='Router1' and severity<>'cleared'
+        """
+        conditions = []
+        
+        # Filter by NE name
+        if name:
+            conditions.append(f"neName='{name}'")
+        
+        # Filter by NE ID
+        if ne_id:
+            conditions.append(f"neId='{ne_id}'")
+        
+        # Filter by severity
+        if severity:
+            if len(severity) == 1:
+                conditions.append(f"severity='{severity[0]}'")
+            else:
+                # Multiple severities: (severity='critical' or severity='major')
+                sev_conditions = [f"severity='{s}'" for s in severity]
+                conditions.append(f"({' or '.join(sev_conditions)})")
+        
+        # Filter by cleared status
+        if is_cleared is not None:
+            if is_cleared:
+                # Only cleared alarms
+                conditions.append("severity='cleared'")
+            else:
+                # Only non-cleared alarms (exclude 'cleared' severity)
+                conditions.append("severity<>'cleared'")
+        
+        if not conditions:
+            return None
+        
+        # Join conditions with AND
+        filter_str = ' and '.join(conditions)
+        
+        # URL encode the filter (double encoding as NSP expects)
+        return quote(filter_str, safe='')
+    
     def get_alarms(
         self,
         name: Optional[str] = None,
         ne_id: Optional[str] = None,
+        is_cleared: Optional[bool] = None,
+        severity: Optional[List[str]] = None,
+        start_time: Optional[datetime] = None,
+        end_time: Optional[datetime] = None,
         filters: Optional[RestNMSDataFilter] = None,
         page_size: int = 1000
     ) -> List[NspAlarm]:
@@ -66,26 +133,37 @@ class NspDataProvider:
         Get alarms from Nokia NSP.
         
         Args:
-            name: Filter by network element name (neName).
-            ne_id: Filter by network element ID (neId).
+            name: Filter by network element name (neName). Server-side filtering.
+            ne_id: Filter by network element ID (neId). Server-side filtering.
+            is_cleared: Filter by cleared status. Server-side filtering.
+                        True = only cleared alarms, False = only active alarms.
+            severity: Filter by severity levels. Server-side filtering.
+                      Values: 'critical', 'major', 'minor', 'warning', 'cleared'.
+            start_time: Start time for alarm query period. Client-side filtering.
+            end_time: End time for alarm query period. Client-side filtering.
             filters: RestNMSDataFilter instance for additional client-side filtering.
             page_size: Number of records per page (default 1000).
         
         Returns:
             List of NspAlarm objects.
-        """
-        # Build API filter
-        api_filters = []
-        if name:
-            api_filters.append(f"neName='{name}'")
-        if ne_id:
-            api_filters.append(f"neId='{ne_id}'")
         
-        # Build URL
+        Note:
+            - name, ne_id, is_cleared, severity are filtered server-side (more efficient)
+            - start_time, end_time are filtered client-side via RestNMSDataFilter
+            - This API is unified with NceDataProvider.get_alarms() for consistency
+        """
+        # Build server-side alarm filter
+        alarm_filter = self._build_alarm_filter(
+            name=name,
+            ne_id=ne_id,
+            is_cleared=is_cleared,
+            severity=severity
+        )
+        
+        # Build URL with filter
         url = self.ALARMS_ENDPOINT
-        if api_filters:
-            filter_str = ' AND '.join(api_filters)
-            url = f"{url}?alarmFilter={filter_str}"
+        if alarm_filter:
+            url = f"{url}?alarmFilter={alarm_filter}"
         
         logger.debug(f"Fetching alarms from: {url}")
         
@@ -95,14 +173,7 @@ class NspDataProvider:
         
         try:
             self.client.clear_data()
-            self.client.send_request(url if '?' not in self.ALARMS_ENDPOINT else self.ALARMS_ENDPOINT)
-            
-            # If we built a custom URL with filters
-            if api_filters:
-                self.client.clear_data()
-                # For NSP, the URL is built in send_request, so we pass the full path
-                self.client.send_request(url.replace(self.client.API_NSP_HOST, '').replace(':8544', ''))
-            
+            self.client.send_request(url)
             raw_data = self.client.get_data()
         finally:
             self.client.limit = original_limit
@@ -110,7 +181,14 @@ class NspDataProvider:
         # Convert to NspAlarm objects
         alarms = [NspAlarm(item) for item in raw_data]
         
-        # Apply client-side filters
+        # Build client-side filter for time range
+        time_filter = None
+        if start_time is not None or end_time is not None:
+            time_filter = RestNMSDataFilter()
+            time_filter.time_range(last_time_detected=(start_time, end_time))
+            alarms = time_filter.apply(alarms)
+        
+        # Apply additional client-side filters
         if filters:
             alarms = filters.apply(alarms)
         
@@ -120,7 +198,9 @@ class NspDataProvider:
     def get_alarms_raw(
         self,
         name: Optional[str] = None,
-        ne_id: Optional[str] = None
+        ne_id: Optional[str] = None,
+        is_cleared: Optional[bool] = None,
+        severity: Optional[List[str]] = None
     ) -> List[dict]:
         """
         Get raw alarm data from Nokia NSP without conversion.
@@ -128,20 +208,23 @@ class NspDataProvider:
         Args:
             name: Filter by network element name.
             ne_id: Filter by network element ID.
+            is_cleared: Filter by cleared status.
+            severity: Filter by severity levels.
         
         Returns:
             List of raw alarm dictionaries.
         """
-        api_filters = []
-        if name:
-            api_filters.append(f"neName='{name}'")
-        if ne_id:
-            api_filters.append(f"neId='{ne_id}'")
+        # Build server-side alarm filter
+        alarm_filter = self._build_alarm_filter(
+            name=name,
+            ne_id=ne_id,
+            is_cleared=is_cleared,
+            severity=severity
+        )
         
         url = self.ALARMS_ENDPOINT
-        if api_filters:
-            filter_str = ' AND '.join(api_filters)
-            url = f"{url}?alarmFilter={filter_str}"
+        if alarm_filter:
+            url = f"{url}?alarmFilter={alarm_filter}"
         
         self.client.clear_data()
         self.client.send_request(url)
@@ -207,6 +290,8 @@ class NspDataProvider:
     def get_alarms_count(
         self,
         name: Optional[str] = None,
+        is_cleared: Optional[bool] = None,
+        severity: Optional[List[str]] = None,
         filters: Optional[RestNMSDataFilter] = None
     ) -> int:
         """
@@ -214,12 +299,19 @@ class NspDataProvider:
         
         Args:
             name: Filter by network element name.
+            is_cleared: Filter by cleared status.
+            severity: Filter by severity levels.
             filters: RestNMSDataFilter instance for additional filtering.
         
         Returns:
             Number of alarms.
         """
-        alarms = self.get_alarms(name=name, filters=filters)
+        alarms = self.get_alarms(
+            name=name,
+            is_cleared=is_cleared,
+            severity=severity,
+            filters=filters
+        )
         return len(alarms)
     
     def get_alarms_by_severity(
@@ -228,7 +320,7 @@ class NspDataProvider:
         name: Optional[str] = None
     ) -> List[NspAlarm]:
         """
-        Get alarms filtered by severity level.
+        Get alarms filtered by severity level (server-side filtering).
         
         Args:
             severity: Severity level (critical, major, minor, warning, cleared).
@@ -237,8 +329,8 @@ class NspDataProvider:
         Returns:
             List of NspAlarm objects with specified severity.
         """
-        filters = RestNMSDataFilter().include(severity=[severity])
-        return self.get_alarms(name=name, filters=filters)
+        # Use server-side filtering for efficiency
+        return self.get_alarms(name=name, severity=[severity])
     
     def get_active_alarms(
         self,
@@ -246,21 +338,15 @@ class NspDataProvider:
         filters: Optional[RestNMSDataFilter] = None
     ) -> List[NspAlarm]:
         """
-        Get only active (non-cleared) alarms.
+        Get only active (non-cleared) alarms (server-side filtering).
         
         Args:
             name: Filter by network element name.
-            filters: Additional filters to apply.
+            filters: Additional client-side filters to apply.
         
         Returns:
             List of active NspAlarm objects.
         """
-        base_filter = RestNMSDataFilter().exclude(severity=['cleared'])
-        
-        if filters:
-            # Combine filters - apply base filter first, then user filters
-            alarms = self.get_alarms(name=name, filters=base_filter)
-            return filters.apply(alarms)
-        
-        return self.get_alarms(name=name, filters=base_filter)
+        # Use server-side filtering for is_cleared (more efficient)
+        return self.get_alarms(name=name, is_cleared=False, filters=filters)
 
