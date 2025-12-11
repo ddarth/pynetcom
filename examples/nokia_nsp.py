@@ -2,15 +2,11 @@ import logging
 from pynetcom import RestNSP
 from config import API_NSP_HOST, API_NSP_USER, API_NSP_PASS, API_NSP_NE_NAME
 
-logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
-
-# Set needed logging level
-logging.getLogger().setLevel(logging.INFO)
-
-# 
-API_NSP_USER =  API_NSP_USER
-API_NSP_PASS = API_NSP_PASS
-API_NSP_HOST = API_NSP_HOST
+# Configure logging (change to logging.DEBUG or logging.INFO for verbose output)
+LOG_LEVEL = logging.WARNING
+logging.basicConfig(level=LOG_LEVEL, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.getLogger('pynetcom').setLevel(LOG_LEVEL)
+logging.getLogger('urllib3').setLevel(logging.WARNING)
 
 """
 Various Nokia NSP API urls
@@ -74,6 +70,8 @@ def get_nsp_all_alarms():
     nes = list()
     for alarm in alarms:
         print(alarm['neName'], alarm['alarmName'])
+    
+    nsp.close()
 
 def get_nsp_ne_name_alarms(ne_name: str):
     """Get all alarms from NSP by neName"""
@@ -84,6 +82,8 @@ def get_nsp_ne_name_alarms(ne_name: str):
     nes = list()
     for alarm in alarms:
         print(alarm['neName'], alarm['alarmName'], alarm['severity'], ' | \t', alarm['affectedObjectName'], ' | \t', alarm['affectedObjectType'], ' | \t', alarm['affectedObject'])
+    
+    nsp.close()
 
 def get_nsp_all_ne():
     """Get all network elements from NSP"""
@@ -95,6 +95,8 @@ def get_nsp_all_ne():
     for ne in elements:
         # print(ne)
         print(ne['name'], ne['ipAddress'], ne['type'], ne['managedState'])
+    
+    nsp.close()
     return elements
 
 

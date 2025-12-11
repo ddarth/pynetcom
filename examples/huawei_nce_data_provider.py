@@ -9,16 +9,34 @@ This example demonstrates:
 """
 
 import logging
+import time
 from datetime import datetime, timedelta
+from functools import wraps
 
 from pynetcom import RestNCE, NceDataProvider, RestNMSDataFilter, NCEAuthenticationError
 from config import API_NCE_HOST, API_NCE_USER, API_NCE_PASS, API_NCE_NE_NAME, API_NCE_SUBNET_NAME
 
-# Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+# Configure logging (change LOG_LEVEL as needed)
+LOG_LEVEL = logging.DEBUG
+logging.basicConfig(level=LOG_LEVEL, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.getLogger('pynetcom').setLevel(LOG_LEVEL)  # Also set for pynetcom library
+logging.getLogger('urllib3').setLevel(logging.WARNING)  # Suppress urllib3 noise
 logger = logging.getLogger(__name__)
 
 
+def timed(func):
+    """Decorator to measure and print execution time."""
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        start = time.time()
+        result = func(*args, **kwargs)
+        elapsed = time.time() - start
+        print(f"⏱ Execution time: {elapsed:.2f}s")
+        return result
+    return wrapper
+
+
+@timed
 def example_get_all_alarms():
     """Get all alarms from NCE."""
     print("\n" + "=" * 70)
@@ -34,8 +52,11 @@ def example_get_all_alarms():
     print("\nFirst 5 alarms (brief):")
     for alarm in alarms[:5]:
         print(f"  {alarm.brief()}")
+    
+    client.close()
 
 
+@timed
 def example_get_alarms_by_name():
     """Get alarms filtered by network element name."""
     print("\n" + "=" * 70)
@@ -53,8 +74,11 @@ def example_get_alarms_by_name():
     print(f"Alarms for '{ne_name}': {len(alarms)}")
     for alarm in alarms[:3]:
         print(f"\n{alarm.brief()}")
+    
+    client.close()
 
 
+@timed
 def example_get_active_alarms():
     """Get only active (non-cleared) alarms."""
     print("\n" + "=" * 70)
@@ -78,8 +102,11 @@ def example_get_active_alarms():
     print("\nBy severity:")
     for sev, count in sorted(severity_counts.items()):
         print(f"  {sev}: {count}")
+    
+    client.close()
 
 
+@timed
 def example_filter_by_severity():
     """Get alarms filtered by severity (server-side)."""
     print("\n" + "=" * 70)
@@ -96,8 +123,11 @@ def example_filter_by_severity():
     print(f"Major/Critical alarms: {len(alarms)}")
     for alarm in alarms[:5]:
         print(f"  {alarm.brief()}")
+    
+    client.close()
 
 
+@timed
 def example_filter_by_time_range():
     """Get alarms within a time range (server-side filtering)."""
     print("\n" + "=" * 70)
@@ -107,18 +137,21 @@ def example_filter_by_time_range():
     client = RestNCE(API_NCE_HOST, API_NCE_USER, API_NCE_PASS)
     provider = NceDataProvider(client)
     
-    # Get alarms from the last 7 days - SERVER-SIDE filtering
+    # Get alarms from the last 1 days - SERVER-SIDE filtering
     end_time = datetime.now()
-    start_time = end_time - timedelta(days=7)
+    start_time = end_time - timedelta(days=1)
     
     # Use server-side time filtering (more efficient)
     alarms = provider.get_alarms(start_time=start_time, end_time=end_time)
     
-    print(f"Alarms in last 7 days: {len(alarms)}")
+    print(f"Alarms in last 1 days: {len(alarms)}")
     for alarm in alarms[:5]:
         print(f"  {alarm.brief()}")
+    
+    client.close()
 
 
+@timed
 def example_combined_filters():
     """Use multiple server-side filter conditions."""
     print("\n" + "=" * 70)
@@ -130,10 +163,10 @@ def example_combined_filters():
     
     # All filters are server-side:
     # - severity: major and critical
-    # - time: last 30 days
+    # - time: last 2 days
     # - is_cleared: False (active only)
     end_time = datetime.now()
-    start_time = end_time - timedelta(days=30)
+    start_time = end_time - timedelta(days=2)
     
     alarms = provider.get_alarms(
         severity=['major', 'critical'],
@@ -142,11 +175,14 @@ def example_combined_filters():
         is_cleared=False
     )
     
-    print(f"Active major/critical alarms (last 30 days): {len(alarms)}")
+    print(f"Active major/critical alarms (last 2 days): {len(alarms)}")
     for alarm in alarms[:5]:
         print(f"\n{alarm.brief()}")
+    
+    client.close()
 
 
+@timed
 def example_alarm_details():
     """Show detailed alarm information."""
     print("\n" + "=" * 70)
@@ -163,8 +199,11 @@ def example_alarm_details():
         print(alarms[0].details())
     else:
         print("No active alarms found")
+    
+    client.close()
 
 
+@timed
 def example_get_network_elements():
     """Get network elements from NCE."""
     print("\n" + "=" * 70)
@@ -179,9 +218,13 @@ def example_get_network_elements():
     print(f"Total network elements: {len(elements)}")
     print("\nFirst 10 elements:")
     for ne in elements[:10]:
-        print(f"  {ne.brief()}")
+        # print(f"  {ne.brief()}")
+        print(f"  {ne.details()}")
+    
+    client.close()
 
 
+@timed
 def example_get_network_element_by_name():
     """Get network element by name."""
     print("\n" + "=" * 70)
@@ -202,8 +245,11 @@ def example_get_network_element_by_name():
             print(ne.details())
     else:
         print(f"No elements found matching '{ne_name}'")
+    
+    client.close()
 
 
+@timed
 def example_network_element_details():
     """Show detailed network element information."""
     print("\n" + "=" * 70)
@@ -220,8 +266,11 @@ def example_network_element_details():
         print(elements[0].details())
     else:
         print("No network elements found")
+    
+    client.close()
 
 
+@timed
 def example_get_subnets():
     """Get subnets from NCE."""
     print("\n" + "=" * 70)
@@ -231,31 +280,27 @@ def example_get_subnets():
     client = RestNCE(API_NCE_HOST, API_NCE_USER, API_NCE_PASS)
     provider = NceDataProvider(client)
     
+    # Get all subnets
     subnets = provider.get_subnets()
-    
     print(f"Total subnets: {len(subnets)}")
     
-    # Count by node-class
-    node_classes = {}
-    for subnet in subnets:
-        nc = subnet.get('node-class', 'unknown')
-        node_classes[nc] = node_classes.get(nc, 0) + 1
+    # Show first 5 subnets
+    print("\nFirst 5 subnets:")
+    for subnet in subnets[:5]:
+        print(f"  {subnet.get('name')} (ID: {subnet.get('res-id')})")
     
-    print("\nBy node-class:")
-    for nc, count in sorted(node_classes.items()):
-        print(f"  {nc}: {count}")
+    # Find subnet by name
+    target_name = API_NCE_SUBNET_NAME
+    subnet = provider.get_subnet_by_name(target_name)
+    if subnet:
+        print(f"\nFound subnet '{target_name}': ID={subnet.get('res-id')}")
+    else:
+        print(f"\nSubnet '{target_name}' not found")
     
-    # Show first 10 subnets (node-class == 'subnet')
-    print("\nFirst 10 subnets (node-class='subnet'):")
-    shown = 0
-    for subnet in subnets:
-        if subnet.get('node-class') == 'subnet':
-            print(f"  {subnet.get('name')} (ID: {subnet.get('res-id')})")
-            shown += 1
-            if shown >= 10:
-                break
+    client.close()
 
 
+@timed
 def example_get_alarms_by_subnet():
     """Get alarms for all NEs in a subnet."""
     print("\n" + "=" * 70)
@@ -265,38 +310,31 @@ def example_get_alarms_by_subnet():
     client = RestNCE(API_NCE_HOST, API_NCE_USER, API_NCE_PASS)
     provider = NceDataProvider(client)
     
-    # Target subnet name from config
-    target_subnet_name = API_NCE_SUBNET_NAME
-    
     # Find subnet by name
-    subnets = provider.get_subnets()
-    subnet = None
-    for s in subnets:
-        if s.get('name') == target_subnet_name and s.get('node-class') == 'subnet':
-            subnet = s
-            break
-    
+    subnet = provider.get_subnet_by_name(API_NCE_SUBNET_NAME)
     if not subnet:
-        print(f"Subnet '{target_subnet_name}' not found")
+        print(f"Subnet '{API_NCE_SUBNET_NAME}' not found")
+        client.close()
         return
     
     subnet_id = subnet.get('res-id')
-    subnet_name = subnet.get('name')
+    print(f"Subnet: {API_NCE_SUBNET_NAME} (ID: {subnet_id})")
     
-    print(f"Getting alarms for subnet: {subnet_name} (ID: {subnet_id})")
-    
-    # Get alarms for the subnet (server-side filtering by NE resource IDs)
+    # Get alarms for the subnet (client-side filtering)
     alarms = provider.get_alarms(
         subnet_id=subnet_id,
         severity=['major', 'critical'],
         is_cleared=False
     )
     
-    print(f"\nActive major/critical alarms in subnet: {len(alarms)}")
+    print(f"\nActive major/critical alarms: {len(alarms)}")
     for alarm in alarms[:5]:
         print(f"  {alarm.brief()}")
+    
+    client.close()
 
 
+@timed
 def example_export_to_dict():
     """Export alarm data to dictionary/JSON."""
     print("\n" + "=" * 70)
@@ -320,6 +358,8 @@ def example_export_to_dict():
         print(json_str[:500] + "...")
     else:
         print("No alarms to export")
+    
+    client.close()
 
 
 if __name__ == "__main__":

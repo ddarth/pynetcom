@@ -52,6 +52,11 @@ class RestNSP(object):
         self.API_NSP_HOST = nsp_host
         self.API_NSP_USER = nsp_username
         self.API_NSP_PASS = nsp_password
+        
+        # Create session for connection pooling (reuses TCP/SSL connections)
+        self.session = requests.Session()
+        self.session.verify = False
+        
         # Пробуем использовать токен из файла
         if os.path.exists(self.token_filename):
             self.__read_token()
@@ -102,7 +107,7 @@ class RestNSP(object):
             "content-type":"application/json", 
             "Authorization":"Basic "+encoded_credentials,
         }
-        response = requests.post(url, json=payload, headers=headers, verify=False)
+        response = self.session.post(url, json=payload, headers=headers)
         logging.debug('POSTING response.status_code: %d', response.status_code)
         logging.debug('POSTING response.json: %s', response.json())
         response_json = response.json()
@@ -135,12 +140,12 @@ class RestNSP(object):
  
         logging.debug("SENDING REQUEST to url: %s", self.url)
 
-        response = requests.get (self.url, headers=self.header, data=None, verify=False)
+        response = self.session.get(self.url, headers=self.header, data=None)
         if response.status_code == 401:
             logging.warning('Unauthorized')
             self.__auth()
             # По хорошему тут нужна рекурсия, но пока и так сойдет
-            response = requests.get (self.url, headers=self.header, data=None, verify=False)
+            response = self.session.get(self.url, headers=self.header, data=None)
         else:
             logging.debug('SUCCESS AUTHENTICATE USING EXISTING TOKEN')
 
@@ -178,4 +183,18 @@ class RestNSP(object):
 
         :return: data in JSON format
         """
-        return self.data 
+        return self.data
+    
+    def close(self):
+        """Close the session and release connections."""
+        if self.session:
+            self.session.close()
+    
+    def __enter__(self):
+        """Context manager entry."""
+        return self
+    
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Context manager exit - close session."""
+        self.close()
+        return False

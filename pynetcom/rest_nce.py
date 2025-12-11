@@ -4,7 +4,8 @@ import os
 import logging
 import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-# logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+
+logger = logging.getLogger('pynetcom.rest_nce')
 
 
 class NCEAuthenticationError(Exception):
@@ -60,9 +61,14 @@ class RestNCE(object):
         self.API_NCE_HOST = nce_host
         self.API_NCE_USER = nce_username
         self.API_NCE_PASS = nce_password
+        
+        # Create session for connection pooling (reuses TCP/SSL connections)
+        self.session = requests.Session()
+        self.session.verify = False
+        
         if os.path.exists(self.token_filename):
             self.__read_token()
-            logging.debug('read token: %s', self.token)
+            logger.debug('read token: %s', self.token)
         else:
             self.__auth()
         self.header = { "X-Auth-Token": self.token, "content-type":"application/json" }
@@ -93,31 +99,30 @@ class RestNCE(object):
         payload = { "grantType": "password", "userName": self.API_NCE_USER, "value": self.API_NCE_PASS }
 
         url = self.API_NCE_HOST + self.AUTH_REST_URL
-        logging.debug(['url: ', url])
+        logger.debug(['url: ', url])
         # verify=False - disable ssl certificate verification check
-        response = requests.put(url, data=json.dumps(payload), 
-            headers = {"content-type":"application/json", "Accept":"application/json"}, 
-            verify=False
+        response = self.session.put(url, data=json.dumps(payload), 
+            headers = {"content-type":"application/json", "Accept":"application/json"}
         )
-        logging.debug('POSTING response.status_code: %d', response.status_code)
+        logger.debug('POSTING response.status_code: %d', response.status_code)
         
         try:
             response_json = response.json()
-            logging.debug('POSTING response.json: %s', response_json)
+            logger.debug('POSTING response.json: %s', response_json)
         except json.JSONDecodeError:
             response_json = {}
         
         if response.status_code == 200:
-            logging.info("SUCCESSFUL AUTHORIZATION")
+            logger.info("SUCCESSFUL AUTHORIZATION")
         else:
             exception_id = response_json.get('exceptionId', 'unknown_error')
-            logging.error("NCE Authentication failed: %s", exception_id)
+            logger.error("NCE Authentication failed: %s", exception_id)
             
             # Remove invalid token file if exists
             if os.path.exists(self.token_filename):
                 try:
                     os.remove(self.token_filename)
-                    logging.debug("Removed invalid token file: %s", self.token_filename)
+                    logger.debug("Removed invalid token file: %s", self.token_filename)
                 except OSError:
                     pass
             
@@ -128,7 +133,7 @@ class RestNCE(object):
         self.token = response_json["accessSession"]
         self.__write_token()
         self.__update_request_header()
-        logging.debug('token: %s', self.token)
+        logger.debug('token: %s', self.token)
         return self.token        
 
     def send_request(self, rest_url: str, get_params: str = '', data: dict = None) -> dict:
@@ -143,18 +148,18 @@ class RestNCE(object):
         Raises:
             NCEAuthenticationError: If re-authentication fails.
         """
-        logging.info('send_request')
+        logger.info('send_request')
         self.url = self.API_NCE_HOST + rest_url
         if not self.is_trunked:
             self.url += "?limit=" + self.limit
 
         if get_params != '':
             self.url += "&" + get_params
-        logging.debug(f"url: {self.url}")
-        response = requests.get(self.url, headers=self.header, data=data, verify=False)
+        logger.debug(f"url: {self.url}")
+        response = self.session.get(self.url, headers=self.header, data=data)
 
         if response.status_code == 401:
-            logging.warning('Unauthorized - token expired or invalid, re-authenticating...')
+            logger.warning('Unauthorized - token expired or invalid, re-authenticating...')
             # Remove old token file
             if os.path.exists(self.token_filename):
                 try:
@@ -164,18 +169,18 @@ class RestNCE(object):
             # Re-authenticate (may raise NCEAuthenticationError)
             self.__auth()
             # Retry request with new token
-            response = requests.get(self.url, headers=self.header, data=data, verify=False)
+            response = self.session.get(self.url, headers=self.header, data=data)
         else:
-            logging.debug('SUCCESS AUTHENTICATE USING EXISTING TOKEN')
+            logger.debug('SUCCESS AUTHENTICATE USING EXISTING TOKEN')
 
         if response.status_code == 200:
-            logging.info("GET REQUEST IS OK")
+            logger.info("GET REQUEST IS OK")
         else:
-            logging.error("GET REQUEST RETURN ERROR: %d", response.status_code)
+            logger.error("GET REQUEST RETURN ERROR: %d", response.status_code)
             try:
-                logging.debug(response.json())
+                logger.debug(response.json())
             except json.JSONDecodeError:
-                logging.debug(response.text)
+                logger.debug(response.text)
             return False
         # Look the header. It contain pagination flag which indicate that
         # the data is croped and also contain link to "next request".
@@ -190,8 +195,8 @@ class RestNCE(object):
             self.send_request(response_header["next-page"])
         else:
             self.is_trunked = False
-            return self.data 
-
+            return self.data
+    
     def clear_data(self):
         """
         Used between requests
@@ -212,4 +217,18 @@ class RestNCE(object):
 
         :return: data in JSON format
         """
-        return self.data 
+        return self.data
+    
+    def close(self):
+        """Close the session and release connections."""
+        if self.session:
+            self.session.close()
+    
+    def __enter__(self):
+        """Context manager entry."""
+        return self
+    
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Context manager exit - close session."""
+        self.close()
+        return False

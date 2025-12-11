@@ -3,15 +3,11 @@ import json
 from config import API_NCE_HOST, API_NCE_USER, API_NCE_PASS, API_NCE_NE_NAME
 import logging
 
-logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
-
-# Setting authentication parameters
-API_NCE_USER =  API_NCE_USER
-API_NCE_PASS = API_NCE_PASS
-API_NCE_HOST = API_NCE_HOST
-
-# Set needed logging level
-logging.getLogger().setLevel(logging.INFO)
+# Configure logging (change to logging.DEBUG or logging.INFO for verbose output)
+LOG_LEVEL = logging.WARNING
+logging.basicConfig(level=LOG_LEVEL, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.getLogger('pynetcom').setLevel(LOG_LEVEL)
+logging.getLogger('urllib3').setLevel(logging.WARNING)
 
 """
 Various Huawei NCE API urls
@@ -114,14 +110,14 @@ for item in items:
         result.append(res_host)
 
 nce.clear_data()
+# exit()
 print('#########################################################################')
 print('# Found the following alarms.')
 print('#########################################################################')
 
 #########################################################################
 # Get alarms by host resource id
-nce.send_request("/restconf/v1/data/ietf-alarms:alarms/alarm-list", 'resource=008ca2e2-3d92-45f8-b2c0-ebb425932a36', { 'is-cleared': False } )
-
+nce.send_request("/restconf/v1/data/ietf-alarms:alarms/alarm-list", 'resource=923b7fb9-5445-483c-b41f-320b674c7ef5', { 'is-cleared': False } )
 
 """
 Return the following object
@@ -191,5 +187,8 @@ for item in items:
         }
         print(json.dumps(res_alarm, indent=4))
         result.append(res_alarm)
+
+# Close the session
+nce.close()
 
 

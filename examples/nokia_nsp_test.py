@@ -60,7 +60,7 @@ def example_get_alarms_by_ne_name():
     
     print(f"Alarms for '{ne_name}': {len(alarms)}")
     for alarm in alarms[:3]:
-        print(f"\n{alarm.brief()}")
+        print(f"\n{alarm.details()}")
     
     client.close()
 
@@ -274,16 +274,16 @@ def example_export_to_dict():
 if __name__ == "__main__":
     # Run examples
     try:
-        example_get_all_alarms()
+        # example_get_all_alarms()
         example_get_alarms_by_ne_name()
-        example_filter_by_severity()
-        example_filter_by_time_range()
-        example_combined_filters()
-        example_get_active_alarms()
-        example_alarm_details()
-        example_get_network_elements()
-        example_network_element_details()
-        example_export_to_dict()
+        # example_filter_by_severity()
+        # example_filter_by_time_range()
+        # example_combined_filters()
+        # example_get_active_alarms()
+        # example_alarm_details()
+        # example_get_network_elements()
+        # example_network_element_details()
+        # example_export_to_dict()
     except Exception as e:
         logger.error(f"Error: {e}")
         raise
