@@ -118,6 +118,46 @@ class NspDataProvider:
         # URL encode the filter (double encoding as NSP expects)
         return quote(filter_str, safe='')
     
+    def _build_ne_filter(
+        self,
+        name: Optional[str] = None,
+        subnet_id: Optional[str] = None
+    ) -> Optional[str]:
+        """
+        Build NSP filter query string for network elements server-side filtering.
+        
+        Args:
+            name: Filter by network element name.
+            subnet_id: Filter by topology group FDN (e.g., 'fdn:realm:sam:topologyGroup:Network-JA').
+        
+        Returns:
+            URL-encoded filter string or None if no filters.
+        
+        Example filters:
+            name='Router1'
+            topologyGroup='fdn:realm:sam:topologyGroup:Network-JA'
+            name='Router1' and topologyGroup='fdn:realm:sam:topologyGroup:Network-JA'
+        """
+        conditions = []
+        
+        # Filter by NE name
+        if name:
+            conditions.append(f"name='{name}'")
+        
+        # Filter by topology group (subnet)
+        if subnet_id:
+            conditions.append(f"topologyGroup='{subnet_id}'")
+        
+        if not conditions:
+            return None
+        
+        # Join conditions with AND
+        filter_str = ' and '.join(conditions)
+        
+        # URL encode the filter
+        return quote(filter_str, safe='')
+
+    
     def get_alarms(
         self,
         name: Optional[str] = None,
@@ -233,6 +273,7 @@ class NspDataProvider:
     def get_network_elements(
         self,
         name: Optional[str] = None,
+        subnet_id: Optional[str] = None,
         filters: Optional[RestNMSDataFilter] = None,
         page_size: int = 1000
     ) -> List[NspNetworkElement]:
@@ -240,16 +281,27 @@ class NspDataProvider:
         Get network elements from Nokia NSP.
         
         Args:
-            name: Filter by network element name.
+            name: Filter by network element name (server-side filtering).
+            subnet_id: Filter by topology group FDN (server-side filtering).
+                       Example: 'fdn:realm:sam:topologyGroup:Network-JA'
             filters: RestNMSDataFilter instance for additional client-side filtering.
             page_size: Number of records per page.
         
         Returns:
             List of NspNetworkElement objects.
-        """
-        url = self.NETWORK_ELEMENTS_ENDPOINT
         
-        # NSP doesn't support name filter in URL for NEs, so we filter client-side
+        Note:
+            - name and subnet_id are filtered server-side (more efficient)
+            - This API is unified with NceDataProvider.get_network_elements() for consistency
+        """
+        # Build server-side filter
+        ne_filter = self._build_ne_filter(name=name, subnet_id=subnet_id)
+        
+        # Build URL with filter
+        url = self.NETWORK_ELEMENTS_ENDPOINT
+        if ne_filter:
+            url = f"{url}?filter={ne_filter}"
+        
         logger.debug(f"Fetching network elements from: {url}")
         
         original_limit = self.client.limit
@@ -264,10 +316,6 @@ class NspDataProvider:
         
         # Convert to NspNetworkElement objects
         elements = [NspNetworkElement(item) for item in raw_data]
-        
-        # Filter by name if specified
-        if name:
-            elements = [e for e in elements if e.name and name.lower() in e.name.lower()]
         
         # Apply client-side filters
         if filters:
@@ -349,4 +397,82 @@ class NspDataProvider:
         """
         # Use server-side filtering for is_cleared (more efficient)
         return self.get_alarms(name=name, is_cleared=False, filters=filters)
+    
+    def get_subnets(self) -> List[dict]:
+        """
+        Get all subnets (topology groups) from NSP.
+        
+        Returns:
+            List of subnet dictionaries with 'name' and 'fdn' keys.
+            Example: [{'name': 'Network-JA', 'fdn': 'fdn:realm:sam:topologyGroup:Network-JA'}]
+        
+        Note:
+            Nokia NSP doesn't have a dedicated subnets endpoint. This method extracts
+            unique topology groups from all network elements.
+        """
+        logger.debug("Fetching all network elements to extract topology groups")
+        
+        # Get all network elements
+        elements = self.get_network_elements()
+        
+        # Extract unique topology groups
+        topology_groups = set()
+        for element in elements:
+            if hasattr(element, 'topology_group') and element.topology_group:
+                topology_groups.add(element.topology_group)
+        
+        # Parse FDN to extract subnet names and build result
+        subnets = []
+        for fdn in sorted(topology_groups):
+            # Parse FDN: 'fdn:realm:sam:topologyGroup:Network-JA' -> 'Network-JA'
+            if ':topologyGroup:' in fdn:
+                name = fdn.split(':topologyGroup:')[-1]
+                subnets.append({'name': name, 'fdn': fdn})
+            else:
+                # Fallback: use full FDN as name if parsing fails
+                subnets.append({'name': fdn, 'fdn': fdn})
+        
+        logger.info(f"Found {len(subnets)} topology groups (subnets)")
+        return subnets
+    
+    def get_subnet_by_name(self, name: str) -> Optional[dict]:
+        """
+        Find subnet (topology group) by name.
+        
+        Args:
+            name: Subnet name (e.g., 'Network-JA').
+        
+        Returns:
+            Subnet dict {'name': 'Network-JA', 'fdn': 'fdn:realm:sam:topologyGroup:Network-JA'}
+            or None if not found.
+        """
+        subnets = self.get_subnets()
+        for subnet in subnets:
+            if subnet.get('name') == name:
+                return subnet
+        return None
+    
+    def get_network_elements_by_subnet(
+        self,
+        subnet_id: str,
+        page_size: int = 1000
+    ) -> List[NspNetworkElement]:
+        """
+        Get network elements in a subnet (server-side filtering).
+        
+        Args:
+            subnet_id: Topology group FDN (e.g., 'fdn:realm:sam:topologyGroup:Network-JA').
+            page_size: Number of records per page.
+        
+        Returns:
+            List of NspNetworkElement objects in the subnet.
+        
+        Note:
+            This method uses server-side filtering for efficiency.
+            Unified API with NceDataProvider.get_network_elements_by_subnet().
+        """
+        logger.debug(f"Fetching NEs for subnet: {subnet_id}")
+        elements = self.get_network_elements(subnet_id=subnet_id, page_size=page_size)
+        logger.info(f"Found {len(elements)} NEs in subnet '{subnet_id}'")
+        return elements
 

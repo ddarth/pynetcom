@@ -4,11 +4,14 @@ Example: Using NspDataProvider for Nokia NSP alarm and network element managemen
 This example demonstrates:
 - Getting alarms with server-side filtering (name, severity, is_cleared)
 - Getting alarms with client-side filtering (time range, RestNMSDataFilter)
-- Getting network elements
+- Getting network elements with server-side filtering (name, subnet_id)
+- Getting subnets (topology groups) and filtering NEs by subnet
 - Using brief() and details() methods for display
 
-Note: NSP API supports server-side filtering for severity, is_cleared, name, ne_id.
-      Time range filtering is done client-side via RestNMSDataFilter.
+Note: NSP API supports server-side filtering for:
+      - Alarms: severity, is_cleared, name, ne_id
+      - Network Elements: name, topologyGroup (subnet_id)
+      Time range filtering for alarms is done client-side via RestNMSDataFilter.
 """
 
 import logging
@@ -272,6 +275,94 @@ def example_export_to_dict():
     client.close()
 
 
+def example_get_subnets():
+    """Get subnets (topology groups) from NSP."""
+    print("\n" + "=" * 70)
+    print("Example 11: Get subnets (topology groups)")
+    print("=" * 70)
+    
+    client = RestNSP(API_NSP_HOST, API_NSP_USER, API_NSP_PASS)
+    provider = NspDataProvider(client)
+    
+    # Get all subnets (topology groups)
+    subnets = provider.get_subnets()
+    print(f"Total subnets: {len(subnets)}")
+    
+    # Show first 5 subnets
+    print("\nFirst 5 subnets:")
+    for subnet in subnets[:5]:
+        print(f"  {subnet.get('name')} (FDN: {subnet.get('fdn')})")
+    
+    # Find subnet by name (example)
+    if subnets:
+        example_subnet_name = subnets[0].get('name')
+        subnet = provider.get_subnet_by_name(example_subnet_name)
+        if subnet:
+            print(f"\nFound subnet '{example_subnet_name}': FDN={subnet.get('fdn')}")
+    
+    client.close()
+
+
+def example_get_network_element_by_name():
+    """Get network element by name (server-side filtering)."""
+    print("\n" + "=" * 70)
+    print("Example 12: Get network element by name (server-side)")
+    print("=" * 70)
+    
+    client = RestNSP(API_NSP_HOST, API_NSP_USER, API_NSP_PASS)
+    provider = NspDataProvider(client)
+    
+    # NE name from config
+    ne_name = API_NSP_NE_NAME
+    
+    # Server-side filtering by name
+    elements = provider.get_network_elements(name=ne_name)
+    
+    if elements:
+        print(f"Found {len(elements)} element(s) matching '{ne_name}':")
+        for ne in elements:
+            print(ne.details())
+    else:
+        print(f"No elements found matching '{ne_name}'")
+    
+    client.close()
+
+
+def example_get_ne_by_subnet():
+    """Get network elements by subnet (server-side filtering)."""
+    print("\n" + "=" * 70)
+    print("Example 13: Get NEs by subnet (server-side filtering)")
+    print("=" * 70)
+    
+    client = RestNSP(API_NSP_HOST, API_NSP_USER, API_NSP_PASS)
+    provider = NspDataProvider(client)
+    
+    # Get all subnets
+    subnets = provider.get_subnets()
+    
+    if not subnets:
+        print("No subnets found")
+        client.close()
+        return
+    
+    # Use first subnet as example
+    target_subnet = subnets[0]
+    subnet_name = target_subnet.get('name')
+    subnet_fdn = target_subnet.get('fdn')
+    
+    print(f"Subnet: {subnet_name} (FDN: {subnet_fdn})")
+    
+    # Get NEs in subnet using server-side filtering
+    elements = provider.get_network_elements_by_subnet(subnet_fdn)
+    print(f"\nFound {len(elements)} NEs in subnet '{subnet_name}'")
+    
+    # Show first 5 NEs
+    for element in elements[:5]:
+        print(f"  {element.brief()}")
+    
+    client.close()
+
+
 if __name__ == "__main__":
     # Run examples
     try:
@@ -285,6 +376,9 @@ if __name__ == "__main__":
         example_get_network_elements()
         example_network_element_details()
         example_export_to_dict()
+        example_get_subnets()
+        example_get_network_element_by_name()
+        example_get_ne_by_subnet()
     except Exception as e:
         logger.error(f"Error: {e}")
         raise

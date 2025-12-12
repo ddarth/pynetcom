@@ -174,6 +174,7 @@ class NspNetworkElement(BaseNetworkElement):
     site_name: Optional[str] = None
     deployment_state: Optional[str] = None
     communication_state: Optional[str] = None
+    topology_group: Optional[str] = None
     
     # Field mapping: API -> Python
     _field_mapping = {
@@ -188,6 +189,7 @@ class NspNetworkElement(BaseNetworkElement):
         'siteName': 'site_name',
         'deploymentState': 'deployment_state',
         'communicationState': 'communication_state',
+        'topologyGroup': 'topology_group',
     }
     
     def _populate_from_data(self, data: Dict[str, Any]) -> None:
@@ -211,6 +213,7 @@ class NspNetworkElement(BaseNetworkElement):
             f"  Deployment State:   {self.deployment_state or 'N/A'}",
             f"  Communication State:{self.communication_state or 'N/A'}",
             "-" * 60,
+            f"  Topology Group:     {self.topology_group or 'N/A'}",
             f"  Site ID:            {self.site_id or 'N/A'}",
             f"  Site Name:          {self.site_name or 'N/A'}",
             "=" * 60,

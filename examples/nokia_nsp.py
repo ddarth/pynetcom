@@ -140,7 +140,7 @@ def get_nsp_all_ne():
 
     elements = nsp.get_data()
     print(nsp.token)
-    for ne in elements:
+    for ne in elements[:3]:
         print(json.dumps(ne, indent=4))
         # print(ne['name'], ne['ipAddress'], ne['type'], ne['managedState'])
     
