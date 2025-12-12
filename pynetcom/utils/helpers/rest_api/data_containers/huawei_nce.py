@@ -16,7 +16,8 @@ class NceAlarm(BaseAlarm):
     """
     Huawei NCE alarm data container.
     
-    Extends BaseAlarm with NCE-specific fields.
+    Extends BaseAlarm with only common fields.
+    All NCE-specific data is stored in vendor_specific_info dict.
     Maps kebab-case API field names to snake_case Python attributes.
     
     NCE alarms have nested structure:
@@ -25,26 +26,6 @@ class NceAlarm(BaseAlarm):
     - alarm-parameters
     - common-alarm-parameters
     """
-    
-    # NCE-specific fields
-    alarm_serial_number: Optional[str] = None
-    reason_id: Optional[int] = None
-    resource_url: Optional[str] = None
-    resource_id: Optional[str] = None
-    product_type: Optional[str] = None
-    layer: Optional[str] = None
-    repair_action: Optional[str] = None
-    ems_time: Optional[datetime] = None
-    location_info: Optional[str] = None
-    native_probable_cause: Optional[str] = None
-    event_type: Optional[str] = None
-    alarm_type_qualifier: Optional[str] = None
-    alarm_text: Optional[str] = None
-    other_info: Optional[str] = None
-    tenant_id: Optional[str] = None
-    tenant: Optional[str] = None
-    ip_address_info: Optional[str] = None
-    md_name: Optional[str] = None
     
     def _populate_from_data(self, data: Dict[str, Any]) -> None:
         """Populate fields from NCE API data (nested structure)."""
@@ -59,11 +40,12 @@ class NceAlarm(BaseAlarm):
         self.severity = resource_params.get('perceived-severity')
         self.alarm_name = alarm_params.get('alarm-text')  # Use alarm-text as alarm_name
         self.alarm_type = common_params.get('alarm-type-id') or x733_params.get('event-type')
-        self.probable_cause = alarm_params.get('probable-cause')
+        self.probable_cause = alarm_params.get('native-probable-cause')
+        self.additional_description = alarm_params.get('probable-cause')
         
         self.ne_name = alarm_params.get('ne-name')
-        self.ne_id = common_params.get('resource')
-        self.affected_object = common_params.get('resource')
+        self.ne_id = alarm_params.get('ip-address')
+        self.affected_object = alarm_params.get('location-info')
         
         self.acknowledged = data.get('is-acked')
         self.is_cleared = resource_params.get('is-cleared')
@@ -72,57 +54,84 @@ class NceAlarm(BaseAlarm):
         self.time_created = parse_datetime(data.get('time-created'))
         self.last_changed = parse_datetime(resource_params.get('last-changed'))
         
-        self.additional_text = alarm_params.get('other-info')
-        
-        # NCE-specific fields
+        self.additional_text = alarm_params.get('repair-action')
         self.alarm_serial_number = alarm_params.get('alarm-serial-number')
-        self.reason_id = alarm_params.get('reason-id')
-        self.resource_url = common_params.get('resource-url')
-        self.resource_id = common_params.get('resource')
-        self.product_type = common_params.get('product-type')
-        self.layer = common_params.get('layer')
-        self.repair_action = alarm_params.get('repair-action')
-        self.ems_time = parse_datetime(alarm_params.get('ems-time'))
-        self.location_info = alarm_params.get('location-info')
-        self.native_probable_cause = alarm_params.get('native-probable-cause')
-        self.event_type = x733_params.get('event-type')
-        self.alarm_type_qualifier = common_params.get('alarm-type-qualifier')
-        self.alarm_text = alarm_params.get('alarm-text')
         self.other_info = alarm_params.get('other-info')
-        self.tenant_id = alarm_params.get('tenant-id')
-        self.tenant = alarm_params.get('tenant')
-        self.ip_address_info = alarm_params.get('ip-address')
-        self.md_name = common_params.get('md-name')
+        
+        # Store all Huawei NCE-specific data in vendor_specific_info
+        self.vendor_specific_info = {
+            # Resource identifiers
+            'resource': common_params.get('resource'),
+            'alt-resource': common_params.get('alt-resource'),
+            'resource-url': common_params.get('resource-url'),
+            'ietf-resource-url': common_params.get('ietf-resource-url'),
+            'product-type': common_params.get('product-type'),
+            'layer': common_params.get('layer'),
+            'md-name': common_params.get('md-name'),
+            
+            # Alarm details (NCE-specific format)
+            'alarm-text': alarm_params.get('alarm-text'),
+            'native-probable-cause': alarm_params.get('native-probable-cause'),
+            'probable-cause': alarm_params.get('probable-cause'),
+            'location-info': alarm_params.get('location-info'),
+            'repair-action': alarm_params.get('repair-action'),
+            'other-info': alarm_params.get('other-info'),
+            'reason-id': alarm_params.get('reason-id'),
+            
+            # Network element info
+            'ip-address': alarm_params.get('ip-address'),
+            
+            # Organizational
+            'tenant': alarm_params.get('tenant'),
+            'tenant-id': alarm_params.get('tenant-id'),
+            
+            # Alarm classification
+            'event-type': x733_params.get('event-type'),
+            'alarm-type-qualifier': common_params.get('alarm-type-qualifier'),
+            
+            # Timestamps
+            'ems-time': alarm_params.get('ems-time'),
+        }
     
     def brief(self) -> str:
         """Get brief one-line representation of the alarm."""
         parts = [
             self.ne_name or 'N/A',
             self.severity or 'N/A',
-            self.alarm_text or self.alarm_name or 'N/A',
-            self.location_info or self.affected_object or 'N/A'
+            self.alarm_name or 'N/A',
+            self.affected_object or 'N/A'
         ]
         return ' | '.join(parts)
     
     def details(self) -> str:
-        """Get detailed multi-line representation with NCE-specific fields."""
+        """Get detailed multi-line representation with NCE-specific fields from vendor_specific_info."""
+        vendor = self.vendor_specific_info or {}
+        
+        # Helper to parse datetime from vendor_specific_info
+        def format_vendor_datetime(key):
+            val = vendor.get(key)
+            if val:
+                dt = parse_datetime(val)
+                return self._format_datetime(dt)
+            return 'N/A'
+        
         lines = [
             "=" * 70,
-            f"Huawei NCE Alarm: {self.alarm_text or 'N/A'}",
+            f"Huawei NCE Alarm: {self.alarm_name or 'N/A'}",
             "=" * 70,
             f"  Serial Number:        {self.alarm_serial_number or 'N/A'}",
             f"  Severity:             {self.severity or 'N/A'}",
-            f"  Event Type:           {self.event_type or 'N/A'}",
             f"  Alarm Type:           {self.alarm_type or 'N/A'}",
             f"  Probable Cause:       {self.probable_cause or 'N/A'}",
-            f"  Native Probable Cause:{self.native_probable_cause or 'N/A'}",
+            f"  Additional Desc:      {self.additional_description or 'N/A'}",
             "-" * 70,
             f"  NE Name:              {self.ne_name or 'N/A'}",
-            f"  Resource ID:          {self.resource_id or 'N/A'}",
-            f"  Resource URL:         {self.resource_url or 'N/A'}",
-            f"  Product Type:         {self.product_type or 'N/A'}",
-            f"  Layer:                {self.layer or 'N/A'}",
-            f"  Location Info:        {self.location_info or 'N/A'}",
+            f"  NE ID (IP):           {self.ne_id or 'N/A'}",
+            f"  Affected Object:      {self.affected_object or 'N/A'}",
+            f"  Resource:             {vendor.get('resource') or 'N/A'}",
+            f"  Resource URL:         {vendor.get('resource-url') or 'N/A'}",
+            f"  Product Type:         {vendor.get('product-type') or 'N/A'}",
+            f"  Layer:                {vendor.get('layer') or 'N/A'}",
             "-" * 70,
             f"  Acknowledged:         {self.acknowledged}",
             f"  Cleared:              {self.is_cleared}",
@@ -130,14 +139,14 @@ class NceAlarm(BaseAlarm):
             "-" * 70,
             f"  Time Created:         {self._format_datetime(self.time_created)}",
             f"  Last Changed:         {self._format_datetime(self.last_changed)}",
-            f"  EMS Time:             {self._format_datetime(self.ems_time)}",
+            f"  EMS Time:             {format_vendor_datetime('ems-time')}",
             "-" * 70,
-            f"  Reason ID:            {self.reason_id}",
-            f"  MD Name:              {self.md_name or 'N/A'}",
-            f"  Tenant:               {self.tenant or 'N/A'}",
-            f"  Repair Action:        {self.repair_action or 'N/A'}",
+            f"  Reason ID:            {vendor.get('reason-id') or 'N/A'}",
+            f"  Event Type:           {vendor.get('event-type') or 'N/A'}",
+            f"  MD Name:              {vendor.get('md-name') or 'N/A'}",
+            f"  Tenant:               {vendor.get('tenant') or 'N/A'}",
             "-" * 70,
-            f"  Alarm Text:           {self.alarm_text or 'N/A'}",
+            f"  Additional Text:      {self.additional_text or 'N/A'}",
             f"  Other Info:           {self.other_info or 'N/A'}",
             "=" * 70,
         ]

@@ -13,7 +13,7 @@ Note: NSP API supports server-side filtering for severity, is_cleared, name, ne_
 
 import logging
 from datetime import datetime, timedelta
-
+import json
 from pynetcom import RestNSP, NspDataProvider, RestNMSDataFilter
 from config import API_NSP_HOST, API_NSP_USER, API_NSP_PASS, API_NSP_NE_NAME
 
@@ -60,7 +60,7 @@ def example_get_alarms_by_ne_name():
     
     print(f"Alarms for '{ne_name}': {len(alarms)}")
     for alarm in alarms[:3]:
-        print(f"\n{alarm.details()}")
+        print(f"\n{json.dumps(alarm.to_dict(), indent=4)}")
     
     client.close()
 

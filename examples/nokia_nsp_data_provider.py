@@ -259,8 +259,9 @@ def example_export_to_dict():
         alarm = alarms[0]
         print("Alarm as dictionary:")
         alarm_dict = alarm.to_dict()
-        for key, value in list(alarm_dict.items())[:10]:
+        for key, value in list(alarm_dict.items())[:12]:
             print(f"  {key}: {value}")
+        print(f"\nMapped severity (original if cleared): {alarm.severity}, is_cleared={alarm.is_cleared}")
         
         print("\nAlarm as JSON (truncated):")
         json_str = alarm.to_json()

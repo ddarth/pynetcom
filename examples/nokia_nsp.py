@@ -1,7 +1,7 @@
 import logging
 from pynetcom import RestNSP
 from config import API_NSP_HOST, API_NSP_USER, API_NSP_PASS, API_NSP_NE_NAME
-
+import json
 # Configure logging (change to logging.DEBUG or logging.INFO for verbose output)
 LOG_LEVEL = logging.WARNING
 logging.basicConfig(level=LOG_LEVEL, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -59,6 +59,54 @@ Alarm example:
     "impact": 0,
     "rootCause": false
 }
+
+NE example:
+{
+    "fdn": "fdn:model:equipment:NetworkElement:1452373",
+    "sourceType": "nfmp",
+    "sourceSystem": "fdn:realm:sam",
+    "sources": [
+        "fdn:realm:sam:network:172.28.2.84"
+    ],
+    "name": "Router1",
+    "neName": "Router1",
+    "neId": "172.28.2.84",
+    "description": null,
+    "ipAddress": "172.28.2.84",
+    "type": "7250 IXR-e",
+    "product": "7250 IXR",
+    "version": "TiMOS-C-23.10.R6",
+    "resyncState": "failed",
+    "managedState": "managed",
+    "longitude": 0.0,
+    "latitude": 0.0,
+    "location": "Router1",
+    "topologyGroup": "fdn:realm:sam:topologyGroup:Network-MyNetwork",
+    "adminState": "unlocked",
+    "operState": "enabled",
+    "standbyState": "providingService",
+    "availabilityStates": [],
+    "objectDetails": null,
+    "networkType": "ip",
+    "communicationState": "up",
+    "communicationStateDetails": null,
+    "macAddress": "A0-67-D6-12-34-56",
+    "clliCode": "N/A",
+    "links": [
+        {
+            "rel": "self",
+            "href": "https://172.28.192.11:8544/NetworkSupervision/rest/api/v1/networkElements/fdn:model:equipment:NetworkElement:1452373"
+        },
+        {
+            "rel": "shelves",
+            "href": "https://172.28.192.11:8544/NetworkSupervision/rest/api/v1/networkElements/fdn:model:equipment:NetworkElement:1452373/shelves{?filter}"
+        },
+        {
+            "rel": "radioEquipment",
+            "href": "https://172.28.192.11:8544/NetworkSupervision/rest/api/v1/networkElements/fdn:model:equipment:NetworkElement:1452373/radioEquipment{?filter}"
+        }
+    ]
+}
 """
 
 def get_nsp_all_alarms():
@@ -93,8 +141,8 @@ def get_nsp_all_ne():
     elements = nsp.get_data()
     print(nsp.token)
     for ne in elements:
-        # print(ne)
-        print(ne['name'], ne['ipAddress'], ne['type'], ne['managedState'])
+        print(json.dumps(ne, indent=4))
+        # print(ne['name'], ne['ipAddress'], ne['type'], ne['managedState'])
     
     nsp.close()
     return elements
@@ -104,7 +152,7 @@ def get_nsp_all_ne():
 def main():
 
     # nes = get_nsp_all_alarms()
-    nes = get_nsp_ne_name_alarms(API_NSP_NE_NAME)
-    # nes = get_nsp_all_ne()
+    # nes = get_nsp_ne_name_alarms(API_NSP_NE_NAME)
+    nes = get_nsp_all_ne()
 
 main() 

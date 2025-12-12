@@ -55,6 +55,7 @@ class BaseAlarm(ABC):
     alarm_name: Optional[str] = None
     alarm_type: Optional[str] = None
     probable_cause: Optional[str] = None
+    additional_description: Optional[str] = None
     
     ne_name: Optional[str] = None
     ne_id: Optional[str] = None
@@ -68,6 +69,10 @@ class BaseAlarm(ABC):
     last_changed: Optional[datetime] = None
     
     additional_text: Optional[str] = None
+    alarm_serial_number: Optional[str] = None
+    other_info: Optional[str] = None
+    
+    vendor_specific_info: Optional[Dict[str, Any]] = None
     raw_data: Optional[Dict[str, Any]] = None
     
     def __init__(self, data: Dict[str, Any]):
@@ -142,7 +147,7 @@ class BaseAlarm(ABC):
         Convert alarm to dictionary.
         
         Returns:
-            Dictionary with all alarm fields.
+            Dictionary with all alarm fields (common + vendor_specific_info).
         """
         result = {}
         for attr in dir(self):
