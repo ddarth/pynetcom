@@ -2,13 +2,13 @@
 Example: Using NspDataProvider for Nokia NSP alarm and network element management.
 
 This example demonstrates:
-- Getting alarms with server-side filtering (name, severity, is_cleared)
-- Getting alarms with client-side filtering (time range, RestNMSDataFilter)
+- Getting alarms with server-side filtering (name, severity, is_cleared, time range)
+- Getting alarms with client-side filtering (RestNMSDataFilter for exclude/include)
 - Getting network elements
 - Using brief() and details() methods for display
 
-Note: NSP API supports server-side filtering for severity, is_cleared, name, ne_id.
-      Time range filtering is done client-side via RestNMSDataFilter.
+Note: NSP API supports server-side filtering for severity, is_cleared, name, ne_id, 
+      start_time, end_time (via lastTimeDetected field).
 """
 
 import logging

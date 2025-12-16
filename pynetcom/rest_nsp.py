@@ -134,7 +134,9 @@ class RestNSP(object):
         self.url = self.API_NSP_HOST + ':8544' + rest_url
 
         if self.__pagination_is_trunked:
-           self.url += "?pageStart=" + str(self.__pagination_end_row) + "&pageEnd=" + str(self.__pagination_end_row + self.limit)
+            # Check if URL already has query parameters
+            separator = '&' if '?' in self.url else '?'
+            self.url += separator + "pageStart=" + str(self.__pagination_end_row) + "&pageEnd=" + str(self.__pagination_end_row + self.limit)
         else:
             self.clear_data()
  

@@ -57,12 +57,38 @@ class NspDataProvider:
         """
         self.client = client
     
+    def _datetime_to_millis(self, dt: datetime) -> int:
+        """
+        Convert datetime to milliseconds timestamp for NSP API.
+        
+        NSP API expects lastTimeDetected in milliseconds since Unix epoch (UTC).
+        
+        Args:
+            dt: datetime object. If naive, treated as UTC. If timezone-aware, converted to UTC.
+        
+        Returns:
+            Milliseconds timestamp as integer (UTC+0).
+        """
+        from datetime import timezone
+        
+        if dt.tzinfo is not None:
+            # Timezone-aware: convert to UTC
+            dt_utc = dt.astimezone(timezone.utc)
+        else:
+            # Naive datetime: treat as UTC by adding UTC timezone
+            dt_utc = dt.replace(tzinfo=timezone.utc)
+        
+        # Convert to milliseconds timestamp (UTC+0)
+        return int(dt_utc.timestamp() * 1000)
+    
     def _build_alarm_filter(
         self,
         name: Optional[str] = None,
         ne_id: Optional[str] = None,
         is_cleared: Optional[bool] = None,
-        severity: Optional[List[str]] = None
+        severity: Optional[List[str]] = None,
+        start_time: Optional[datetime] = None,
+        end_time: Optional[datetime] = None
     ) -> Optional[str]:
         """
         Build NSP alarmFilter query string for server-side filtering.
@@ -72,6 +98,8 @@ class NspDataProvider:
             ne_id: Filter by network element ID (neId).
             is_cleared: Filter by cleared status.
             severity: Filter by severity levels (critical, major, minor, warning, cleared).
+            start_time: Start time for alarm query (lastTimeDetected >= start_time).
+            end_time: End time for alarm query (lastTimeDetected <= end_time).
         
         Returns:
             URL-encoded alarmFilter string or None if no filters.
@@ -80,6 +108,7 @@ class NspDataProvider:
             severity='major'
             (severity='critical' or severity='major')
             neName='Router1' and severity<>'cleared'
+            neName='Router1' and (lastTimeDetected>1765773167000 and lastTimeDetected<1765776767000)
         """
         conditions = []
         
@@ -108,6 +137,22 @@ class NspDataProvider:
             else:
                 # Only non-cleared alarms (exclude 'cleared' severity)
                 conditions.append("severity<>'cleared'")
+        
+        # Filter by time range (server-side via lastTimeDetected in milliseconds UTC)
+        if start_time is not None or end_time is not None:
+            time_conditions = []
+            if start_time is not None:
+                start_ms = self._datetime_to_millis(start_time)
+                time_conditions.append(f"lastTimeDetected>{start_ms}")
+            if end_time is not None:
+                end_ms = self._datetime_to_millis(end_time)
+                time_conditions.append(f"lastTimeDetected<{end_ms}")
+            
+            # Wrap time conditions in parentheses if both present
+            if len(time_conditions) == 2:
+                conditions.append(f"({' and '.join(time_conditions)})")
+            else:
+                conditions.append(time_conditions[0])
         
         if not conditions:
             return None
@@ -179,8 +224,10 @@ class NspDataProvider:
                         True = only cleared alarms, False = only active alarms.
             severity: Filter by severity levels. Server-side filtering.
                       Values: 'critical', 'major', 'minor', 'warning', 'cleared'.
-            start_time: Start time for alarm query period. Client-side filtering.
-            end_time: End time for alarm query period. Client-side filtering.
+            start_time: Start time for alarm query period (lastTimeDetected). Server-side filtering.
+                        Naive datetime treated as UTC, timezone-aware converted to UTC.
+            end_time: End time for alarm query period (lastTimeDetected). Server-side filtering.
+                      Naive datetime treated as UTC, timezone-aware converted to UTC.
             filters: RestNMSDataFilter instance for additional client-side filtering.
             page_size: Number of records per page (default 1000).
         
@@ -188,16 +235,18 @@ class NspDataProvider:
             List of NspAlarm objects.
         
         Note:
-            - name, ne_id, is_cleared, severity are filtered server-side (more efficient)
-            - start_time, end_time are filtered client-side via RestNMSDataFilter
-            - This API is unified with NceDataProvider.get_alarms() for consistency
+            - All filters (name, ne_id, is_cleared, severity, start_time, end_time) are 
+              applied server-side via alarmFilter for maximum efficiency
+            - Additional client-side filtering available via filters parameter
         """
-        # Build server-side alarm filter
+        # Build server-side alarm filter including time range
         alarm_filter = self._build_alarm_filter(
             name=name,
             ne_id=ne_id,
             is_cleared=is_cleared,
-            severity=severity
+            severity=severity,
+            start_time=start_time,
+            end_time=end_time
         )
         
         # Build URL with filter
@@ -220,13 +269,6 @@ class NspDataProvider:
         
         # Convert to NspAlarm objects
         alarms = [NspAlarm(item) for item in raw_data]
-        
-        # Build client-side filter for time range
-        time_filter = None
-        if start_time is not None or end_time is not None:
-            time_filter = RestNMSDataFilter()
-            time_filter.time_range(last_time_detected=(start_time, end_time))
-            alarms = time_filter.apply(alarms)
         
         # Apply additional client-side filters
         if filters:

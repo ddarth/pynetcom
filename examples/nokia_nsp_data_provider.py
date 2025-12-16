@@ -2,16 +2,16 @@
 Example: Using NspDataProvider for Nokia NSP alarm and network element management.
 
 This example demonstrates:
-- Getting alarms with server-side filtering (name, severity, is_cleared)
-- Getting alarms with client-side filtering (time range, RestNMSDataFilter)
+- Getting alarms with server-side filtering (name, severity, is_cleared, time range)
+- Getting alarms with client-side filtering (RestNMSDataFilter for exclude/include)
 - Getting network elements with server-side filtering (name, subnet_id)
 - Getting subnets (topology groups) and filtering NEs by subnet
 - Using brief() and details() methods for display
 
 Note: NSP API supports server-side filtering for:
-      - Alarms: severity, is_cleared, name, ne_id
+      - Alarms: severity, is_cleared, name, ne_id, start_time, end_time (lastTimeDetected)
       - Network Elements: name, topologyGroup (subnet_id)
-      Time range filtering for alarms is done client-side via RestNMSDataFilter.
+      All server-side filters are more efficient than client-side filtering.
 """
 
 import logging
@@ -97,20 +97,20 @@ def example_filter_by_severity():
 
 
 def example_filter_by_time_range():
-    """Get alarms within a time range (client-side filtering)."""
+    """Get alarms within a time range (server-side filtering)."""
     print("\n" + "=" * 70)
-    print("Example 4: Filter alarms by time range (client-side)")
+    print("Example 4: Filter alarms by time range (server-side)")
     print("=" * 70)
     
     client = RestNSP(API_NSP_HOST, API_NSP_USER, API_NSP_PASS)
     provider = NspDataProvider(client)
     
     # Get alarms from the last 7 days
-    # Note: time filtering is done client-side for NSP
+    # Time filtering is done server-side via lastTimeDetected field
     end_time = datetime.now()
     start_time = end_time - timedelta(days=7)
     
-    # Use built-in start_time/end_time parameters
+    # Use built-in start_time/end_time parameters (server-side filtering)
     alarms = provider.get_alarms(start_time=start_time, end_time=end_time)
     
     print(f"Alarms in last 7 days: {len(alarms)}")
@@ -133,8 +133,8 @@ def example_combined_filters():
     # SERVER-SIDE (efficient):
     # - severity: only major and critical
     # - is_cleared: only active alarms
+    # - time range: last 30 days (via lastTimeDetected)
     # CLIENT-SIDE (via RestNMSDataFilter):
-    # - time range: last 30 days
     # - exclude specific alarm names
     
     end_time = datetime.now()
@@ -147,8 +147,8 @@ def example_combined_filters():
     alarms = provider.get_alarms(
         severity=['major', 'critical'],  # Server-side
         is_cleared=False,                 # Server-side
-        start_time=start_time,            # Client-side
-        end_time=end_time,                # Client-side
+        start_time=start_time,            # Server-side
+        end_time=end_time,                # Server-side
         filters=alarm_filter              # Client-side (exclude LinkDown)
     )
     
