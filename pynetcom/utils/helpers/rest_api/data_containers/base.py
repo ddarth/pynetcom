@@ -67,6 +67,7 @@ class BaseAlarm(ABC):
     
     time_created: Optional[datetime] = None
     last_changed: Optional[datetime] = None
+    cleared_time: Optional[datetime] = None
     
     additional_text: Optional[str] = None
     alarm_serial_number: Optional[str] = None
@@ -130,6 +131,7 @@ class BaseAlarm(ABC):
             "-" * 60,
             f"  Time Created:    {self._format_datetime(self.time_created)}",
             f"  Last Changed:    {self._format_datetime(self.last_changed)}",
+            f"  Cleared Time:    {self._format_datetime(self.cleared_time)}",
             "-" * 60,
             f"  Additional Text: {self.additional_text or 'N/A'}",
             "=" * 60,

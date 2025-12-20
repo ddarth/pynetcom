@@ -54,6 +54,16 @@ class NceAlarm(BaseAlarm):
         self.time_created = parse_datetime(data.get('time-created'))
         self.last_changed = parse_datetime(resource_params.get('last-changed'))
         
+        # Extract cleared time if alarm is cleared
+        if resource_params.get('is-cleared'):
+            status_changes = resource_params.get('status-change', [])
+            if status_changes and len(status_changes) > 0:
+                self.cleared_time = parse_datetime(status_changes[0].get('time'))
+            else:
+                self.cleared_time = None
+        else:
+            self.cleared_time = None
+        
         self.additional_text = alarm_params.get('repair-action')
         self.alarm_serial_number = alarm_params.get('alarm-serial-number')
         self.other_info = alarm_params.get('other-info')
@@ -139,6 +149,7 @@ class NceAlarm(BaseAlarm):
             "-" * 70,
             f"  Time Created:         {self._format_datetime(self.time_created)}",
             f"  Last Changed:         {self._format_datetime(self.last_changed)}",
+            f"  Cleared Time:         {self._format_datetime(self.cleared_time)}",
             f"  EMS Time:             {format_vendor_datetime('ems-time')}",
             "-" * 70,
             f"  Reason ID:            {vendor.get('reason-id') or 'N/A'}",

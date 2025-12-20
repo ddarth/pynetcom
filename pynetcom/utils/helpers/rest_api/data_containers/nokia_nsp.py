@@ -51,9 +51,12 @@ class NspAlarm(BaseAlarm):
             self.is_cleared = True
             # Preserve original severity for consumers while flagging cleared
             self.severity = original_severity if original_severity else raw_severity
+            # Extract cleared time if alarm is cleared
+            self.cleared_time = parse_datetime(data.get('lastTimeCleared'))
         else:
             self.is_cleared = False
             self.severity = raw_severity
+            self.cleared_time = None
         
         # Store all Nokia NSP-specific data in vendor_specific_info
         self.vendor_specific_info = {
@@ -142,6 +145,7 @@ class NspAlarm(BaseAlarm):
             "-" * 70,
             f"  Time Created:         {self._format_datetime(self.time_created)}",
             f"  Last Changed:         {self._format_datetime(self.last_changed)}",
+            f"  Cleared Time:         {self._format_datetime(self.cleared_time)}",
             f"  First Time Detected:  {format_vendor_datetime('first-time-detected')}",
             f"  Last Time Cleared:    {format_vendor_datetime('last-time-cleared')}",
             "-" * 70,
