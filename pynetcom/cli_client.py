@@ -411,11 +411,12 @@ class EquipCLI(object):
 			print ("\r\nsysname = "+self.sysname+" type=\"" + self.sys_type + "\" version=\"" +self.sys_version + "\" uptime=\""+ self.sys_uptime + "\"\r\n")
 		pass
 
-	def wait_caret(self, is_recursive_error = False):
+	def wait_caret(self, is_recursive_error = False, command = None):
 		"""Wait for expected caret. If caret is not found, try to get errors and run wait_caret again.
 
 		Args:
 			is_recursive_error (bool): If True, then some error exist and function will run itself again.
+			command (str|None): Command that was executed before waiting for caret.
 
 		Returns:
 			None
@@ -432,12 +433,37 @@ class EquipCLI(object):
 		if i!=0:
 			out = ""
 			out = self.child.before.decode('ASCII')
-			print("CARET: "+self.caret_read+"|")
-			print(out)		
+
+			error_types = {
+				1: "TIMEOUT",
+				2: "EOF",
+				3: "Command Error",
+				4: "MINOR Warning"
+			}
+			error_type = error_types.get(i)
+
+			if error_type is not None:
+				if command is not None:
+					logging.error(
+						"[%s] Error type \"%s\" while executing command: %s",
+						self.host,
+						error_type,
+						command
+					)
+				else:
+					logging.error(
+						"[%s] Error type \"%s\" while waiting for caret.",
+						self.host,
+						error_type
+					)
+			else:
+				logging.error("Some Error occurs!")
+
+			logging.error("[%s] Expected caret: %s|", self.host, self.caret_read)
+			logging.error("[%s] CLI output:\n%s", self.host, out)
 			self.add_cli_text_errors(out)
-			logging.error("Some Error occurs!")
 			# run wait_caret again
-			self.wait_caret(True)
+			self.wait_caret(True, command=command)
 			pass
 		pass
 		if i==0:
@@ -461,8 +487,10 @@ class EquipCLI(object):
 		if self.child is None:
 			print("You must connect first. Use .connect()")
 			return False
+		if self.debug >= 2:
+			logging.debug("[%s] Executing command: %s", self.host, command)
 		self.child.sendline(command)
-		self.wait_caret()
+		self.wait_caret(command=command)
 		out = ""
 		out = self.child.before.decode('ASCII')
 		return out
@@ -484,7 +512,14 @@ class HuaweiEquipCLI(EquipCLI):
 	def cli_display_interface_description(self):
 		return self.exec_cli("display interface description")
 	def cli_display_ip_vpn_instance(self):
-		return self.exec_cli("display ip vpn-instance")
+		if "S5300 V100R005C01SPC100" in self.sys_version:
+			return ""
+		elif "S5300 V200R005C00SPC500" in self.sys_version:
+			return ""
+		elif "S2300 V100R006C05" in self.sys_version:
+			return ""
+		else:
+			return self.exec_cli("display ip vpn-instance")
 	def cli_display_arp_vpn_instance_X(self, arg):
 		if self.sys_version=="5.160 (NE40E&80E V600R008C10SPC300)":
 			return self.exec_cli("display arp vpn-instance "+arg+" all")
@@ -496,6 +531,10 @@ class HuaweiEquipCLI(EquipCLI):
 			return self.exec_cli("display arp vpn-instance "+arg+" all")
 		elif "NE40E V800R02" in self.sys_version:
 			return self.exec_cli("display arp all | in "+arg)
+		elif "S3352 " in self.sys_version:
+			return self.exec_cli("display arp all | in "+arg)
+		elif "S3328 " in self.sys_version:
+			return self.exec_cli("display arp all | in "+arg)
 		else:
 			return self.exec_cli("display arp vpn-instance "+arg)
 	def cli_display_ip_interface_brief(self):
@@ -504,12 +543,34 @@ class HuaweiEquipCLI(EquipCLI):
 		return self.exec_cli("display mac-address")
 	def cli_display_vsi_services_all(self):
 		# IF Switch, then skip
-		if "5.110 (S5300 V200R001C00SPC300)" in self.sys_version:
+		if "S5300 V200R00" in self.sys_version:
+			return ""
+		elif "S3352 " in self.sys_version:
+			return ""
+		elif "S3328 " in self.sys_version:
+			return ""
+		elif "S5300 V100R00" in self.sys_version:
+			return ""
+		elif "S2300 V100R006C05" in self.sys_version:
+			return ""
+		elif "S5320 " in self.sys_version:
 			return ""
 		return self.exec_cli("display vsi services all")
 	def cli_display_ve_group(self):
 		# IF Switch, then skip
 		if "5.110 (S5300 V200R001C00SPC300)" in self.sys_version:
+			return ""
+		elif "S3352 " in self.sys_version:
+			return ""
+		elif "S3328 " in self.sys_version:
+			return ""
+		elif "S5300 V200R00" in self.sys_version:
+			return ""
+		elif "S5300 V100R00" in self.sys_version:
+			return ""
+		elif "S2300 V100R006C05" in self.sys_version:
+			return ""
+		elif "S5320 " in self.sys_version:
 			return ""
 		return self.exec_cli("display virtual-ethernet ve-group")
 

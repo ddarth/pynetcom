@@ -8,9 +8,9 @@ class HuaweiRouterToolException(Exception):
         super().__init__(message)
 
 
-REGEX_HUAWEI_LONG_IF = "(?#IfNameS)(((Eth-Trunk|LoopBack|Vlanif|Global-VE)(\d*)|(GigabitEthernet|Ethernet|Tunnel|Virtual\-Ethernet|XGigabitEthernet|100GE|25GE|50\|100GE|FlexE|FlexE\-50\|100G)(\d*\/\d*\/\d*))(\.\d*)?)(?#IfNameE)"
+REGEX_HUAWEI_LONG_IF = "(?#IfNameS)(((Eth-Trunk|LoopBack|Vlanif|Global-VE|NULL|VT)(\d*)|(Aux|GigabitEthernet|Ethernet|Tunnel|Virtual\-Ethernet|XGigabitEthernet|100GE|25GE|50\|100GE|FlexE|FlexE\-50\|100G)(\d*\/\d*\/\d*))(\.\d*)?)(?#IfNameE)"
 
-REGEX_HUAWEI_SHORT_IF = "(?#IfNameS)(((Eth-Trunk|Loop|Vlanif|Global-VE)(\d*)|(GE|Eth|Tun|VE|XGE|100GE|MEth|25GE|50\|100GE|FlexE|FlexE\-50\|100G)(\d*\/\d*\/\d*))(\.\d*)?)(?#IfNameE)"
+REGEX_HUAWEI_SHORT_IF = "(?#IfNameS)(((Eth-Trunk|Loop|Vlanif|Global-VE|NULL|VT)(\d*)|(Aux|GE|Eth|Tun|VE|XGE|100GE|MEth|25GE|50\|100GE|FlexE|FlexE\-50\|100G)(\d*\/\d*\/\d*))(\.\d*)?)(?#IfNameE)"
 
 
 ##########################################################################################
@@ -73,6 +73,8 @@ def convert_short2long_if(short_name):
     part1 = "Tunnel"
   elif part1=="VE":
     part1 = "Virtual-Ethernet"
+  elif part1=="VT":
+    part1 = "Virtual-Template"
   elif part1=="XGE":
     part1 = "XGigabitEthernet"
   return part1+part2+""
@@ -108,6 +110,8 @@ def convert_long2short_if(long_name):
     part1 = "VE"
   elif part1=="XGigabitEthernet":
     part1 = "XGE"
+  elif part1=="Virtual-Template":
+    part1 = "VT"
   # print(part1+part2)
   # exit()
   return part1+part2+""
