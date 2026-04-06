@@ -573,6 +573,15 @@ class HuaweiEquipCLI(EquipCLI):
 		elif "S5320 " in self.sys_version:
 			return ""
 		return self.exec_cli("display virtual-ethernet ve-group")
+	def cli_display_ip_vpn_instance_interface(self):
+		if "S5300 V100R005C01SPC100" in self.sys_version:
+			return ""
+		elif "S5300 V200R005C00SPC500" in self.sys_version:
+			return ""
+		elif "S2300 V100R006C05" in self.sys_version:
+			return ""
+		else:
+			return self.exec_cli("display ip vpn-instance interface")
 
 		
 class NokiaEquipCLI(EquipCLI):
