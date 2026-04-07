@@ -9,11 +9,16 @@ from pynetcom.utils.helpers.rest_api.nokia_nsp import NspDataProvider
 from pynetcom.utils.helpers.rest_api.huawei_nce import NceDataProvider
 from pynetcom.utils.helpers.rest_api.data_containers import (
     BaseAlarm,
+    BaseLink,
     BaseNetworkElement,
+    BasePort,
     NspAlarm,
     NspNetworkElement,
     NceAlarm,
+    NceIgpLink,
+    NceLink,
     NceNetworkElement,
+    NcePort,
 )
 
 __all__ = [
@@ -21,10 +26,15 @@ __all__ = [
     'NspDataProvider',
     'NceDataProvider',
     'BaseAlarm',
+    'BaseLink',
     'BaseNetworkElement',
+    'BasePort',
     'NspAlarm',
     'NspNetworkElement',
     'NceAlarm',
+    'NceIgpLink',
+    'NceLink',
     'NceNetworkElement',
+    'NcePort',
 ]
 
