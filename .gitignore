@@ -14,3 +14,6 @@ connect.log
 .vscode/*
 PYPI_UPLOAD.md
 examples/nokia_nsp_test.py
+examples/huawei_nce_topology_test.py
+examples/huawei_nce_ports_test.py
+docs/iMaster NCE-IP V100R023C00 Northbound REST API Guide 06.pdf

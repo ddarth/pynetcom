@@ -1172,3 +1172,414 @@ class NceDataProvider:
                         return NceIgpLink(link_data[0])
         return None
 
+    # ─── Topology Enrichment: high-level query methods ─────────────────
+
+    def get_links_between(
+        self,
+        name_a: str,
+        name_b: str,
+        resolve_names: bool = False,
+        filters: Optional[RestNMSDataFilter] = None,
+    ) -> List[NceLink]:
+        """
+        Get all links between two network elements (both directions).
+
+        NCE links are directional (a-end -> z-end), so this method queries
+        both directions and merges results with deduplication by res_id.
+
+        Uses server-side filters (a-end-ne-id + z-end-ne-id) for efficiency —
+        does NOT load all links.
+
+        Args:
+            name_a: Name of the first NE (exact match, server-side filter).
+            name_b: Name of the second NE (exact match, server-side filter).
+            resolve_names: If True, resolves NE and port UUIDs to names.
+            filters: RestNMSDataFilter for additional client-side filtering.
+
+        Returns:
+            List of NceLink objects representing all links between the two NEs.
+            Empty list if either NE is not found or no links exist.
+
+        Performance: ~0.2s (2 targeted API calls, no bulk loading).
+
+        Example:
+            links = provider.get_links_between("IPBB_Bostery_NE40E-1", "IPBB_Bostery_NE40E-2")
+            # Returns 2 links (e.g. GE1/0/7 <-> GE1/0/7, GE3/0/1 <-> GE3/0/1)
+        """
+        # Resolve NE names to res_ids
+        nes_a = self.get_network_elements(name=name_a)
+        nes_b = self.get_network_elements(name=name_b)
+        if not nes_a or not nes_b:
+            logger.warning(f"NE not found: {'name_a' if not nes_a else 'name_b'}")
+            return []
+
+        id_a = nes_a[0].res_id
+        id_b = nes_b[0].res_id
+
+        # Query both directions (NCE links are directional: a-end -> z-end)
+        links_ab = self.get_links(a_end_ne_id=id_a, z_end_ne_id=id_b,
+                                   resolve_names=resolve_names, filters=filters)
+        links_ba = self.get_links(a_end_ne_id=id_b, z_end_ne_id=id_a,
+                                   resolve_names=resolve_names, filters=filters)
+
+        # Deduplicate by res_id (shouldn't overlap, but just in case)
+        seen = {l.res_id for l in links_ab}
+        for l in links_ba:
+            if l.res_id not in seen:
+                links_ab.append(l)
+                seen.add(l.res_id)
+
+        logger.info(f"Links between '{name_a}' and '{name_b}': {len(links_ab)}")
+        return links_ab
+
+    def get_neighbors(
+        self,
+        name: str,
+        resolve_names: bool = False,
+        filters: Optional[RestNMSDataFilter] = None,
+    ) -> List[dict]:
+        """
+        Get all neighbors of a network element with their connecting links.
+
+        Queries links in both directions (NE as a-end and z-end) and groups
+        results by neighbor NE. Uses server-side NE ID filter.
+
+        Args:
+            name: NE name (exact match, server-side filter).
+            resolve_names: If True, resolves NE and port UUIDs to names.
+            filters: RestNMSDataFilter for additional client-side filtering.
+
+        Returns:
+            List of dicts, each representing a neighbor:
+            [
+                {
+                    "ne_id": "uuid-of-neighbor",
+                    "ne_name": "NeighborName" or None,
+                    "links": [NceLink, ...]  # all links to this neighbor
+                },
+                ...
+            ]
+            Empty list if NE not found or has no links.
+
+        Performance: ~0.3s (2 targeted API calls + optional name resolve).
+
+        Example:
+            neighbors = provider.get_neighbors("IPBB_Bostery_NE40E-2", resolve_names=True)
+            for n in neighbors:
+                print(f"{n['ne_name']}: {len(n['links'])} links")
+        """
+        nes = self.get_network_elements(name=name)
+        if not nes:
+            logger.warning(f"NE '{name}' not found")
+            return []
+
+        ne_id = nes[0].res_id
+
+        # Get all links where this NE is source or sink
+        links_out = self.get_links(a_end_ne_id=ne_id, resolve_names=resolve_names, filters=filters)
+        links_in = self.get_links(z_end_ne_id=ne_id, resolve_names=resolve_names, filters=filters)
+
+        # Merge and deduplicate
+        all_links = list(links_out)
+        seen = {l.res_id for l in all_links}
+        for l in links_in:
+            if l.res_id not in seen:
+                all_links.append(l)
+                seen.add(l.res_id)
+
+        # Group by neighbor NE
+        # For each link, the neighbor is the "other end"
+        neighbors_map: Dict[str, dict] = {}
+        for link in all_links:
+            if link.a_end_ne_id == ne_id:
+                neighbor_id = link.z_end_ne_id
+                neighbor_name = link.z_end_ne_name
+            else:
+                neighbor_id = link.a_end_ne_id
+                neighbor_name = link.a_end_ne_name
+
+            if neighbor_id not in neighbors_map:
+                neighbors_map[neighbor_id] = {
+                    'ne_id': neighbor_id,
+                    'ne_name': neighbor_name,
+                    'links': []
+                }
+            neighbors_map[neighbor_id]['links'].append(link)
+
+        result = list(neighbors_map.values())
+        logger.info(f"Neighbors of '{name}': {len(result)} NEs, {len(all_links)} links total")
+        return result
+
+    def get_links_by_subnet(
+        self,
+        subnet_name_or_id: str,
+        resolve_names: bool = False,
+        filters: Optional[RestNMSDataFilter] = None,
+    ) -> List[NceLink]:
+        """
+        Get all links within a subnet (both ends belong to NEs in the subnet).
+
+        Approach:
+        1. Resolve subnet name -> subnet_id (if name given)
+        2. Get all NEs in subnet (server-side filter: ref-parent-subnet)
+        3. Get all links (paginated)
+        4. Client-side filter: keep only links where BOTH a-end and z-end NEs
+           are in the subnet
+
+        Note: NCE does NOT support server-side link filtering by subnet.
+        All links are loaded once and filtered in memory.
+
+        Args:
+            subnet_name_or_id: Subnet name (e.g. "IP Domain", "DWDM", "Osh")
+                               or subnet res-id UUID.
+            resolve_names: If True, resolves NE and port UUIDs to names.
+            filters: RestNMSDataFilter for additional client-side filtering.
+
+        Returns:
+            List of NceLink objects where both ends are in the subnet.
+
+        Available subnets (real data):
+            IP Domain: 111 NEs, DWDM: 62, Osh: 31, SDH: 20,
+            Issyk-Kul_Naryn: 8, OMC_SWITCH: 7, South: 4
+
+        Performance: ~2-60s depending on resolve_names (link loading is ~2s).
+
+        Example:
+            links = provider.get_links_by_subnet("IP Domain", resolve_names=True)
+            print(f"Links in IP Domain: {len(links)}")
+        """
+        # Resolve subnet name to ID
+        subnet = self.get_subnet_by_name(subnet_name_or_id)
+        if subnet:
+            subnet_id = subnet.get('res-id')
+        else:
+            # Assume it's a direct subnet_id
+            subnet_id = subnet_name_or_id
+
+        # Get all NEs in this subnet (server-side filter)
+        subnet_nes = self.get_network_elements(subnet_id=subnet_id)
+        if not subnet_nes:
+            logger.warning(f"No NEs found in subnet '{subnet_name_or_id}'")
+            return []
+
+        ne_ids = {ne.res_id for ne in subnet_nes}
+        logger.info(f"Subnet '{subnet_name_or_id}': {len(ne_ids)} NEs")
+
+        # Get all links and filter by subnet NEs (both ends must be in subnet)
+        all_links = self.get_links(resolve_names=resolve_names, filters=filters)
+        subnet_links = [l for l in all_links
+                        if l.a_end_ne_id in ne_ids and l.z_end_ne_id in ne_ids]
+
+        logger.info(f"Links in subnet '{subnet_name_or_id}': {len(subnet_links)} (from {len(all_links)} total)")
+        return subnet_links
+
+    def get_ports_by_ip(
+        self,
+        ipv4: str,
+        ne_id: Optional[str] = None,
+    ) -> List[NcePort]:
+        """
+        Find port(s) by IPv4 address.
+
+        NCE does NOT support server-side IP filtering on ports. This method
+        loads ports and filters by addrv4 on the client side.
+
+        If ne_id is provided, only that NE's ports are loaded (~0.12s).
+        If ne_id is NOT provided, ALL ports are loaded (~56s for ~88K ports).
+        Always provide ne_id when possible for performance.
+
+        Args:
+            ipv4: IPv4 address to search for (exact match on addrv4 field).
+            ne_id: Optional NE UUID to narrow the search.
+
+        Returns:
+            List of NcePort objects with matching addrv4.
+
+        Performance:
+            - With ne_id: ~0.12s (50-100 ports per NE)
+            - Without ne_id: ~56s (loads all ~88K ports)
+
+        Example:
+            # Fast: search within a known NE
+            ports = provider.get_ports_by_ip("11.110.1.114",
+                        ne_id="d0cc81df-b9f9-11ea-ad74-b008759ca76f")
+
+            # Slow: search across all NEs (~56s)
+            ports = provider.get_ports_by_ip("11.110.1.114")
+        """
+        if ne_id:
+            ports = self.get_ports(ne_id=ne_id)
+        else:
+            logger.warning("get_ports_by_ip without ne_id loads ALL ports (~56s). "
+                           "Provide ne_id for better performance.")
+            ports = self.get_ports()
+
+        matching = [p for p in ports if p.addrv4 == ipv4]
+        logger.info(f"Ports with IP {ipv4}: {len(matching)} (searched {len(ports)} ports)")
+        return matching
+
+    def get_trunk_members(self, port: NcePort) -> List[NcePort]:
+        """
+        Get physical member ports of an Eth-Trunk (LAG) interface.
+
+        Eth-Trunk is a logical aggregation of multiple physical ports.
+        Member ports reference their trunk via the trunk_ltp_id field:
+            member.trunk_ltp_id == trunk.res_id
+
+        If the port is already physical (is_physical=True), returns empty list.
+
+        Args:
+            port: NcePort object (typically an Eth-Trunk).
+
+        Returns:
+            List of NcePort objects — the physical member ports.
+            Empty list if port is physical or has no members.
+
+        Performance: ~0.12s (loads ports for the NE via ne-id server-side filter).
+
+        Example:
+            trunk = provider.get_ports_by_ip("11.110.1.116", ne_id="...")[0]
+            # trunk.name = "Eth-Trunk4", trunk.is_physical = False
+            members = provider.get_trunk_members(trunk)
+            # [GE6/1/0 (10G Fiber), GE6/1/1, GE6/1/2, GE6/1/3]
+        """
+        if port.is_physical:
+            return []
+
+        if not port.ne_id or not port.res_id:
+            return []
+
+        # Load all ports for this NE (server-side ne-id filter)
+        ne_ports = self.get_ports(ne_id=port.ne_id)
+
+        # Filter: member ports whose trunk_ltp_id points to this port
+        members = [p for p in ne_ports if p.trunk_ltp_id == port.res_id]
+        logger.info(f"Trunk members of '{port.name}': {len(members)}")
+        return members
+
+    def get_physical_ports_by_ip(
+        self,
+        ipv4: str,
+        ne_id: Optional[str] = None,
+    ) -> Optional[dict]:
+        """
+        Find physical port(s) by IPv4 address, expanding Eth-Trunk if needed.
+
+        Unified method that handles both cases:
+        - Regular physical port (e.g. GigabitEthernet1/0/0 with IP):
+          Returns the port itself as the only physical port.
+        - Eth-Trunk with IP: Returns the trunk + its physical member ports.
+
+        The result always has the same structure regardless of port type.
+
+        Args:
+            ipv4: IPv4 address to search for.
+            ne_id: Optional NE UUID for fast lookup (~0.12s).
+                   Without ne_id, loads ALL ports (~56s).
+
+        Returns:
+            Dict with unified structure, or None if IP not found:
+            {
+                "port": NcePort,             # the port that holds the IP
+                "physical_ports": [NcePort], # physical port(s)
+                "is_trunk": bool,            # True if Eth-Trunk
+            }
+
+            For regular port: physical_ports = [port itself]
+            For Eth-Trunk:    physical_ports = [member1, member2, ...]
+
+        Performance:
+            - With ne_id: ~0.12-0.25s
+            - Without ne_id: ~56s (bulk port loading)
+
+        Example:
+            # Regular port
+            result = provider.get_physical_ports_by_ip("11.110.1.114", ne_id="...")
+            # result["port"].name = "GigabitEthernet1/0/0"
+            # result["is_trunk"] = False
+            # result["physical_ports"] = [GigabitEthernet1/0/0]  (1 port)
+
+            # Eth-Trunk
+            result = provider.get_physical_ports_by_ip("11.110.1.116", ne_id="...")
+            # result["port"].name = "Eth-Trunk4"
+            # result["is_trunk"] = True
+            # result["physical_ports"] = [GE6/1/0, GE6/1/1, GE6/1/2, GE6/1/3]
+        """
+        ports = self.get_ports_by_ip(ipv4, ne_id=ne_id)
+        if not ports:
+            return None
+
+        port = ports[0]
+
+        if port.is_physical:
+            # Regular physical port — it IS the physical port
+            return {
+                'port': port,
+                'physical_ports': [port],
+                'is_trunk': False,
+            }
+        else:
+            # Logical port (Eth-Trunk or other) — find physical members
+            members = self.get_trunk_members(port)
+            return {
+                'port': port,
+                'physical_ports': members,
+                'is_trunk': len(members) > 0,
+            }
+
+    def get_alarms_for_link(
+        self,
+        link: NceLink,
+        is_cleared: Optional[bool] = None,
+    ) -> List[NceAlarm]:
+        """
+        Get alarms associated with a link's NEs.
+
+        Fetches alarms for both NEs of the link (a-end and z-end) using
+        server-side resource filter for efficiency.
+
+        The returned alarms include all alarms for both NEs, not just
+        port-specific ones. To further filter by port name, check
+        alarm.affected_object for the port name string.
+
+        Common alarm types seen on down links:
+        - "Link Down" (critical) — contains port name in affected_object
+        - "The physical port is Down" (critical)
+        - "The state of the OSPF interface changed" (major)
+        - "BFD session change to fault down state" (major)
+        - "Optical Invalid" / "Input optical power is too low"
+
+        Args:
+            link: NceLink object (must have a_end_ne_id and z_end_ne_id).
+            is_cleared: Filter by alarm cleared status.
+                        True: only cleared alarms.
+                        False: only active alarms.
+                        None: all alarms.
+
+        Returns:
+            List of NceAlarm objects for both NEs of the link.
+
+        Performance: ~1-2s (2 server-side filtered alarm queries).
+
+        Example:
+            down_links = [l for l in links if l.operate_status == '1']
+            if down_links:
+                alarms = provider.get_alarms_for_link(down_links[0], is_cleared=False)
+                for a in alarms:
+                    print(f"{a.ne_name} | {a.severity} | {a.alarm_name}")
+        """
+        alarms = []
+
+        if link.a_end_ne_id:
+            alarms_a = self.get_alarms(resource=link.a_end_ne_id, is_cleared=is_cleared)
+            alarms.extend(alarms_a)
+
+        if link.z_end_ne_id:
+            alarms_z = self.get_alarms(resource=link.z_end_ne_id, is_cleared=is_cleared)
+            alarms.extend(alarms_z)
+
+        logger.info(f"Alarms for link '{link.name}': {len(alarms)} "
+                     f"(A-end: {len(alarms_a) if link.a_end_ne_id else 0}, "
+                     f"Z-end: {len(alarms_z) if link.z_end_ne_id else 0})")
+        return alarms
+
