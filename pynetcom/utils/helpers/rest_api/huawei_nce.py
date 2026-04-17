@@ -2142,6 +2142,127 @@ class NceDataProvider:
             granularity=granularity,
         )
 
+    # ─── EML Historical PM ────────────────────────────────────────────
+
+    def get_eml_pm_historical(
+        self,
+        ne_physical_id: int,
+        shelf: int,
+        slot: int,
+        ports: List[int],
+        start_time: int,
+        end_time: int,
+        indicators: Optional[List[int]] = None,
+        granularity: str = '15min',
+        sub_card_id: int = 1,
+    ) -> Dict[int, List[dict]]:
+        """
+        Query historical PM data for a board's ports.
+
+        Uses /rest/emlperfservice/v1/trans/queryhisdata — returns time-series
+        PM data for the specified period. Same board/port addressing as
+        get_eml_pm_for_board().
+
+        Data retention (NCE internal storage limits):
+            - '15min': NCE stores only ~4-6 hours of 15-minute data.
+              Even if you request 7 days, you'll get only the last few
+              hours. Use for "what happened recently" scenarios.
+            - '24hour': NCE stores ~6-7 days of daily aggregated data.
+              One record per day (Cur/Min/Max over 24h). Use for weekly
+              trend analysis. Min values can reveal brief outages
+              (e.g. Min = -60 dBm = Loss of Signal during that day).
+
+        If longer history is needed, collect and store data externally.
+
+        Args:
+            ne_physical_id: NE physical-id (int).
+            shelf: Shelf/frame number (usually 0).
+            slot: Board slot number.
+            ports: List of physical port numbers.
+            start_time: Start of period, unix timestamp in seconds (int).
+            end_time: End of period, unix timestamp in seconds (int).
+            indicators: List of pmParameterIds. Defaults to
+                EML_PM_OPTICAL_POWER_ONLY.
+            granularity: '15min' or '24hour'.
+            sub_card_id: Subboard ID, usually 1.
+
+        Returns:
+            dict: {port_number: [
+                {'time': int, 'param_id': int, 'value': str, 'unit': str},
+                ...
+            ]}
+            Records sorted by time. Empty dict if no data.
+
+        Example:
+            import time
+            now = int(time.time())
+            hist = provider.get_eml_pm_historical(
+                638829, 0, 4, [1, 2],
+                start_time=now - 7*86400, end_time=now,
+                indicators=[201],  # LSIOPCUR only
+                granularity='24hour'
+            )
+            for port, records in hist.items():
+                for r in records:
+                    t = time.strftime('%m-%d', time.localtime(r['time']))
+                    print(f"Port {port} {t}: {r['value']} {r['unit']}")
+        """
+        if indicators is None:
+            indicators = list(self.EML_PM_OPTICAL_POWER_ONLY)
+        if not ports:
+            return {}
+
+        CHUNK_SIZE = 180
+        chunks = [indicators[i:i + CHUNK_SIZE]
+                  for i in range(0, len(indicators), CHUNK_SIZE)]
+
+        merged: Dict[int, List[dict]] = {}
+
+        for chunk in chunks:
+            body = {
+                "monitoringObjects": {
+                    "neId": int(ne_physical_id),
+                    "shelfId": int(shelf),
+                    "boardId": int(slot),
+                    "subCardId": int(sub_card_id),
+                    "physicalPortId": [int(p) for p in ports],
+                },
+                "granularitys": granularity,
+                "pmEndTimeFrom": int(start_time),
+                "pmEndTimeTo": int(end_time),
+                "pmParameterIds": chunk,
+            }
+
+            result = self.client.send_post_request(
+                self.EML_PM_HIS_URL, body)
+            if not result or isinstance(result, bool):
+                continue
+
+            if result.get('errorCode', -1) != 0:
+                logger.debug(
+                    f"EML PM historical error: "
+                    f"{result.get('errorCode')} {result.get('errorMessage')}")
+                continue
+
+            for port_data in result.get('physicalPort', []):
+                port_id = port_data.get('physicalPortID')
+                if port_id is None:
+                    continue
+                merged.setdefault(port_id, [])
+                for d in port_data.get('listPMData', []):
+                    merged[port_id].append({
+                        'time': d.get('endTime'),
+                        'param_id': d.get('pmParameterId'),
+                        'value': d.get('value', ''),
+                        'unit': d.get('unit', ''),
+                    })
+
+        # Sort by time
+        for port_id in merged:
+            merged[port_id].sort(key=lambda x: x.get('time', 0))
+
+        return merged
+
     # ─── Optical Power Thresholds & Reference ──────────────────────────
 
     def get_optical_power_thresholds(
