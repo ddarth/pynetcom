@@ -50,8 +50,8 @@ def example_links_between():
 
     print(f"Links found: {len(links)}")
     for l in links:
-        status = 'up' if l.operate_status == '0' else 'down'
-        print(f"  {l.a_end_ltp_name} <-> {l.z_end_ltp_name} | {l.link_type} | {status} | {l.bandwidth} kbps")
+        status = 'up' if l.oper_status == '0' else 'down'
+        print(f"  {l.source_tp_name} <-> {l.dest_tp_name} | {l.link_type} | {status} | {l.bandwidth} kbps")
 
     client.close()
 
@@ -112,14 +112,14 @@ def example_ports_by_ip():
     # First find an NE to narrow the search
     elements = provider.get_network_elements(name=API_NCE_NE_NAME)
     if elements:
-        ports = provider.get_ports(ne_id=elements[0].res_id)
-        with_ip = [p for p in ports if p.addrv4]
+        ports = provider.get_ports(ne_id=elements[0].node_id)
+        with_ip = [p for p in ports if p.ipv4_address]
         if with_ip:
-            target_ip = with_ip[0].addrv4
-            result = provider.get_ports_by_ip(target_ip, ne_id=elements[0].res_id)
+            target_ip = with_ip[0].ipv4_address
+            result = provider.get_ports_by_ip(target_ip, ne_id=elements[0].node_id)
             print(f"Port with IP {target_ip}: {len(result)}")
             for p in result:
-                print(f"  {p.name} | {p.ltp_type_name} | {p.addrv4}/{p.addrv4_mask}")
+                print(f"  {p.name} | {p.interface_type} | {p.ipv4_address}/{p.ipv4_prefix_length}")
 
     client.close()
 
@@ -135,7 +135,7 @@ def example_alarms_for_link():
     provider = NceDataProvider(client)
 
     all_links = provider.get_links()
-    down = [l for l in all_links if l.operate_status == '1']
+    down = [l for l in all_links if l.oper_status == '1']
     print(f"Down links: {len(down)}")
 
     if down:

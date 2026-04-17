@@ -70,15 +70,15 @@ def example_get_ports_by_ne():
         return
 
     ne = elements[0]
-    ports = provider.get_ports(ne_id=ne.res_id, resolve_names=True)
+    ports = provider.get_ports(ne_id=ne.node_id, resolve_names=True)
 
-    print(f"NE: {ne.name} ({ne.res_id})")
+    print(f"NE: {ne.name} ({ne.node_id})")
     print(f"Total ports: {len(ports)}")
 
     # Stats by type
     types = {}
     for p in ports:
-        types[p.ltp_type_name] = types.get(p.ltp_type_name, 0) + 1
+        types[p.interface_type] = types.get(p.interface_type, 0) + 1
     print("\nBy type:")
     for t, c in sorted(types.items(), key=lambda x: -x[1]):
         print(f"  {t}: {c}")
@@ -110,11 +110,11 @@ def example_filter_physical_ports():
         client.close()
         return
 
-    ports = provider.get_ports(ne_id=elements[0].res_id, is_physical=True)
+    ports = provider.get_ports(ne_id=elements[0].node_id, is_physical=True)
 
     print(f"Physical ports: {len(ports)}")
     for p in ports[:10]:
-        print(f"  {p.name} | {p.ltp_type_name} | BW: {p.bandwidth} | {p.medium_type or 'N/A'}")
+        print(f"  {p.name} | {p.interface_type} | BW: {p.bandwidth} | {p.medium_type or 'N/A'}")
 
     client.close()
 
@@ -137,7 +137,7 @@ def example_filter_by_type():
     if not elements:
         client.close()
         return
-    ne_id = elements[0].res_id
+    ne_id = elements[0].node_id
 
     for ltp_type in ['Ethernet', 'Eth-Trunk', 'LoopBack', 'Vlanif']:
         ports = provider.get_ports(ne_id=ne_id, ltp_type_name=ltp_type)
@@ -165,7 +165,7 @@ def example_port_details():
         client.close()
         return
 
-    ports = provider.get_ports(ne_id=elements[0].res_id, ltp_type_name='Ethernet',
+    ports = provider.get_ports(ne_id=elements[0].node_id, ltp_type_name='Ethernet',
                                 is_physical=True, resolve_names=True)
     if ports:
         print(ports[0].details())
@@ -193,18 +193,18 @@ def example_sub_interfaces():
         return
 
     # Get all ports for the NE
-    all_ports = provider.get_ports(ne_id=elements[0].res_id)
+    all_ports = provider.get_ports(ne_id=elements[0].node_id)
 
     # Find parent-child relationships
-    parent_ids = {p.parent_ltp_id for p in all_ports if p.parent_ltp_id}
-    parents = [p for p in all_ports if p.res_id in parent_ids]
+    parent_ids = {p.parent_tp_id for p in all_ports if p.parent_tp_id}
+    parents = [p for p in all_ports if p.node_id in parent_ids]
 
     print(f"Ports with sub-interfaces: {len(parents)}")
     for parent in parents[:3]:
-        children = [p for p in all_ports if p.parent_ltp_id == parent.res_id]
-        print(f"\n  Parent: {parent.name} ({parent.ltp_type_name})")
+        children = [p for p in all_ports if p.parent_tp_id == parent.node_id]
+        print(f"\n  Parent: {parent.name} ({parent.interface_type})")
         for child in children[:5]:
-            print(f"    Sub: {child.name} ({child.ltp_type_name})")
+            print(f"    Sub: {child.name} ({child.interface_type})")
 
     client.close()
 
@@ -226,12 +226,12 @@ def example_ports_with_ip():
         client.close()
         return
 
-    ports = provider.get_ports(ne_id=elements[0].res_id)
-    with_ip = [p for p in ports if p.addrv4]
+    ports = provider.get_ports(ne_id=elements[0].node_id)
+    with_ip = [p for p in ports if p.ipv4_address]
 
     print(f"Ports with IPv4: {len(with_ip)}")
     for p in with_ip:
-        print(f"  {p.name}: {p.addrv4}/{p.addrv4_mask} | {p.ltp_type_name} | {p.work_mode or 'N/A'}")
+        print(f"  {p.name}: {p.ipv4_address}/{p.ipv4_prefix_length} | {p.interface_type} | {p.work_mode or 'N/A'}")
 
     client.close()
 
@@ -253,7 +253,7 @@ def example_export():
         client.close()
         return
 
-    ports = provider.get_ports(ne_id=elements[0].res_id, ltp_type_name='Ethernet',
+    ports = provider.get_ports(ne_id=elements[0].node_id, ltp_type_name='Ethernet',
                                 is_physical=True)
     if ports:
         p = ports[0]

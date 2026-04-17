@@ -5,7 +5,7 @@ Provides high-level methods for fetching alarms and network elements
 from Nokia NSP with filtering and pagination support.
 """
 
-from typing import List, Optional
+from typing import Dict, List, Optional
 from datetime import datetime
 import logging
 from urllib.parse import quote
@@ -14,7 +14,8 @@ from pynetcom.rest_nsp import RestNSP
 from pynetcom.utils.helpers.rest_api.base import RestNMSDataFilter
 from pynetcom.utils.helpers.rest_api.data_containers.nokia_nsp import (
     NspAlarm,
-    NspNetworkElement,
+    NspInterface,
+    NspNode,
 )
 
 
@@ -318,7 +319,7 @@ class NspDataProvider:
         subnet_id: Optional[str] = None,
         filters: Optional[RestNMSDataFilter] = None,
         page_size: int = 1000
-    ) -> List[NspNetworkElement]:
+    ) -> List[NspNode]:
         """
         Get network elements from Nokia NSP.
         
@@ -330,7 +331,7 @@ class NspDataProvider:
             page_size: Number of records per page.
         
         Returns:
-            List of NspNetworkElement objects.
+            List of NspNode objects.
         
         Note:
             - name and subnet_id are filtered server-side (more efficient)
@@ -356,8 +357,8 @@ class NspDataProvider:
         finally:
             self.client.limit = original_limit
         
-        # Convert to NspNetworkElement objects
-        elements = [NspNetworkElement(item) for item in raw_data]
+        # Convert to NspNode objects
+        elements = [NspNode(item) for item in raw_data]
         
         # Apply client-side filters
         if filters:
@@ -498,7 +499,7 @@ class NspDataProvider:
         self,
         subnet_id: str,
         page_size: int = 1000
-    ) -> List[NspNetworkElement]:
+    ) -> List[NspNode]:
         """
         Get network elements in a subnet (server-side filtering).
         
@@ -507,7 +508,7 @@ class NspDataProvider:
             page_size: Number of records per page.
         
         Returns:
-            List of NspNetworkElement objects in the subnet.
+            List of NspNode objects in the subnet.
         
         Note:
             This method uses server-side filtering for efficiency.
@@ -517,4 +518,155 @@ class NspDataProvider:
         elements = self.get_network_elements(subnet_id=subnet_id, page_size=page_size)
         logger.info(f"Found {len(elements)} NEs in subnet '{subnet_id}'")
         return elements
+
+    # ─── L3 Interfaces via NETCONF ────────────────────────────────────
+
+    def get_interfaces(
+        self,
+        ne_ip: str,
+        netconf_user: str,
+        netconf_pass: str,
+        router_name: str = 'Base',
+        netconf_port: int = 830,
+        include_state: bool = False,
+        timeout: int = 60,
+    ) -> List[NspInterface]:
+        """
+        Get L3 router interfaces with IPv4 via NETCONF to Nokia SROS device.
+
+        Connects directly to the device (not through NSP) and retrieves
+        router interface configuration including port binding and IP address.
+        Optionally fetches operational state (oper-status, protocols, neighbor).
+
+        This is the only way to get L3/IP data from Nokia devices when NSP
+        does not have NRC/MDM modules activated.
+
+        Source YANG model: nokia-conf:configure/router/interface
+        State YANG model: nokia-state:state/router/interface
+
+        Args:
+            ne_ip: Device management IP address (from NspNode.management_address).
+            netconf_user: NETCONF username (separate from NSP API credentials).
+            netconf_pass: NETCONF password.
+            router_name: Router instance name (default "Base" = global routing table).
+            netconf_port: NETCONF port (default 830).
+            include_state: If True, also fetches oper-state, protocols, neighbor
+                           for each interface. Adds ~1-2s per interface.
+            timeout: NETCONF connection timeout in seconds.
+
+        Returns:
+            List of NspInterface objects with OpenConfig-compatible fields:
+            - interface_name, hardware_port, is_lag
+            - ipv4_address, ipv4_prefix_length
+            - oper_status, protocols (if include_state=True)
+            - neighbor_address, neighbor_mac (if include_state=True)
+
+        Performance:
+            - Config only: ~1-2s per device
+            - Config + state: ~3-5s per device (state query per interface)
+
+        Example:
+            interfaces = provider.get_interfaces(
+                "172.28.205.9", "M2M_user", "M2M_user_123",
+                include_state=True
+            )
+            for iface in interfaces:
+                print(f"{iface.interface_name} | {iface.hardware_port} | "
+                      f"{iface.ipv4_address}/{iface.ipv4_prefix_length}")
+        """
+        import xmltodict
+        from ncclient import manager
+
+        logger.debug(f"NETCONF connecting to {ne_ip}:{netconf_port}")
+
+        try:
+            m = manager.connect(
+                host=ne_ip, port=netconf_port,
+                username=netconf_user, password=netconf_pass,
+                hostkey_verify=False, timeout=timeout,
+                device_params={'name': 'default'}
+            )
+        except Exception as e:
+            logger.error(f"NETCONF connection failed to {ne_ip}: {e}")
+            return []
+
+        try:
+            # Step 1: Get config — interface names, port bindings, IPv4 addresses
+            filter_cfg = f"""
+<configure xmlns="urn:nokia.com:sros:ns:yang:sr:conf">
+  <router>
+    <router-name>{router_name}</router-name>
+    <interface/>
+  </router>
+</configure>
+"""
+            result = m.get_config(source='running', filter=('subtree', filter_cfg))
+            data = xmltodict.parse(result.xml)
+            router = data.get('rpc-reply', {}).get('data', {}).get('configure', {}).get('router', {})
+            raw_interfaces = router.get('interface', [])
+            if isinstance(raw_interfaces, dict):
+                raw_interfaces = [raw_interfaces]
+
+            interfaces = []
+            for raw_iface in raw_interfaces:
+                iface_data = dict(raw_iface)
+
+                # Step 2 (optional): Get state for each interface
+                if include_state:
+                    ifname = iface_data.get('interface-name', '')
+                    try:
+                        filter_state = f"""
+<state xmlns="urn:nokia.com:sros:ns:yang:sr:state">
+  <router>
+    <router-name>{router_name}</router-name>
+    <interface>
+      <interface-name>{ifname}</interface-name>
+    </interface>
+  </router>
+</state>
+"""
+                        state_result = m.get(filter=('subtree', filter_state))
+                        state_data = xmltodict.parse(state_result.xml)
+                        state_iface = (state_data.get('rpc-reply', {})
+                                       .get('data', {}).get('state', {})
+                                       .get('router', {}).get('interface', {}))
+
+                        # Merge state into config data
+                        iface_data['oper-state'] = state_iface.get('oper-state')
+                        iface_data['oper-ip-mtu'] = state_iface.get('oper-ip-mtu')
+                        iface_data['protocol'] = state_iface.get('protocol', '')
+
+                        # Extract neighbor from state
+                        ipv4_state = state_iface.get('ipv4', {})
+                        if isinstance(ipv4_state, dict):
+                            nd = ipv4_state.get('neighbor-discovery', {})
+                            if isinstance(nd, dict):
+                                neighbor = nd.get('neighbor', {})
+                                if isinstance(neighbor, dict):
+                                    iface_data['neighbor-address'] = neighbor.get('ipv4-address')
+                                    iface_data['neighbor-mac'] = neighbor.get('mac-address')
+                                elif isinstance(neighbor, list) and neighbor:
+                                    iface_data['neighbor-address'] = neighbor[0].get('ipv4-address')
+                                    iface_data['neighbor-mac'] = neighbor[0].get('mac-address')
+                    except Exception as e:
+                        logger.warning(f"Failed to get state for interface '{ifname}': {e}")
+
+                # Set node context
+                iface_data['_node_ip'] = ne_ip
+
+                iface = NspInterface(iface_data)
+                iface.node_id = ne_ip
+                interfaces.append(iface)
+
+            logger.info(f"NETCONF {ne_ip}: {len(interfaces)} router interfaces")
+            return interfaces
+
+        except Exception as e:
+            logger.error(f"NETCONF error on {ne_ip}: {e}")
+            return []
+        finally:
+            try:
+                m.close_session()
+            except:
+                pass
 

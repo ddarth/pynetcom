@@ -6,7 +6,7 @@ and topology (links, fibers, IGP links) from Huawei NCE with
 filtering, pagination, and UUID-to-name resolution support.
 """
 
-from typing import Dict, List, Optional, Set
+from typing import Callable, Dict, List, Optional, Set, Tuple
 from datetime import datetime
 import logging
 
@@ -15,9 +15,10 @@ from pynetcom.utils.helpers.rest_api.base import RestNMSDataFilter
 from pynetcom.utils.helpers.rest_api.data_containers.huawei_nce import (
     NceAlarm,
     NceIgpLink,
+    NceInterface,
     NceLink,
-    NceNetworkElement,
-    NcePort,
+    NceNode,
+    NceTerminationPoint,
 )
 
 
@@ -63,6 +64,59 @@ class NceDataProvider:
     LINKS_ENDPOINT = "/restconf/v2/data/huawei-nce-resource-inventory:links"
     IGP_LINKS_ENDPOINT = "/restconf/v3/data/huawei-nce-resource-inventory:igp-links"
     PORTS_ENDPOINT = "/restconf/v3/data/huawei-nce-resource-inventory:ltps"
+
+    # Performance Monitoring — Vendor Specific Raw PM
+    # NOTE: Limited to OCH ports on 9800 M24 only. Requires PM task creation.
+    # For DWDM optical power on ALL port types, prefer EML PM (get_eml_pm_for_board).
+    # For thresholds, use get_optical_power_thresholds().
+    # For reference power, use get_reference_power().
+    PM_CREATE_URL = "/restconf/v1/operations/huawei-nce-common-pm-rawdata:create-monitor-tasks"
+    PM_REALTIME_URL = "/restconf/v1/operations/huawei-nce-common-pm-rawdata:query-realtime-pm-datas"
+    PM_HISTORICAL_URL = "/restconf/v1/operations/huawei-nce-common-pm-rawdata:query-history-pm-datas"
+    PM_QUERY_TASKS_URL = "/restconf/v1/operations/huawei-nce-common-pm-rawdata:query-monitor-tasks"
+    PM_DELETE_TASKS_URL = "/restconf/v1/operations/huawei-nce-common-pm-rawdata:delete-monitor-tasks"
+
+    # EML Performance Service — works on ALL DWDM port types without PM tasks/license
+    EML_PM_CUR_URL = "/rest/emlperfservice/v1/trans/querycurdata"
+    EML_PM_HIS_URL = "/rest/emlperfservice/v1/trans/queryhisdata"
+
+    # Optical power thresholds and reference power
+    OPTICAL_POWER_URL = "/restconf/v2/operations/ietf-trans-oam:query-optical-power"
+    ACTN_NETWORKS_URL = "/restconf/v2/data/ietf-network:networks"
+
+    # NCE-internal pmParameterIds for EML PM (NOT same as Excel indicator IDs)
+    EML_PM_INDICATORS = {
+        # Temperature
+        188: ("Cur Temperature", "Celsius"),
+        189: ("Min Temperature", "Celsius"),
+        190: ("Max Temperature", "Celsius"),
+        # Output optical power
+        198: ("Cur Total Output Optical Power", "dBm"),
+        199: ("Min Total Output Optical Power", "dBm"),
+        200: ("Max Total Output Optical Power", "dBm"),
+        # Input optical power (LSIOPCUR in GUI)
+        201: ("Cur Total Input Optical Power", "dBm"),
+        202: ("Min Total Input Optical Power", "dBm"),
+        203: ("Max Total Input Optical Power", "dBm"),
+        # Laser temperature
+        204: ("Cur Laser Temperature", "Celsius"),
+        205: ("Min Laser Temperature", "Celsius"),
+        206: ("Max Laser Temperature", "Celsius"),
+        # Bias current
+        207: ("Cur Bias Current", "mA"),
+        208: ("Min Bias Current", "mA"),
+        209: ("Max Bias Current", "mA"),
+        # Laser optical power (variant for amplifier boards)
+        210: ("Cur Laser Input Optical Power", "dBm"),
+        211: ("Min Laser Input Optical Power", "dBm"),
+        212: ("Max Laser Input Optical Power", "dBm"),
+        213: ("Cur Laser Output Optical Power", "dBm"),
+        214: ("Min Laser Output Optical Power", "dBm"),
+        215: ("Max Laser Output Optical Power", "dBm"),
+    }
+    # Common indicator sets
+    EML_PM_OPTICAL_DEFAULT = list(range(188, 216))  # 188..215 — optical + temperature + bias
+    EML_PM_OPTICAL_POWER_ONLY = [198, 199, 200, 201, 202, 203, 210, 211, 212, 213, 214, 215]
     
     def __init__(self, client: RestNCE):
         """
@@ -195,7 +249,7 @@ class NceDataProvider:
             logger.debug(f"Looking up NE '{name}' to get resource ID for alarm filtering")
             elements = self.get_network_elements(name=name)
             if elements:
-                resource = elements[0].res_id
+                resource = elements[0].node_id
                 logger.debug(f"Found NE resource ID: {resource}")
             else:
                 logger.warning(f"NE '{name}' not found, will fetch all alarms")
@@ -282,7 +336,7 @@ class NceDataProvider:
         logger.info(f"Found {len(elements)} NEs in subnet '{subnet_id}'")
         
         # 2. Build set of NE resource IDs for fast lookup
-        ne_res_ids = {ne.res_id for ne in elements if ne.res_id}
+        ne_res_ids = {ne.node_id for ne in elements if ne.node_id}
         
         # 3. Fetch all alarms in a single request (with time/severity filters)
         # Call get_alarms without subnet_id to avoid recursion
@@ -295,7 +349,9 @@ class NceDataProvider:
         )
         
         # 4. Filter alarms by NE resource IDs (client-side)
-        subnet_alarms = [a for a in all_alarms if a.resource_id in ne_res_ids]
+        # Filter alarms where the NE resource (from vendor_specific_info) matches subnet NEs
+        subnet_alarms = [a for a in all_alarms
+                         if (a.vendor_specific_info or {}).get('resource') in ne_res_ids]
         
         # Apply additional client-side filters
         if filters:
@@ -308,7 +364,7 @@ class NceDataProvider:
         self,
         subnet_id: str,
         page_size: int = 1000
-    ) -> List[NceNetworkElement]:
+    ) -> List[NceNode]:
         """
         Get all network elements in a subnet.
         
@@ -319,7 +375,7 @@ class NceDataProvider:
             page_size: Number of records per page.
         
         Returns:
-            List of NceNetworkElement objects in the subnet.
+            List of NceNode objects in the subnet.
         """
         logger.debug(f"Fetching NEs for subnet: {subnet_id}")
         elements = self.get_network_elements(subnet_id=subnet_id, page_size=page_size)
@@ -363,7 +419,7 @@ class NceDataProvider:
         subnet_id: Optional[str] = None,
         filters: Optional[RestNMSDataFilter] = None,
         page_size: int = 1000
-    ) -> List[NceNetworkElement]:
+    ) -> List[NceNode]:
         """
         Get network elements from Huawei NCE.
         
@@ -374,7 +430,7 @@ class NceDataProvider:
             page_size: Number of records per page.
         
         Returns:
-            List of NceNetworkElement objects.
+            List of NceNode objects.
         """
         # Build query parameters for server-side filtering
         params = []
@@ -401,8 +457,8 @@ class NceDataProvider:
         # Extract NEs from nested response
         ne_dicts = self._extract_network_elements_from_response(raw_data)
         
-        # Convert to NceNetworkElement objects
-        elements = [NceNetworkElement(item) for item in ne_dicts]
+        # Convert to NceNode objects
+        elements = [NceNode(item) for item in ne_dicts]
         
         # Apply client-side filters
         if filters:
@@ -432,7 +488,7 @@ class NceDataProvider:
         
         return self._extract_network_elements_from_response(raw_data)
     
-    def get_network_element_by_id(self, res_id: str) -> Optional[NceNetworkElement]:
+    def get_network_element_by_id(self, res_id: str) -> Optional[NceNode]:
         """
         Get a single network element by resource ID.
         
@@ -440,7 +496,7 @@ class NceDataProvider:
             res_id: Resource ID of the network element.
         
         Returns:
-            NceNetworkElement object or None if not found.
+            NceNode object or None if not found.
         """
         url = f"{self.NETWORK_ELEMENTS_ENDPOINT}/network-element/{res_id}"
         
@@ -454,9 +510,9 @@ class NceDataProvider:
                 if isinstance(page, dict):
                     ne_data = page.get('network-element')
                     if isinstance(ne_data, dict):
-                        return NceNetworkElement(ne_data)
+                        return NceNode(ne_data)
                     elif isinstance(ne_data, list) and ne_data:
-                        return NceNetworkElement(ne_data[0])
+                        return NceNode(ne_data[0])
         return None
     
     def get_alarms_count(
@@ -645,7 +701,7 @@ class NceDataProvider:
         resolve_names: bool = False,
         filters: Optional[RestNMSDataFilter] = None,
         page_size: int = 5000
-    ) -> List[NcePort]:
+    ) -> List[NceTerminationPoint]:
         """
         Get ports (LTP — Logical Termination Points) from Huawei NCE.
 
@@ -674,7 +730,7 @@ class NceDataProvider:
             page_size: Number of records per page (max 5000).
 
         Returns:
-            List of NcePort objects.
+            List of NceTerminationPoint objects.
 
         Performance:
             - All ports (no filters): ~56s for ~88K ports
@@ -732,8 +788,8 @@ class NceDataProvider:
         # Extract ports from nested response
         ltp_dicts = self._extract_ltps_from_response(raw_data)
 
-        # Convert to NcePort objects
-        ports = [NcePort(item) for item in ltp_dicts]
+        # Convert to NceTerminationPoint objects
+        ports = [NceTerminationPoint(item) for item in ltp_dicts]
 
         # Apply client-side filters
         if filters:
@@ -746,7 +802,7 @@ class NceDataProvider:
         logger.info(f"Retrieved {len(ports)} ports")
         return ports
 
-    def get_port_by_id(self, res_id: str) -> Optional[NcePort]:
+    def get_port_by_id(self, res_id: str) -> Optional[NceTerminationPoint]:
         """
         Get a single port by resource ID.
 
@@ -754,7 +810,7 @@ class NceDataProvider:
             res_id: Resource ID (UUID) of the port.
 
         Returns:
-            NcePort object or None if not found.
+            NceTerminationPoint object or None if not found.
         """
         url = f"{self.PORTS_ENDPOINT}/ltp/{res_id}"
 
@@ -767,9 +823,9 @@ class NceDataProvider:
                 if isinstance(page, dict):
                     ltp_data = page.get('ltp')
                     if isinstance(ltp_data, dict):
-                        return NcePort(ltp_data)
+                        return NceTerminationPoint(ltp_data)
                     elif isinstance(ltp_data, list) and ltp_data:
-                        return NcePort(ltp_data[0])
+                        return NceTerminationPoint(ltp_data[0])
         return None
 
     def resolve_port_names(self, ports: list) -> list:
@@ -780,7 +836,7 @@ class NceDataProvider:
         mutates the port objects in-place and returns the same list.
 
         Args:
-            ports: List of NcePort objects.
+            ports: List of NceTerminationPoint objects.
 
         Returns:
             The same list with ne_name populated.
@@ -795,7 +851,7 @@ class NceDataProvider:
 
         ne_cache = self._build_ne_name_cache()
         for port in ports:
-            port.ne_name = ne_cache.get(port.ne_id)
+            port.node_name = ne_cache.get(port.node_id)
 
         logger.info(f"Resolved NE names for {len(ports)} ports")
         return ports
@@ -817,7 +873,7 @@ class NceDataProvider:
         """
         logger.debug("Building NE name cache...")
         elements = self.get_network_elements()
-        cache = {ne.res_id: ne.name for ne in elements if ne.res_id and ne.name}
+        cache = {ne.node_id: ne.name for ne in elements if ne.node_id and ne.name}
         logger.debug(f"NE name cache built: {len(cache)} entries")
         return cache
 
@@ -857,15 +913,15 @@ class NceDataProvider:
                 try:
                     ports = self.get_ports(ne_id=ne_id)
                     for p in ports:
-                        if p.res_id and p.name:
-                            cache[p.res_id] = p.name
+                        if p.tp_id and p.name:
+                            cache[p.tp_id] = p.name
                 except Exception as e:
                     logger.warning(f"Failed to load ports for NE {ne_id}: {e}")
         else:
             # Bulk loading via get_ports() — all ports at once
             logger.debug(f"Loading ALL ports (bulk mode, {len(ne_ids)} NEs > threshold={PER_NE_THRESHOLD})")
             all_ports = self.get_ports()
-            cache = {p.res_id: p.name for p in all_ports if p.res_id and p.name}
+            cache = {p.tp_id: p.name for p in all_ports if p.tp_id and p.name}
 
         logger.debug(f"LTP name cache built: {len(cache)} entries")
         return cache
@@ -892,7 +948,7 @@ class NceDataProvider:
 
             # Pattern 2: resolve only filtered subset (faster for small sets)
             links = provider.get_links()
-            down_links = [l for l in links if l.operate_status == '1']
+            down_links = [l for l in links if l.oper_status == '1']
             provider.resolve_link_names(down_links)  # only 19 links -> per-NE loading
 
         Args:
@@ -908,14 +964,14 @@ class NceDataProvider:
         ne_ids = set()
         ltp_ids = set()
         for link in links:
-            if link.a_end_ne_id:
-                ne_ids.add(link.a_end_ne_id)
-            if link.z_end_ne_id:
-                ne_ids.add(link.z_end_ne_id)
-            if link.a_end_ltp_id:
-                ltp_ids.add(link.a_end_ltp_id)
-            if link.z_end_ltp_id:
-                ltp_ids.add(link.z_end_ltp_id)
+            if link.source_node:
+                ne_ids.add(link.source_node)
+            if link.dest_node:
+                ne_ids.add(link.dest_node)
+            if link.source_tp:
+                ltp_ids.add(link.source_tp)
+            if link.dest_tp:
+                ltp_ids.add(link.dest_tp)
 
         logger.info(f"Resolving names for {len(links)} links ({len(ne_ids)} unique NEs, {len(ltp_ids)} unique ports)")
 
@@ -927,13 +983,13 @@ class NceDataProvider:
 
         # Step 4: Populate resolved fields on each link object
         for link in links:
-            link.a_end_ne_name = ne_cache.get(link.a_end_ne_id)
-            link.z_end_ne_name = ne_cache.get(link.z_end_ne_id)
-            link.a_end_ltp_name = ltp_cache.get(link.a_end_ltp_id)
-            link.z_end_ltp_name = ltp_cache.get(link.z_end_ltp_id)
+            link.source_node_name = ne_cache.get(link.source_node)
+            link.dest_node_name = ne_cache.get(link.dest_node)
+            link.source_tp_name = ltp_cache.get(link.source_tp)
+            link.dest_tp_name = ltp_cache.get(link.dest_tp)
 
-        resolved_ne = sum(1 for l in links if l.a_end_ne_name or l.z_end_ne_name)
-        resolved_ltp = sum(1 for l in links if l.a_end_ltp_name or l.z_end_ltp_name)
+        resolved_ne = sum(1 for l in links if l.source_node_name or l.dest_node_name)
+        resolved_ltp = sum(1 for l in links if l.source_tp_name or l.dest_tp_name)
         logger.info(f"Resolved: {resolved_ne} links with NE names, {resolved_ltp} links with port names")
 
         return links
@@ -973,12 +1029,12 @@ class NceDataProvider:
 
             # With resolved names (slower, loads NE + port data)
             links = provider.get_links(resolve_names=True)
-            print(links[0].a_end_ne_name)   # "IPBB_Naryn_NE40E-1"
-            print(links[0].a_end_ltp_name)  # "GigabitEthernet1/0/0"
+            print(links[0].source_node_name)   # "IPBB_Naryn_NE40E-1"
+            print(links[0].source_tp_name)  # "GigabitEthernet1/0/0"
 
             # Efficient pattern — resolve only filtered subset
             links = provider.get_links()
-            down = [l for l in links if l.operate_status == '1']
+            down = [l for l in links if l.oper_status == '1']
             provider.resolve_link_names(down)
         """
         # Build query parameters (server-side filters)
@@ -1213,8 +1269,8 @@ class NceDataProvider:
             logger.warning(f"NE not found: {'name_a' if not nes_a else 'name_b'}")
             return []
 
-        id_a = nes_a[0].res_id
-        id_b = nes_b[0].res_id
+        id_a = nes_a[0].node_id
+        id_b = nes_b[0].node_id
 
         # Query both directions (NCE links are directional: a-end -> z-end)
         links_ab = self.get_links(a_end_ne_id=id_a, z_end_ne_id=id_b,
@@ -1223,11 +1279,11 @@ class NceDataProvider:
                                    resolve_names=resolve_names, filters=filters)
 
         # Deduplicate by res_id (shouldn't overlap, but just in case)
-        seen = {l.res_id for l in links_ab}
+        seen = {l.link_id for l in links_ab}
         for l in links_ba:
-            if l.res_id not in seen:
+            if l.link_id not in seen:
                 links_ab.append(l)
-                seen.add(l.res_id)
+                seen.add(l.link_id)
 
         logger.info(f"Links between '{name_a}' and '{name_b}': {len(links_ab)}")
         return links_ab
@@ -1273,7 +1329,7 @@ class NceDataProvider:
             logger.warning(f"NE '{name}' not found")
             return []
 
-        ne_id = nes[0].res_id
+        ne_id = nes[0].node_id
 
         # Get all links where this NE is source or sink
         links_out = self.get_links(a_end_ne_id=ne_id, resolve_names=resolve_names, filters=filters)
@@ -1281,22 +1337,22 @@ class NceDataProvider:
 
         # Merge and deduplicate
         all_links = list(links_out)
-        seen = {l.res_id for l in all_links}
+        seen = {l.link_id for l in all_links}
         for l in links_in:
-            if l.res_id not in seen:
+            if l.link_id not in seen:
                 all_links.append(l)
-                seen.add(l.res_id)
+                seen.add(l.link_id)
 
         # Group by neighbor NE
         # For each link, the neighbor is the "other end"
         neighbors_map: Dict[str, dict] = {}
         for link in all_links:
-            if link.a_end_ne_id == ne_id:
-                neighbor_id = link.z_end_ne_id
-                neighbor_name = link.z_end_ne_name
+            if link.source_node == ne_id:
+                neighbor_id = link.dest_node
+                neighbor_name = link.dest_node_name
             else:
-                neighbor_id = link.a_end_ne_id
-                neighbor_name = link.a_end_ne_name
+                neighbor_id = link.source_node
+                neighbor_name = link.source_node_name
 
             if neighbor_id not in neighbors_map:
                 neighbors_map[neighbor_id] = {
@@ -1362,13 +1418,13 @@ class NceDataProvider:
             logger.warning(f"No NEs found in subnet '{subnet_name_or_id}'")
             return []
 
-        ne_ids = {ne.res_id for ne in subnet_nes}
+        ne_ids = {ne.node_id for ne in subnet_nes}
         logger.info(f"Subnet '{subnet_name_or_id}': {len(ne_ids)} NEs")
 
         # Get all links and filter by subnet NEs (both ends must be in subnet)
         all_links = self.get_links(resolve_names=resolve_names, filters=filters)
         subnet_links = [l for l in all_links
-                        if l.a_end_ne_id in ne_ids and l.z_end_ne_id in ne_ids]
+                        if l.source_node in ne_ids and l.dest_node in ne_ids]
 
         logger.info(f"Links in subnet '{subnet_name_or_id}': {len(subnet_links)} (from {len(all_links)} total)")
         return subnet_links
@@ -1377,7 +1433,7 @@ class NceDataProvider:
         self,
         ipv4: str,
         ne_id: Optional[str] = None,
-    ) -> List[NcePort]:
+    ) -> List[NceTerminationPoint]:
         """
         Find port(s) by IPv4 address.
 
@@ -1393,7 +1449,7 @@ class NceDataProvider:
             ne_id: Optional NE UUID to narrow the search.
 
         Returns:
-            List of NcePort objects with matching addrv4.
+            List of NceTerminationPoint objects with matching addrv4.
 
         Performance:
             - With ne_id: ~0.12s (50-100 ports per NE)
@@ -1414,25 +1470,25 @@ class NceDataProvider:
                            "Provide ne_id for better performance.")
             ports = self.get_ports()
 
-        matching = [p for p in ports if p.addrv4 == ipv4]
+        matching = [p for p in ports if p.ipv4_address == ipv4]
         logger.info(f"Ports with IP {ipv4}: {len(matching)} (searched {len(ports)} ports)")
         return matching
 
-    def get_trunk_members(self, port: NcePort) -> List[NcePort]:
+    def get_trunk_members(self, port: NceTerminationPoint) -> List[NceTerminationPoint]:
         """
         Get physical member ports of an Eth-Trunk (LAG) interface.
 
         Eth-Trunk is a logical aggregation of multiple physical ports.
         Member ports reference their trunk via the trunk_ltp_id field:
-            member.trunk_ltp_id == trunk.res_id
+            member.trunk_ltp_id == trunk.tp_id
 
         If the port is already physical (is_physical=True), returns empty list.
 
         Args:
-            port: NcePort object (typically an Eth-Trunk).
+            port: NceTerminationPoint object (typically an Eth-Trunk).
 
         Returns:
-            List of NcePort objects — the physical member ports.
+            List of NceTerminationPoint objects — the physical member ports.
             Empty list if port is physical or has no members.
 
         Performance: ~0.12s (loads ports for the NE via ne-id server-side filter).
@@ -1446,14 +1502,14 @@ class NceDataProvider:
         if port.is_physical:
             return []
 
-        if not port.ne_id or not port.res_id:
+        if not port.node_id or not port.tp_id:
             return []
 
         # Load all ports for this NE (server-side ne-id filter)
-        ne_ports = self.get_ports(ne_id=port.ne_id)
+        ne_ports = self.get_ports(ne_id=port.node_id)
 
         # Filter: member ports whose trunk_ltp_id points to this port
-        members = [p for p in ne_ports if p.trunk_ltp_id == port.res_id]
+        members = [p for p in ne_ports if p.trunk_ltp_id == port.tp_id]
         logger.info(f"Trunk members of '{port.name}': {len(members)}")
         return members
 
@@ -1480,8 +1536,8 @@ class NceDataProvider:
         Returns:
             Dict with unified structure, or None if IP not found:
             {
-                "port": NcePort,             # the port that holds the IP
-                "physical_ports": [NcePort], # physical port(s)
+                "port": NceTerminationPoint,             # the port that holds the IP
+                "physical_ports": [NceTerminationPoint], # physical port(s)
                 "is_trunk": bool,            # True if Eth-Trunk
             }
 
@@ -1562,7 +1618,7 @@ class NceDataProvider:
         Performance: ~1-2s (2 server-side filtered alarm queries).
 
         Example:
-            down_links = [l for l in links if l.operate_status == '1']
+            down_links = [l for l in links if l.oper_status == '1']
             if down_links:
                 alarms = provider.get_alarms_for_link(down_links[0], is_cleared=False)
                 for a in alarms:
@@ -1570,16 +1626,683 @@ class NceDataProvider:
         """
         alarms = []
 
-        if link.a_end_ne_id:
-            alarms_a = self.get_alarms(resource=link.a_end_ne_id, is_cleared=is_cleared)
+        if link.source_node:
+            alarms_a = self.get_alarms(resource=link.source_node, is_cleared=is_cleared)
             alarms.extend(alarms_a)
 
-        if link.z_end_ne_id:
-            alarms_z = self.get_alarms(resource=link.z_end_ne_id, is_cleared=is_cleared)
+        if link.dest_node:
+            alarms_z = self.get_alarms(resource=link.dest_node, is_cleared=is_cleared)
             alarms.extend(alarms_z)
 
         logger.info(f"Alarms for link '{link.name}': {len(alarms)} "
-                     f"(A-end: {len(alarms_a) if link.a_end_ne_id else 0}, "
-                     f"Z-end: {len(alarms_z) if link.z_end_ne_id else 0})")
+                     f"(A-end: {len(alarms_a) if link.source_node else 0}, "
+                     f"Z-end: {len(alarms_z) if link.dest_node else 0})")
         return alarms
+
+    # ─── Performance Monitoring (DWDM Optical Power) ──────────────────
+
+    def create_pm_task(
+        self,
+        tp_id: str,
+        indicators: List[str],
+        res_type: str = 'ltp',
+        period: str = 'per15min',
+        task_name: Optional[str] = None,
+    ) -> Optional[str]:
+        """
+        Create a Performance Monitoring task for a port or board.
+
+        PM tasks must be created before querying realtime or historical PM data.
+        Uses Vendor Specific Raw PM API (huawei-nce-common-pm-rawdata).
+
+        Note:
+            This API only works on OCH ports of OptiX OSN 9800 M24
+            (U5N402 boards). For optical power on ALL DWDM port types
+            (amplifiers, FIU, OAU, AST2, etc.) without task creation,
+            use get_eml_pm_for_board() / get_eml_pm_for_ne() instead.
+
+        Args:
+            tp_id: Resource UUID — port tp_id (for optical power) or
+                   board card-id (for temperature/CPU).
+            indicators: List of indicator names to monitor. Examples:
+                Optical: ["Cur Total Input Optical Power", "Cur Total Output Optical Power"]
+                Signal:  ["Average ESNR", "Q Value", "Pre-FEC BER"]
+                Health:  ["Temperature", "Bias Current", "Voltage"]
+                Board:   ["Temperature", "Current CPU Usage"]
+            res_type: Resource type — "ltp" for ports, "card" for boards.
+            period: Collection period. Values: "per15min" (default), "per5min",
+                    "hourly", "daily", etc.
+            task_name: Optional descriptive name. Auto-generated if not provided.
+
+        Returns:
+            task_id (str) on success, None on failure.
+
+        Performance: ~0.5s
+
+        Example:
+            task_id = provider.create_pm_task(
+                "50f03c06-c1a4-11ea-9050-b008759ca873",
+                ["Cur Total Input Optical Power", "Temperature"]
+            )
+            # Then query: provider.get_realtime_pm(["50f03c06-..."])
+        """
+        import uuid
+        task_id = str(uuid.uuid4())
+        if not task_name:
+            task_name = f"pynetcom-pm-{res_type}-{tp_id[:8]}"
+
+        body = {
+            "huawei-nce-common-pm-rawdata:input": {
+                "monitor-tasks": [{
+                    "task-id": task_id,
+                    "task-name": task_name,
+                    "res-type-name": res_type,
+                    "res-id": tp_id,
+                    "task-cfg": {
+                        "period": period,
+                        "indicators": {
+                            "indicator": [{"indicator-id": ind} for ind in indicators]
+                        }
+                    }
+                }]
+            }
+        }
+
+        result = self.client.send_post_request(self.PM_CREATE_URL, body)
+        if not result or result is False:
+            logger.error(f"Failed to create PM task for {tp_id}")
+            return None
+
+        # Check for errors in response
+        errors = result.get('errors', result.get('ietf-restconf:errors'))
+        if errors:
+            err_msg = str(errors)[:200]
+            logger.error(f"PM task creation error: {err_msg}")
+            return None
+
+        logger.info(f"Created PM task {task_id} for {res_type} {tp_id}")
+        return task_id
+
+    def get_realtime_pm(self, tp_ids: List[str]) -> List[dict]:
+        """
+        Query realtime Performance Monitoring data for ports or boards.
+
+        Returns current PM values (optical power, temperature, etc.).
+        PM task must be created first via create_pm_task().
+
+        Args:
+            tp_ids: List of resource UUIDs (max 10). Port tp_id or board card-id.
+
+        Returns:
+            List of dicts, each containing:
+            {
+                "res_id": "uuid",
+                "res_name": "DWDM-Node-Shelf0-3-U5N402-1-OCH:1",
+                "device_name": "DWDM-Node-01",
+                "collect_time": "2026-04-08T11:00:00.000Z",
+                "indicators": [
+                    {"id": "Cur Total Input Optical Power", "value": -10.8, "unit": "dBm"},
+                    {"id": "Temperature", "value": 61.6, "unit": "Celsius"}
+                ]
+            }
+            Empty list if no PM data available.
+
+        Example:
+            pm = provider.get_realtime_pm(["50f03c06-c1a4-..."])
+            for record in pm:
+                for ind in record["indicators"]:
+                    print(f"{ind['id']}: {ind['value']} {ind['unit']}")
+        """
+        body = {"huawei-nce-common-pm-rawdata:input": {"res-ids": tp_ids}}
+        result = self.client.send_post_request(self.PM_REALTIME_URL, body)
+        return self._parse_pm_response(result)
+
+    def get_historical_pm(
+        self,
+        tp_ids: List[str],
+        period: str = 'per15min',
+        start_time: Optional[datetime] = None,
+        end_time: Optional[datetime] = None,
+    ) -> List[dict]:
+        """
+        Query historical Performance Monitoring data.
+
+        Args:
+            tp_ids: Resource UUIDs (max 10).
+            period: "per15min" (max 1 day range) or "daily" (max 1 month range).
+            start_time: Start of query period (UTC).
+            end_time: End of query period (UTC).
+
+        Returns:
+            Same format as get_realtime_pm(), but may contain multiple
+            records per resource (one per collection interval).
+        """
+        body = {"huawei-nce-common-pm-rawdata:input": {
+            "res-ids": tp_ids,
+            "period": period,
+            "start-time": self._format_datetime_for_api(start_time) if start_time else None,
+            "end-time": self._format_datetime_for_api(end_time) if end_time else None,
+        }}
+        # Remove None values
+        inp = body["huawei-nce-common-pm-rawdata:input"]
+        body["huawei-nce-common-pm-rawdata:input"] = {k: v for k, v in inp.items() if v is not None}
+
+        result = self.client.send_post_request(self.PM_HISTORICAL_URL, body)
+        return self._parse_pm_response(result)
+
+    def get_pm_tasks(self, tp_ids: List[str]) -> List[dict]:
+        """
+        Query existing PM monitoring tasks for resources.
+
+        Args:
+            tp_ids: Resource UUIDs to check for PM tasks.
+
+        Returns:
+            List of task dicts: [{task_id, task_name, task_status, res_type, res_id}]
+        """
+        body = {"huawei-nce-common-pm-rawdata:input": {"res-ids": tp_ids}}
+        result = self.client.send_post_request(self.PM_QUERY_TASKS_URL, body)
+        if not result or isinstance(result, bool):
+            return []
+        tasks = result.get('huawei-nce-common-pm-rawdata:output', {}).get('monitor-task', [])
+        return [{
+            'task_id': t.get('task-id'),
+            'task_name': t.get('task-name'),
+            'task_status': t.get('task-status'),
+            'res_type': t.get('res-type-name'),
+            'res_id': t.get('res-id'),
+        } for t in tasks]
+
+    def get_pm_tasks_for_ne(self, ne_name: str) -> List[dict]:
+        """
+        Get all existing PM tasks for a network element.
+
+        Automatically fetches NE ports and queries PM tasks in batches of 100.
+
+        Args:
+            ne_name: NE name.
+
+        Returns:
+            List of PM task dicts (same as get_pm_tasks).
+        """
+        nes = self.get_network_elements(name=ne_name)
+        if not nes:
+            return []
+        ports = self.get_ports(ne_id=nes[0].node_id)
+        if not ports:
+            return []
+
+        all_tasks = []
+        tp_ids = [p.tp_id for p in ports if p.tp_id]
+        # Query in batches of 100
+        for i in range(0, len(tp_ids), 100):
+            batch = tp_ids[i:i+100]
+            tasks = self.get_pm_tasks(batch)
+            all_tasks.extend(tasks)
+
+        logger.info(f"PM tasks for NE '{ne_name}': {len(all_tasks)}")
+        return all_tasks
+
+    def delete_pm_tasks(self, task_ids: List[str]) -> bool:
+        """
+        Delete PM monitoring tasks.
+
+        Args:
+            task_ids: List of task UUIDs to delete.
+
+        Returns:
+            True on success.
+        """
+        body = {
+            "huawei-nce-common-pm-rawdata:input": {
+                "task-ids": task_ids
+            }
+        }
+        result = self.client.send_post_request(self.PM_DELETE_TASKS_URL, body)
+        if result and not result.get('errors'):
+            logger.info(f"Deleted {len(task_ids)} PM tasks")
+            return True
+        return False
+
+    def _parse_pm_response(self, result) -> List[dict]:
+        """Parse PM API response into clean list of dicts."""
+        if not result or isinstance(result, bool):
+            return []
+        if result.get('errors') or result.get('ietf-restconf:errors'):
+            return []
+        pm_data = (result.get('huawei-nce-common-pm-rawdata:output', {})
+                   .get('pm-datas', {}).get('pm-data', []))
+        if not pm_data:
+            return []
+        parsed = []
+        for pm in pm_data:
+            indicators = []
+            for ind in pm.get('indicator-datas', {}).get('indicator-data', []):
+                value = ind.get('indicator-double-value',
+                        ind.get('indicator-integer-value',
+                        ind.get('indicator-string-value')))
+                indicators.append({
+                    'id': ind.get('indicator-id'),
+                    'value': value,
+                    'unit': ind.get('indicator-value-unit', ''),
+                })
+            parsed.append({
+                'res_id': pm.get('res-id'),
+                'res_name': pm.get('res-name'),
+                'device_name': pm.get('device-name'),
+                'collect_time': pm.get('collect-time'),
+                'indicators': indicators,
+            })
+        return parsed
+
+    # ─── EML Performance Service (works on ALL DWDM port types) ────────
+
+    def get_eml_pm_for_board(
+        self,
+        ne_physical_id: int,
+        shelf: int,
+        slot: int,
+        ports: List[int],
+        indicators: Optional[List[int]] = None,
+        granularity: str = '15min',
+        sub_card_id: int = 1,
+    ) -> Dict[int, Dict[int, Tuple[str, str]]]:
+        """
+        Query EML Performance Service current PM data for a single board.
+
+        Uses /rest/emlperfservice/v1/trans/querycurdata — works on ALL DWDM
+        boards (OCH, WDM, OTS, OMS, OAU, AST2, FIU) WITHOUT requiring PM tasks
+        or PM license. Returns the same data shown in NCE GUI WDM Performance.
+
+        Recommended approach for DWDM optical power monitoring:
+            1. get_eml_pm_for_board() / get_eml_pm_for_ne() — current levels
+            2. get_reference_power() — baseline expected levels
+            3. get_optical_power_thresholds() — alarm thresholds
+        These three methods provide complete optical health assessment
+        without PM task creation.
+
+        The API requires physical IDs (NOT UUIDs):
+          - ne_physical_id: int from ne.vendor_specific_info['physical-id']
+          - shelf: from port.vendor_specific_info['frame-number']
+          - slot: from port.vendor_specific_info['slot-number']
+          - ports: list of port.vendor_specific_info['port-number']
+
+        Constraints (enforced by NCE):
+          - One board per request (this method's design)
+          - granularity: only "15min" or "24hour"
+          - indicators must be non-empty
+          - Max ~200 indicators per HTTP request (auto-chunked)
+
+        Args:
+            ne_physical_id: Physical NE ID (int).
+            shelf: Shelf/frame number (usually 0).
+            slot: Board slot number.
+            ports: List of physical port numbers to query.
+            indicators: List of pmParameterIds (NCE-internal codes).
+                Defaults to EML_PM_OPTICAL_DEFAULT (188-215).
+                See EML_PM_INDICATORS for known IDs.
+            granularity: '15min' (default) or '24hour'.
+            sub_card_id: Subboard ID, usually 1 (any value works).
+
+        Returns:
+            dict: {port_number: {param_id: (value_str, unit_str)}}
+            Empty dict if board not found or no PM data available.
+
+        Example:
+            # Sarysogot AST2 board (slot 4), ports 1 and 2 (Gazprom/Karakul)
+            pm = provider.get_eml_pm_for_board(638829, 0, 4, [1, 2])
+            for port_num, params in pm.items():
+                input_power = params.get(201)  # LSIOPCUR
+                if input_power:
+                    print(f"Port {port_num}: input={input_power[0]} {input_power[1]}")
+            # Output:
+            #   Port 1: input=-18.00 dBm
+            #   Port 2: input=-35.20 dBm
+        """
+        if indicators is None:
+            indicators = list(self.EML_PM_OPTICAL_DEFAULT)
+        if not ports:
+            return {}
+
+        # Chunk indicators if too many (HTTP 413 limit ~200)
+        CHUNK_SIZE = 180
+        chunks = [indicators[i:i + CHUNK_SIZE] for i in range(0, len(indicators), CHUNK_SIZE)]
+
+        merged: Dict[int, Dict[int, Tuple[str, str]]] = {}
+
+        for chunk in chunks:
+            body = {
+                "monitoringObjects": {
+                    "neId": int(ne_physical_id),
+                    "shelfId": int(shelf),
+                    "boardId": int(slot),
+                    "subCardId": int(sub_card_id),
+                    "physicalPortId": [int(p) for p in ports],
+                },
+                "granularitys": granularity,
+                "pmParameterIds": chunk,
+            }
+
+            result = self.client.send_post_request(self.EML_PM_CUR_URL, body)
+            if not result or isinstance(result, bool):
+                continue
+
+            ec = result.get('errorCode')
+            if ec != 0:
+                logger.debug(
+                    f"EML PM error for ne={ne_physical_id} shelf={shelf} slot={slot}: "
+                    f"errorCode={ec} msg={result.get('errorMessage', '')}"
+                )
+                continue
+
+            # pmStartTime=0 means board not found at this shelf/slot
+            if not result.get('pmStartTime'):
+                continue
+
+            for port_data in result.get('physicalPort', []):
+                port_id = port_data.get('physicalPortID')
+                if port_id is None:
+                    continue
+                merged.setdefault(port_id, {})
+                for d in port_data.get('listPMData', []):
+                    param_id = d.get('pmParameterId')
+                    value = d.get('value', '')
+                    unit = d.get('unit', '')
+                    if param_id is not None:
+                        merged[port_id][param_id] = (value, unit)
+
+        return merged
+
+    def get_eml_pm_for_ports(
+        self,
+        ports: List['NceTerminationPoint'],
+        ne_physical_id: int,
+        indicators: Optional[List[int]] = None,
+        granularity: str = '15min',
+    ) -> Dict[str, Dict[int, Tuple[str, str]]]:
+        """
+        Query EML PM for a specific list of ports (must all be from one NE).
+
+        Convenience wrapper that:
+        - Groups ports by board (frame-number, slot-number) automatically
+        - Issues one EML query per (shelf, slot) combination
+        - Maps results back to port tp_ids (UUIDs) for easy lookup
+
+        Args:
+            ports: List of NceTerminationPoint objects from the same NE.
+                   Each port must have frame-number, slot-number, port-number
+                   in vendor_specific_info.
+            ne_physical_id: Physical ID of the NE these ports belong to.
+            indicators: List of pmParameterIds. Defaults to EML_PM_OPTICAL_DEFAULT.
+            granularity: '15min' or '24hour'.
+
+        Returns:
+            dict: {tp_id (UUID): {param_id: (value, unit)}}
+            Only includes ports for which the API returned data.
+        """
+        if not ports:
+            return {}
+
+        # Group ports by (shelf, slot)
+        boards: Dict[Tuple[int, int], List[Tuple[int, str]]] = {}
+        for p in ports:
+            vsi = p.vendor_specific_info or {}
+            shelf = vsi.get('frame-number')
+            slot = vsi.get('slot-number')
+            port_num = vsi.get('port-number')
+            if shelf is None or slot is None or port_num is None:
+                continue
+            try:
+                key = (int(shelf), int(slot))
+                boards.setdefault(key, []).append((int(port_num), p.tp_id))
+            except (ValueError, TypeError):
+                continue
+
+        # Reverse map: (shelf, slot, port_number) -> tp_id
+        port_to_tpid: Dict[Tuple[int, int, int], str] = {}
+        for (shelf, slot), port_list in boards.items():
+            for port_num, tp_id in port_list:
+                port_to_tpid[(shelf, slot, port_num)] = tp_id
+
+        result: Dict[str, Dict[int, Tuple[str, str]]] = {}
+
+        for (shelf, slot), port_list in boards.items():
+            unique_port_nums = sorted({pn for pn, _ in port_list})
+            board_pm = self.get_eml_pm_for_board(
+                ne_physical_id=ne_physical_id,
+                shelf=shelf,
+                slot=slot,
+                ports=unique_port_nums,
+                indicators=indicators,
+                granularity=granularity,
+            )
+            for port_num, params in board_pm.items():
+                tp_id = port_to_tpid.get((shelf, slot, port_num))
+                if tp_id and params:
+                    result[tp_id] = params
+
+        return result
+
+    def get_eml_pm_for_ne(
+        self,
+        ne: 'NceNode',
+        port_filter: Optional[Callable[['NceTerminationPoint'], bool]] = None,
+        indicators: Optional[List[int]] = None,
+        granularity: str = '15min',
+    ) -> Dict[str, Dict[int, Tuple[str, str]]]:
+        """
+        Query EML PM for all (or filtered) ports on a network element.
+
+        Automatically:
+        - Reads physical-id from ne.vendor_specific_info
+        - Fetches all ports for the NE
+        - Filters to physical ports by default (or use custom filter)
+        - Groups by board and queries each board separately
+
+        Args:
+            ne: NceNode object (must have physical-id in vendor_specific_info).
+            port_filter: Optional callable filter(port) -> bool.
+                Default: only physical ports (p.is_physical is True).
+                Pass `lambda p: True` to include all ports.
+            indicators: List of pmParameterIds. Defaults to EML_PM_OPTICAL_DEFAULT.
+            granularity: '15min' or '24hour'.
+
+        Returns:
+            dict: {tp_id (UUID): {param_id: (value, unit)}}
+
+        Raises:
+            ValueError: if ne has no physical-id (e.g. virtual NE).
+
+        Example:
+            ne = provider.get_network_elements(name='Sarysogot')[0]
+            pm = provider.get_eml_pm_for_ne(ne)
+            for tp_id, params in pm.items():
+                input_power = params.get(201)
+                if input_power:
+                    print(f"Port {tp_id[:8]}: {input_power[0]} {input_power[1]}")
+        """
+        physical_id = (ne.vendor_specific_info or {}).get('physical-id')
+        if physical_id is None:
+            raise ValueError(
+                f"NE '{ne.name}' has no physical-id; cannot query EML PM. "
+                f"Virtual NEs are not supported."
+            )
+
+        all_ports = self.get_ports(ne_id=ne.node_id)
+
+        if port_filter is None:
+            filtered = [p for p in all_ports if p.is_physical]
+        else:
+            filtered = [p for p in all_ports if port_filter(p)]
+
+        return self.get_eml_pm_for_ports(
+            ports=filtered,
+            ne_physical_id=int(physical_id),
+            indicators=indicators,
+            granularity=granularity,
+        )
+
+    # ─── Optical Power Thresholds & Reference ──────────────────────────
+
+    def get_optical_power_thresholds(
+        self,
+        tp_ids: List[str],
+    ) -> Dict[str, dict]:
+        """
+        Query optical power levels and alarm thresholds for ports.
+
+        Uses ietf-trans-oam:query-optical-power — returns current input/output
+        power and configured alarm thresholds in a single call. Auto-batches
+        in groups of 20 TPs (API limit).
+
+        No PM task creation needed, works on all active port types.
+        Passive boards (FIU) return no data — use the active board tp_id.
+
+        Args:
+            tp_ids: List of termination point UUIDs.
+
+        Returns:
+            dict: {tp_id: {
+                'input_power': float or None,
+                'output_power': float or None,
+                'input_lower_threshold': float or None,
+                'input_upper_threshold': float or None,
+                'output_lower_threshold': float or None,
+                'output_upper_threshold': float or None,
+            }}
+            Only includes TPs that returned data.
+
+        Example:
+            thresholds = provider.get_optical_power_thresholds([tp1, tp2])
+            t = thresholds.get(tp1)
+            if t:
+                print(f"Input: {t['input_power']} dBm")
+                print(f"Alarm range: [{t['input_lower_threshold']}..{t['input_upper_threshold']}]")
+        """
+        BATCH_SIZE = 20
+        result: Dict[str, dict] = {}
+
+        for i in range(0, len(tp_ids), BATCH_SIZE):
+            batch = tp_ids[i:i + BATCH_SIZE]
+            body = {
+                "ietf-trans-oam:input": {
+                    "tp-list": [{"tp-id": tp} for tp in batch]
+                }
+            }
+            resp = self.client.send_post_request(self.OPTICAL_POWER_URL, body)
+            if not resp or isinstance(resp, bool):
+                continue
+            for op in (resp.get('ietf-trans-oam:output', {})
+                           .get('optical-power', [])):
+                tp = op.get('tp-id')
+                pw = op.get('optical-power', {})
+                if tp:
+                    result[tp] = {
+                        'input_power': pw.get('input-power'),
+                        'output_power': pw.get('output-power'),
+                        'input_lower_threshold': pw.get('input-power-lower-threshold'),
+                        'input_upper_threshold': pw.get('input-power-upper-threshold'),
+                        'output_lower_threshold': pw.get('output-power-lower-threshold'),
+                        'output_upper_threshold': pw.get('output-power-upper-threshold'),
+                    }
+
+        return result
+
+    def get_reference_power(
+        self,
+        tp_ids: List[str],
+        ne_ids: Dict[str, str],
+        network_id: Optional[str] = None,
+    ) -> Dict[str, float]:
+        """
+        Query reference (baseline) input power for optical ports.
+
+        Uses ACTN Topology TP endpoint to read the expected input power
+        level configured during commissioning. One GET request per TP
+        (no batch endpoint available).
+
+        Args:
+            tp_ids: List of termination point UUIDs.
+            ne_ids: Mapping {tp_id: ne_uuid}. Required to build ACTN URL.
+            network_id: ACTN network UUID. Auto-discovered if not provided
+                (queries /restconf/v2/data/ietf-network:networks).
+
+        Returns:
+            dict: {tp_id: reference_power_float}
+            Only includes TPs where reference power is configured.
+
+        Example:
+            refs = provider.get_reference_power(
+                [tp1, tp2],
+                ne_ids={tp1: ne_id, tp2: ne_id}
+            )
+            if tp1 in refs:
+                print(f"Reference: {refs[tp1]} dBm")
+        """
+        if not tp_ids or not ne_ids:
+            return {}
+
+        # Auto-discover ACTN network ID
+        if not network_id:
+            network_id = self._discover_actn_network_id()
+            if not network_id:
+                logger.warning("Could not discover ACTN network ID")
+                return {}
+
+        result: Dict[str, float] = {}
+        seen = set()
+
+        for tp_id in tp_ids:
+            if tp_id in seen:
+                continue
+            seen.add(tp_id)
+
+            ne_id = ne_ids.get(tp_id)
+            if not ne_id:
+                continue
+
+            url = (f"{self.client.API_NCE_HOST}"
+                   f"/restconf/v2/data/ietf-network:networks"
+                   f"/network={network_id}"
+                   f"/node={ne_id}"
+                   f"/ietf-network-topology:termination-point={tp_id}")
+            try:
+                r = self.client.session.get(
+                    url, headers=self.client.header, verify=False)
+                if r.status_code != 200:
+                    continue
+                tps = r.json().get(
+                    'ietf-network-topology:termination-point', [])
+                if tps:
+                    otn = (tps[0].get('ietf-te-topology:te', {})
+                                 .get('otn-specific-info', {}))
+                    ref = otn.get('input-reference-power')
+                    if ref is not None:
+                        result[tp_id] = float(ref)
+            except Exception:
+                continue
+
+        return result
+
+    def _discover_actn_network_id(self) -> Optional[str]:
+        """Discover the ACTN network UUID (first available network)."""
+        if hasattr(self, '_actn_network_id_cache'):
+            return self._actn_network_id_cache
+
+        url = (f"{self.client.API_NCE_HOST}"
+               f"{self.ACTN_NETWORKS_URL}"
+               f"?limit=5&fields=network-id")
+        try:
+            r = self.client.session.get(
+                url, headers=self.client.header, verify=False)
+            if r.status_code == 200:
+                nets = (r.json().get('ietf-network:networks', {})
+                                .get('network', []))
+                if nets:
+                    nid = nets[0].get('network-id')
+                    self._actn_network_id_cache = nid
+                    return nid
+        except Exception:
+            pass
+        return None
 

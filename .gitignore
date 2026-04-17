@@ -17,3 +17,14 @@ examples/nokia_nsp_test.py
 examples/huawei_nce_topology_test.py
 examples/huawei_nce_ports_test.py
 docs/iMaster NCE-IP V100R023C00 Northbound REST API Guide 06.pdf
+examples/huawei_nce_topology_enrichment_test.py
+actn_extracted.txt
+vendor_extracted.txt
+docx_extracted.txt
+dwdm_topology.html
+docs/internal/
+examples/test_eml_pm.py
+examples/huawei_nce_dwdm_test.py
+examples/generate_dwdm_topology.py
+examples/nokia_nsp_topology_test.py
+.claude/

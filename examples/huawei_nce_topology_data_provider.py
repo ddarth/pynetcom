@@ -173,16 +173,16 @@ def example_get_links_by_ne():
         return
 
     ne = elements[0]
-    print(f"NE: {ne.name} (res_id={ne.res_id})")
+    print(f"NE: {ne.name} (res_id={ne.node_id})")
 
     # Get links where this NE is the source (a-end)
-    links = provider.get_links(a_end_ne_id=ne.res_id)
+    links = provider.get_links(a_end_ne_id=ne.node_id)
     print(f"Links from this NE: {len(links)}")
     for link in links[:5]:
         print(f"  {link.brief()}")
 
     # Get links where this NE is the sink (z-end)
-    links_sink = provider.get_links(z_end_ne_id=ne.res_id)
+    links_sink = provider.get_links(z_end_ne_id=ne.node_id)
     print(f"\nLinks to this NE: {len(links_sink)}")
     for link in links_sink[:5]:
         print(f"  {link.brief()}")
@@ -296,7 +296,7 @@ def example_resolve_names_inline():
     When resolve_names=True is passed, the provider automatically:
     1. Fetches all NE names (~1-2s)
     2. Fetches port names (bulk: ~56s for all, or per-NE: ~0.2s each for <=10 NEs)
-    3. Populates a_end_ne_name, z_end_ne_name, a_end_ltp_name, z_end_ltp_name
+    3. Populates source_node_name, dest_node_name, source_tp_name, dest_tp_name
 
     After resolution, brief() and details() show names alongside UUIDs.
     """
@@ -311,12 +311,12 @@ def example_resolve_names_inline():
     ne_name = API_NCE_NE_NAME
     elements = provider.get_network_elements(name=ne_name)
     if elements:
-        links = provider.get_links(a_end_ne_id=elements[0].res_id, resolve_names=True)
+        links = provider.get_links(a_end_ne_id=elements[0].node_id, resolve_names=True)
         print(f"Links from '{ne_name}' (resolved): {len(links)}")
         for link in links[:5]:
             print(f"  {link.brief()}")
-            print(f"    A-End: {link.a_end_ne_name} / {link.a_end_ltp_name}")
-            print(f"    Z-End: {link.z_end_ne_name} / {link.z_end_ltp_name}")
+            print(f"    Source: {link.source_node_name} / {link.source_tp_name}")
+            print(f"    Dest: {link.dest_node_name} / {link.dest_tp_name}")
 
     client.close()
 
@@ -345,7 +345,7 @@ def example_resolve_names_separate():
     print(f"Total links: {len(links)}")
 
     # Step 2: Filter to down links only
-    down = [l for l in links if l.operate_status == '1']
+    down = [l for l in links if l.oper_status == '1']
     print(f"Down links: {len(down)}")
 
     # Step 3: Resolve names only for down links
@@ -353,8 +353,8 @@ def example_resolve_names_separate():
 
     for link in down[:5]:
         print(f"  {link.brief()}")
-        print(f"    A-End NE: {link.a_end_ne_name}, Port: {link.a_end_ltp_name}")
-        print(f"    Z-End NE: {link.z_end_ne_name}, Port: {link.z_end_ltp_name}")
+        print(f"    Source NE: {link.source_node_name}, Port: {link.source_tp_name}")
+        print(f"    Dest NE: {link.dest_node_name}, Port: {link.dest_tp_name}")
 
     client.close()
 

@@ -5,9 +5,12 @@ Nokia NSP specific data containers.
 from typing import Dict, Any, Optional
 from datetime import datetime
 
+from typing import List
+
 from pynetcom.utils.helpers.rest_api.data_containers.base import (
     BaseAlarm,
-    BaseNetworkElement,
+    BaseInterface,
+    BaseNode,
     parse_datetime,
 )
 
@@ -163,64 +166,111 @@ class NspAlarm(BaseAlarm):
         return '\n'.join(lines)
 
 
-class NspNetworkElement(BaseNetworkElement):
+class NspNode(BaseNode):
     """
-    Nokia NSP network element data container.
-    
-    Extends BaseNetworkElement with NSP-specific fields.
+    Nokia NSP network element as RFC 8345 Node.
+
+    API: GET /NetworkSupervision/rest/api/v1/networkElements
+    Maps NSP camelCase fields to BaseNode standard fields.
+    NSP-specific fields (siteId, clliCode, macAddress, etc.) go to vendor_specific_info.
     """
-    
-    # NSP-specific fields
-    ne_id: Optional[str] = None
-    version: Optional[str] = None
-    product: Optional[str] = None
-    site_id: Optional[str] = None
-    site_name: Optional[str] = None
-    deployment_state: Optional[str] = None
-    communication_state: Optional[str] = None
-    topology_group: Optional[str] = None
-    
-    # Field mapping: API -> Python
-    _field_mapping = {
-        'name': 'name',
-        'ipAddress': 'ip_address',
-        'type': 'element_type',
-        'managedState': 'managed_state',
-        'neId': 'ne_id',
-        'version': 'version',
-        'product': 'product',
-        'siteId': 'site_id',
-        'siteName': 'site_name',
-        'deploymentState': 'deployment_state',
-        'communicationState': 'communication_state',
-        'topologyGroup': 'topology_group',
-    }
-    
+
     def _populate_from_data(self, data: Dict[str, Any]) -> None:
-        """Populate fields from NSP API data."""
-        for api_field, python_field in self._field_mapping.items():
-            setattr(self, python_field, data.get(api_field))
-    
-    def details(self) -> str:
-        """Get detailed multi-line representation with NSP-specific fields."""
-        lines = [
-            "=" * 60,
-            f"Nokia NSP Network Element: {self.name or 'N/A'}",
-            "=" * 60,
-            f"  NE ID:              {self.ne_id or 'N/A'}",
-            f"  IP Address:         {self.ip_address or 'N/A'}",
-            f"  Type:               {self.element_type or 'N/A'}",
-            f"  Product:            {self.product or 'N/A'}",
-            f"  Version:            {self.version or 'N/A'}",
-            "-" * 60,
-            f"  Managed State:      {self.managed_state or 'N/A'}",
-            f"  Deployment State:   {self.deployment_state or 'N/A'}",
-            f"  Communication State:{self.communication_state or 'N/A'}",
-            "-" * 60,
-            f"  Topology Group:     {self.topology_group or 'N/A'}",
-            f"  Site ID:            {self.site_id or 'N/A'}",
-            f"  Site Name:          {self.site_name or 'N/A'}",
-            "=" * 60,
-        ]
-        return '\n'.join(lines)
+        # BaseNode standard fields
+        self.node_id = data.get('neId') or data.get('ipAddress')
+        self.name = data.get('name') or data.get('neName')
+        self.management_address = data.get('ipAddress')
+        self.platform_type = data.get('type')
+        self.platform_vendor = 'Nokia'
+        self.software_version = data.get('version')
+        self.oper_status = data.get('communicationState')
+        self.admin_status = data.get('adminState')
+        self.topology_group = data.get('topologyGroup')
+
+        # NSP-specific → vendor_specific_info
+        self.vendor_specific_info = {
+            'fdn': data.get('fdn'),
+            'neId': data.get('neId'),
+            'product': data.get('product'),
+            'managedState': data.get('managedState'),
+            'resyncState': data.get('resyncState'),
+            'operState': data.get('operState'),
+            'standbyState': data.get('standbyState'),
+            'networkType': data.get('networkType'),
+            'macAddress': data.get('macAddress'),
+            'clliCode': data.get('clliCode'),
+            'location': data.get('location'),
+            'longitude': data.get('longitude'),
+            'latitude': data.get('latitude'),
+            'sourceType': data.get('sourceType'),
+            'sourceSystem': data.get('sourceSystem'),
+        }
+
+
+class NspInterface(BaseInterface):
+    """
+    Nokia NSP L3 router interface as OpenConfig Interface.
+
+    Source: NETCONF get-config to device at:
+        /configure/router[router-name='Base']/interface
+
+    Optionally enriched with state data from NETCONF get:
+        /state/router/interface[interface-name='...']/...
+        → oper_status, protocols, neighbor IP/MAC
+
+    The data dict passed to __init__ should have keys:
+        interface-name, port, ipv4 (with primary.address/prefix-length)
+    And optionally (from state):
+        oper-state, protocol, neighbor-address, neighbor-mac
+
+    Example:
+        iface = NspInterface({
+            'interface-name': 'NE1-NE2',
+            'port': '1/1/23',
+            'ipv4': {'primary': {'address': '172.28.206.133', 'prefix-length': '31'}},
+            'oper-state': 'up',
+            'protocol': 'ospfv2 mpls rsvp ldp',
+            'neighbor-address': '172.28.206.132',
+            'neighbor-mac': 'a0:67:d6:87:db:ae',
+        })
+    """
+
+    def _populate_from_data(self, data: Dict[str, Any]) -> None:
+        self.interface_name = data.get('interface-name')
+
+        # Port binding
+        port = data.get('port', '')
+        self.hardware_port = port
+        self.is_lag = port.startswith('lag-') if port else False
+
+        # IPv4 from config: ipv4.primary.address / prefix-length
+        ipv4 = data.get('ipv4', {})
+        if isinstance(ipv4, dict):
+            primary = ipv4.get('primary', {})
+            if isinstance(primary, dict):
+                self.ipv4_address = primary.get('address')
+                pl = primary.get('prefix-length')
+                self.ipv4_prefix_length = int(pl) if pl is not None else None
+
+        # State data (optional, from NETCONF get /state/...)
+        self.oper_status = data.get('oper-state')
+        self.admin_status = data.get('admin-state')
+
+        # MTU from state
+        mtu = data.get('oper-ip-mtu')
+        self.mtu = int(mtu) if mtu else None
+
+        # Protocols from state (space-separated string)
+        proto_str = data.get('protocol', '')
+        self.protocols = proto_str.split() if proto_str else None
+
+        # Neighbor from state
+        self.neighbor_address = data.get('neighbor-address')
+        self.neighbor_mac = data.get('neighbor-mac')
+
+        # QoS and other config → vendor_specific_info
+        self.vendor_specific_info = {}
+        for key in ('egress', 'ingress', 'ipv4'):
+            if key in data:
+                self.vendor_specific_info[key] = data[key]
 

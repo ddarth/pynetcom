@@ -197,6 +197,37 @@ class RestNCE(object):
             self.is_trunked = False
             return self.data
     
+    def send_post_request(self, rest_url: str, data: dict = None) -> dict:
+        """
+        Send POST request to NCE API with JSON body.
+
+        Used by Performance Monitoring and other POST-based endpoints.
+        No pagination — returns single response. Auto-refreshes token on 401.
+
+        :param rest_url: Full URL path (e.g. /restconf/v1/operations/...)
+        :param data: JSON body dict
+        :return: Response JSON dict, or False on error
+        """
+        url = self.API_NCE_HOST + rest_url
+        logger.debug(f"POST url: {url}")
+        response = self.session.post(url, headers=self.header, json=data)
+
+        if response.status_code == 401:
+            logger.warning('Unauthorized on POST - re-authenticating...')
+            if os.path.exists(self.token_filename):
+                try:
+                    os.remove(self.token_filename)
+                except OSError:
+                    pass
+            self.__auth()
+            response = self.session.post(url, headers=self.header, json=data)
+
+        try:
+            return response.json()
+        except json.JSONDecodeError:
+            logger.error(f"POST returned non-JSON: {response.status_code} {response.text[:200]}")
+            return False
+
     def clear_data(self):
         """
         Used between requests

@@ -15,16 +15,21 @@ from pynetcom.utils.helpers.rest_api import (
 # from pynetcom.cli_client import EquipCLI, NokiaEquipCLI, HuaweiEquipCLI, cli_caret
 
 # Library version
-__version__ = "0.1.6"
+__version__ = "0.2.0"
 
 # Description
 __doc__ = """
 pynetcom - Python library for interacting with network devices and management systems
 via REST API and CLI, supporting multiple vendors like Huawei, Nokia, and more.
+
+Data models follow IETF RFC 8345/8346 and OpenConfig standards:
+- BaseNode (RFC 8345): network element
+- BaseLink (RFC 8345): network link (source/dest terminology)
+- BaseTerminationPoint (RFC 8345): port/interface
+- BaseInterface (OpenConfig): L3 router interface with IPv4
+- BaseAlarm: alarm data
 """
 
-# Objects list, thats will be imported by default
-# __all__ = ["RestNCE", "RestNSP", "NetconfClient", "EquipCLI", "NokiaEquipCLI", "HuaweiEquipCLI", "cli_caret"]
 __all__ = [
     "RestNCE",
     "RestNSP",
