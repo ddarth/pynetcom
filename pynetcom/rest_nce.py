@@ -1,11 +1,53 @@
-import requests
 import json
-import os
 import logging
+import os
+import random
+import re
+import threading
+import time
+from typing import Dict, Optional, Tuple
+
+import requests
 import urllib3
+
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 logger = logging.getLogger('pynetcom.rest_nce')
+
+
+# --------------------------------------------------------------------------- #
+#  Per-endpoint concurrency limits                                            #
+# --------------------------------------------------------------------------- #
+#
+# NCE rejects requests with HTTP 429 when client exceeds a per-endpoint limit.
+# Documented limits in the NCE-T NBI Guide are nominal and often stricter in
+# practice — e.g. /ltps is documented as "~10 concurrent" but empirically
+# starts rejecting at 2 parallel GETs (it is actually rate-limited at ~5 req/s).
+#
+# The map below is consulted by ``send_request`` and ``send_post_request`` —
+# every outgoing request for a matching URL path is gated by a shared
+# Semaphore. Unknown endpoints are not throttled (backward compatible).
+#
+# Values are based on empirical measurements on the production NCE. For
+# endpoints not covered here, callers are responsible for sensible concurrency;
+# if measurements reveal a limit, add it here instead of in consumer code.
+#
+# Format: {regex pattern to match url path: max_concurrent_requests}
+#
+ENDPOINT_LIMITS: Dict[str, int] = {
+    # /ltps is rate-limited (~5 req/s). Any parallelism triggers 429 rapidly;
+    # the safe setting is max_concurrent=1. See
+    # network_entries/examples/measure_endpoint_limits.py for the measurement.
+    r'/restconf/v\d+/data/huawei-nce-resource-inventory:ltps': 1,
+    # query-optical-power: empirically handles 6 concurrent without 429,
+    # saturates at 4x speedup (see examples/experiment_thresholds.py).
+    r'/restconf/v\d+/operations/ietf-trans-oam:query-optical-power': 6,
+}
+
+# Response codes that warrant a retry. 429 is rate limiting; 502/503/504 are
+# transient gateway/backend issues. Others (400, 401, 403, 404, 409) indicate
+# a real client or server problem that retrying cannot fix.
+_RETRYABLE_STATUS = {429, 502, 503, 504}
 
 
 class NCEAuthenticationError(Exception):
@@ -50,28 +92,103 @@ class RestNCE(object):
     AUTH_REST_URL = "/rest/plat/smapp/v1/sessions"
     token_filename = 'nce_token.txt'
 
-    def __init__(self, nce_host, nce_username, nce_password):
+    def __init__(self, nce_host, nce_username, nce_password,
+                 endpoint_limits: Optional[Dict[str, int]] = None,
+                 max_retries: int = 6):
         """
         :param nce_host: https://X.X.X.X:26335
         :param nce_username: nce_api_user
         :param nce_password: nce_api_user_password
+        :param endpoint_limits: Optional override of per-endpoint concurrency
+            limits. Merged over the module-level :data:`ENDPOINT_LIMITS` dict.
+            Use this when connecting to a NCE with different sizing (e.g.
+            6K env, where documented /links limit is 20 vs 10 on 3K).
+        :param max_retries: How many times to retry a single request that
+            fails with 429/5xx. Exponential backoff 0.2s..8s. Default 6
+            gives worst-case ~20s per request before giving up.
         """
-        
+
         self.logger = logging.getLogger('pynetcom')
         self.API_NCE_HOST = nce_host
         self.API_NCE_USER = nce_username
         self.API_NCE_PASS = nce_password
-        
+        self.max_retries = max_retries
+
+        # Build per-endpoint semaphores from module defaults + caller overrides.
+        # URL pattern -> Semaphore. Matched by ``_get_semaphore`` at each call.
+        limits = dict(ENDPOINT_LIMITS)
+        if endpoint_limits:
+            limits.update(endpoint_limits)
+        self._semaphores: Dict[re.Pattern, threading.Semaphore] = {
+            re.compile(pattern): threading.Semaphore(n)
+            for pattern, n in limits.items()
+        }
+
+        # Retry telemetry. Consumers can inspect this to tune concurrency —
+        # if a counter grows during normal operation, something's wrong
+        # (limit changed, other client is using NCE, network issue).
+        self.retry_stats: Dict[str, int] = {
+            '429': 0, '502': 0, '503': 0, '504': 0, 'exhausted': 0,
+        }
+
         # Create session for connection pooling (reuses TCP/SSL connections)
         self.session = requests.Session()
         self.session.verify = False
-        
+
         if os.path.exists(self.token_filename):
             self.__read_token()
             logger.debug('read token: %s', self.token)
         else:
             self.__auth()
         self.header = { "X-Auth-Token": self.token, "content-type":"application/json" }
+
+    def _get_semaphore(self, url: str) -> Optional[threading.Semaphore]:
+        """
+        Return the semaphore for the given URL, or None if no limit configured.
+
+        Matches the URL path (query string stripped) against compiled patterns
+        in ``self._semaphores``. The first pattern that matches wins — patterns
+        should be disjoint in practice.
+        """
+        path = url.split('?', 1)[0]
+        for pattern, sem in self._semaphores.items():
+            if pattern.search(path):
+                return sem
+        return None
+
+    def _request_with_retry(self, method: str, url: str,
+                            **request_kwargs) -> requests.Response:
+        """
+        Perform an HTTP request with retry on 429/5xx and exponential backoff.
+
+        Bumps the per-status counter in ``self.retry_stats`` on every retry,
+        and the ``'exhausted'`` counter when ``max_retries`` is exceeded.
+        The caller is responsible for handling the final response — including
+        any residual non-200 status after retries.
+
+        :param method: ``'get'`` or ``'post'`` — attribute of ``self.session``.
+        :param url: Full absolute URL to request.
+        :param request_kwargs: Passed directly to ``self.session.<method>``.
+        :return: Final ``requests.Response`` (may still be non-200 if retries
+                 were exhausted — caller logs and returns).
+        """
+        session_method = getattr(self.session, method)
+        backoff = 0.2
+        response: Optional[requests.Response] = None
+        for attempt in range(self.max_retries + 1):
+            response = session_method(url, **request_kwargs)
+            if response.status_code not in _RETRYABLE_STATUS:
+                return response
+            if attempt >= self.max_retries:
+                self.retry_stats['exhausted'] += 1
+                return response
+            self.retry_stats[str(response.status_code)] += 1
+            logger.debug(
+                'retry #%d (%s %s): status=%d, backoff=%.2fs',
+                attempt + 1, method.upper(), url, response.status_code, backoff)
+            time.sleep(backoff + random.random() * 0.1)
+            backoff = min(backoff * 2, 8.0)
+        return response  # unreachable in theory; satisfies type checker
 
     def __read_token(self):
         """Load token from file."""
@@ -140,11 +257,15 @@ class RestNCE(object):
         """
         Send GET-request to NCE API.
 
+        Gated by a per-endpoint semaphore (see :data:`ENDPOINT_LIMITS`) and
+        retried on HTTP 429/5xx with exponential backoff. 401 triggers
+        token re-auth and one immediate retry as before.
+
         :param rest_url: URL Endpoint (for example /restconf/v1/data/ietf-alarms:alarms/alarm-list)
         :param get_params: Additional get parameters (after ? for example filter=10)
         :param data: Body of request
         :return: data in JSON format
-        
+
         Raises:
             NCEAuthenticationError: If re-authentication fails.
         """
@@ -156,7 +277,15 @@ class RestNCE(object):
         if get_params != '':
             self.url += "&" + get_params
         logger.debug(f"url: {self.url}")
-        response = self.session.get(self.url, headers=self.header, data=data)
+
+        sem = self._get_semaphore(self.url)
+        if sem is not None:
+            with sem:
+                response = self._request_with_retry(
+                    'get', self.url, headers=self.header, data=data)
+        else:
+            response = self._request_with_retry(
+                'get', self.url, headers=self.header, data=data)
 
         if response.status_code == 401:
             logger.warning('Unauthorized - token expired or invalid, re-authenticating...')
@@ -168,8 +297,14 @@ class RestNCE(object):
                     pass
             # Re-authenticate (may raise NCEAuthenticationError)
             self.__auth()
-            # Retry request with new token
-            response = self.session.get(self.url, headers=self.header, data=data)
+            # Retry request with new token (still gated by same semaphore).
+            if sem is not None:
+                with sem:
+                    response = self._request_with_retry(
+                        'get', self.url, headers=self.header, data=data)
+            else:
+                response = self._request_with_retry(
+                    'get', self.url, headers=self.header, data=data)
         else:
             logger.debug('SUCCESS AUTHENTICATE USING EXISTING TOKEN')
 
@@ -189,7 +324,7 @@ class RestNCE(object):
         # print(response.json())
         # print(response_header)
         self.data.append(response.json())
-        
+
         if response_header.get("is-truncated") == "true":
             self.is_trunked = True
             self.send_request(response_header["next-page"])
@@ -202,7 +337,10 @@ class RestNCE(object):
         Send POST request to NCE API with JSON body.
 
         Used by Performance Monitoring and other POST-based endpoints.
-        No pagination — returns single response. Auto-refreshes token on 401.
+        Gated by a per-endpoint semaphore (see :data:`ENDPOINT_LIMITS`) and
+        retried on HTTP 429/5xx with exponential backoff. 401 triggers
+        token re-auth and one immediate retry.
+        No pagination — returns single response.
 
         :param rest_url: Full URL path (e.g. /restconf/v1/operations/...)
         :param data: JSON body dict
@@ -210,7 +348,15 @@ class RestNCE(object):
         """
         url = self.API_NCE_HOST + rest_url
         logger.debug(f"POST url: {url}")
-        response = self.session.post(url, headers=self.header, json=data)
+
+        sem = self._get_semaphore(url)
+        if sem is not None:
+            with sem:
+                response = self._request_with_retry(
+                    'post', url, headers=self.header, json=data)
+        else:
+            response = self._request_with_retry(
+                'post', url, headers=self.header, json=data)
 
         if response.status_code == 401:
             logger.warning('Unauthorized on POST - re-authenticating...')
@@ -220,7 +366,13 @@ class RestNCE(object):
                 except OSError:
                     pass
             self.__auth()
-            response = self.session.post(url, headers=self.header, json=data)
+            if sem is not None:
+                with sem:
+                    response = self._request_with_retry(
+                        'post', url, headers=self.header, json=data)
+            else:
+                response = self._request_with_retry(
+                    'post', url, headers=self.header, json=data)
 
         try:
             return response.json()

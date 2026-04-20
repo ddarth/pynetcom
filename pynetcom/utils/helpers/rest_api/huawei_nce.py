@@ -6,6 +6,7 @@ and topology (links, fibers, IGP links) from Huawei NCE with
 filtering, pagination, and UUID-to-name resolution support.
 """
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Callable, Dict, List, Optional, Set, Tuple
 from datetime import datetime
 import logging
@@ -2268,19 +2269,32 @@ class NceDataProvider:
     def get_optical_power_thresholds(
         self,
         tp_ids: List[str],
+        max_workers: int = 6,
     ) -> Dict[str, dict]:
         """
         Query optical power levels and alarm thresholds for ports.
 
         Uses ietf-trans-oam:query-optical-power — returns current input/output
         power and configured alarm thresholds in a single call. Auto-batches
-        in groups of 20 TPs (API limit).
+        in groups of 20 TPs (API limit, server returns 400 for size>20 and
+        413 for size>=50).
 
         No PM task creation needed, works on all active port types.
         Passive boards (FIU) return no data — use the active board tp_id.
 
+        Per-batch latency on NCE is ~1.15 sec/TP (a 20-TP batch takes ~23 sec).
+        With ``max_workers > 1`` batches run in parallel via
+        ``ThreadPoolExecutor``. Empirically NCE handles up to 6 concurrent
+        requests on this endpoint without HTTP 429 (unlike /ltps and PM
+        endpoints which cap at 10) and gives near-linear speedup up to
+        ``max_workers=3`` (3x), saturating at ``max_workers=6`` (~4x).
+
+        Set ``max_workers=1`` to restore the exact old sequential behaviour.
+
         Args:
             tp_ids: List of termination point UUIDs.
+            max_workers: Parallel batch fan-out. Default 6 — best speedup
+                observed without 429. ``1`` = sequential (old behaviour).
 
         Returns:
             dict: {tp_id: {
@@ -2301,10 +2315,13 @@ class NceDataProvider:
                 print(f"Alarm range: [{t['input_lower_threshold']}..{t['input_upper_threshold']}]")
         """
         BATCH_SIZE = 20
-        result: Dict[str, dict] = {}
+        if not tp_ids:
+            return {}
 
-        for i in range(0, len(tp_ids), BATCH_SIZE):
-            batch = tp_ids[i:i + BATCH_SIZE]
+        batches = [tp_ids[i:i + BATCH_SIZE]
+                   for i in range(0, len(tp_ids), BATCH_SIZE)]
+
+        def _fetch(batch: List[str]) -> Dict[str, dict]:
             body = {
                 "ietf-trans-oam:input": {
                     "tp-list": [{"tp-id": tp} for tp in batch]
@@ -2312,13 +2329,14 @@ class NceDataProvider:
             }
             resp = self.client.send_post_request(self.OPTICAL_POWER_URL, body)
             if not resp or isinstance(resp, bool):
-                continue
+                return {}
+            out: Dict[str, dict] = {}
             for op in (resp.get('ietf-trans-oam:output', {})
                            .get('optical-power', [])):
                 tp = op.get('tp-id')
                 pw = op.get('optical-power', {})
                 if tp:
-                    result[tp] = {
+                    out[tp] = {
                         'input_power': pw.get('input-power'),
                         'output_power': pw.get('output-power'),
                         'input_lower_threshold': pw.get('input-power-lower-threshold'),
@@ -2326,7 +2344,16 @@ class NceDataProvider:
                         'output_lower_threshold': pw.get('output-power-lower-threshold'),
                         'output_upper_threshold': pw.get('output-power-upper-threshold'),
                     }
+            return out
 
+        result: Dict[str, dict] = {}
+        if max_workers <= 1 or len(batches) <= 1:
+            for batch in batches:
+                result.update(_fetch(batch))
+        else:
+            with ThreadPoolExecutor(max_workers=max_workers) as ex:
+                for partial in ex.map(_fetch, batches):
+                    result.update(partial)
         return result
 
     def get_reference_power(
