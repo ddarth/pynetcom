@@ -1985,19 +1985,34 @@ class NceDataProvider:
             }
 
             result = self.client.send_post_request(self.EML_PM_CUR_URL, body)
+            # Эти три ветки — silent fail в исходной реализации (DEBUG).
+            # Подняли до WARNING: при транзиентной перегрузке NCE мы
+            # теряли данные молча. Теперь caller-у видно что произошло
+            # и можно решить — retry/skip/etc.
             if not result or isinstance(result, bool):
+                logger.warning(
+                    f"EML PM empty response for ne={ne_physical_id} "
+                    f"shelf={shelf} slot={slot} ports={ports}"
+                )
                 continue
 
             ec = result.get('errorCode')
             if ec != 0:
-                logger.debug(
-                    f"EML PM error for ne={ne_physical_id} shelf={shelf} slot={slot}: "
-                    f"errorCode={ec} msg={result.get('errorMessage', '')}"
+                logger.warning(
+                    f"EML PM errorCode={ec} for ne={ne_physical_id} "
+                    f"shelf={shelf} slot={slot} ports={ports}: "
+                    f"{result.get('errorMessage', '')}"
                 )
                 continue
 
-            # pmStartTime=0 means board not found at this shelf/slot
+            # pmStartTime=0 means board not found at this shelf/slot.
+            # Это **не** ошибка — board просто отсутствует / не активен.
+            # Оставляем DEBUG.
             if not result.get('pmStartTime'):
+                logger.debug(
+                    f"EML PM no data (board not found?) for "
+                    f"ne={ne_physical_id} shelf={shelf} slot={slot}"
+                )
                 continue
 
             for port_data in result.get('physicalPort', []):
