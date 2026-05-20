@@ -142,6 +142,14 @@ class RemoteEndpoint(RPCDataContainer):
     sdp_id: Optional[int] = None                       # Nokia SDP identifier (None for Huawei)
     pw_type: Optional[str] = None                      # ethernet | vlan | ...
     oper_status: Optional[str] = None
+    # H-VPLS PW-redundancy role. Set from the vendor's native leaf:
+    #   * Huawei — ``role`` ("primary" / "secondary") on each <pw> entry,
+    #     plus ``pw-role`` ("master" / "slave") on FDB records.
+    #   * Nokia — there is no per-spoke-sdp role surfaced at this layer
+    #     (failover is handled by SDP-side mechanisms); stays ``None``.
+    # Normalised to lower-case strings: ``"primary"`` / ``"secondary"`` /
+    # ``"master"`` / ``"slave"`` / ``None``.
+    role: Optional[str] = None
 
     def __init__(self, data: Optional[dict] = None):
         if data is not None and self.field_mapping:
@@ -223,7 +231,17 @@ class MacEntry(RPCDataContainer):
     interface: Optional[str] = None
     entry_type: Optional[MacEntryType] = None
     source_type: Optional[MacSourceType] = None    # SAP | PW (where learned)
-    age: Optional[int] = None              # seconds
+    # Seconds since the entry's age timer started (or seconds-to-expiry on
+    # vendors that surface a TTL — see vendor adapter docstrings). Strictly
+    # Optional[int] — vendors that publish only a timestamp put it in
+    # :attr:`last_update` instead so this field stays type-clean.
+    age: Optional[int] = None
+    # ISO-8601 timestamp of the last learn / refresh event, on vendors that
+    # publish it (Nokia ``last-update`` / ``last-update-time``). Free-form
+    # string, vendor-native — no parsing into datetime to keep the contract
+    # transport-agnostic. ``None`` when the vendor does not surface it
+    # (Huawei does not on the standard MAC subtree).
+    last_update: Optional[str] = None
     # Convenience back-link to the parent service (set by ServicesClient).
     network_instance: Optional[str] = None
     # PW-learned enrichment (populated only when source_type == PW):

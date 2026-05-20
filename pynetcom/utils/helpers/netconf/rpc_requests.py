@@ -654,7 +654,11 @@ class NokiaVprnRPCRequest:
     we surface is the operational one.
     """
 
-    _FIELDS = "<oper-state/><oper-route-distinguisher/>"
+    # ``admin-state`` selects the operator-configured intent (admin shutdown
+    # vs no shutdown); ``oper-state`` carries the runtime status. The adapter
+    # uses admin-state for the ``enabled`` boolean (vendor-symmetric with
+    # VPLS / EPIPE) and oper-state for ``oper_status``.
+    _FIELDS = "<admin-state/><oper-state/><oper-route-distinguisher/>"
 
     def __init__(self, service_name: str | None = None, brief: bool = False):
         self.service_name = service_name
@@ -806,6 +810,42 @@ class NokiaVprnInterfaceVplsRPCRequest:
             f'    </vprn>'
             f'  </service>'
             f'</configure>'
+        )
+
+    def get_request_filter(self) -> str:
+        return self.request_filter
+
+
+class NokiaBaseRouterInterfaceVplsRPCRequest:
+    """Filter for Nokia R-VPLS interface→VPLS bindings on the Base router.
+
+    YANG path: ``/configure/router[router-name='Base']/interface[interface-name]/vpls``
+    in the **configure** namespace (``urn:nokia.com:sros:ns:yang:sr:conf``).
+    This is the Base-router counterpart of
+    :class:`NokiaVprnInterfaceVplsRPCRequest` — same binding shape (``vpls``
+    sub-element with a single ``vpls-name`` leaf), but the parent is the
+    global router rather than a VPRN.
+
+    Always scoped to ``router-name=Base`` (the only router-name on the
+    Base namespace). Pure-L3 interfaces omit the ``vpls`` element entirely
+    so the binding map naturally contains only bound R-VPLS interfaces.
+
+    Uses ``<get-config source="running">`` (caller-driven via
+    :meth:`NetconfClient.get_config`), since the binding is a configured
+    leaf.
+    """
+
+    def __init__(self):
+        self.request_filter = (
+            '<configure xmlns="urn:nokia.com:sros:ns:yang:sr:conf">'
+            '  <router>'
+            '    <router-name>Base</router-name>'
+            '    <interface>'
+            '      <interface-name/>'
+            '      <vpls/>'
+            '    </interface>'
+            '  </router>'
+            '</configure>'
         )
 
     def get_request_filter(self) -> str:

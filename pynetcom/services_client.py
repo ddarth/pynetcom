@@ -50,6 +50,7 @@ from pynetcom.utils.helpers.netconf.rpc_requests import (
     HuaweiMacRPCRequest,
     HuaweiVeGroupRPCRequest,
     NokiaArpRPCRequest,
+    NokiaBaseRouterInterfaceVplsRPCRequest,
     NokiaEpipeRPCRequest,
     NokiaFdbRPCRequest,
     NokiaL3InterfaceRPCRequest,
@@ -192,16 +193,88 @@ class ServicesClient:
     def get_endpoints(self, service_name: str) -> List[Endpoint]:
         """Return SAP + PW endpoints for one service.
 
-        Convenience wrapper: fetches the service, then flattens
-        connection_points → endpoints into a single list. Equivalent to
+        Low-level, low-cost convenience wrapper: fetches the service WITHOUT
+        any optional enrichment, then flattens connection_points → endpoints
+        into a single list. Equivalent to
         ``get_l2vpn_services(name=service_name)[0].saps() + ...pseudowires()``
-        but in one call.
+        but in one call. For SDP-enriched PWs use :meth:`get_pseudowires`.
         """
-        services = self.get_l2vpn_services(name=service_name)
+        services = self.get_l2vpn_services(
+            name=service_name, enrich_remote_system=False
+        )
         result: List[Endpoint] = []
         for svc in services:
             result.extend(svc.saps())
             result.extend(svc.pseudowires())
+        return result
+
+    def get_saps(self, service_name: str) -> List[Endpoint]:
+        """Return only the LOCAL endpoints (SAPs / ACs) of one L2 service.
+
+        Lighter than :meth:`get_endpoints` semantically — it filters to the
+        local side only and bypasses SDP enrichment entirely (SAPs have no
+        remote-system to fill). One :meth:`get_l2vpn_services` RPC.
+
+        :param service_name: VPLS / VSI / EPIPE service name (YANG list key,
+            server-side narrowing).
+        :type service_name: str
+        :return: Flat list of :class:`Endpoint` objects with
+            ``type == EndpointType.LOCAL``.
+        :rtype: List[Endpoint]
+        """
+        services = self.get_l2vpn_services(
+            name=service_name, enrich_remote_system=False
+        )
+        result: List[Endpoint] = []
+        for svc in services:
+            result.extend(svc.saps())
+        return result
+
+    def get_pseudowires(
+        self,
+        service_name: str,
+        include_standby: bool = False,
+        enrich_remote_system: bool = True,
+    ) -> List[Endpoint]:
+        """Return only the REMOTE endpoints (PWs / SDP-bindings) of one L2 service.
+
+        :param service_name: VPLS / VSI / VPWS service name.
+        :type service_name: str
+        :param include_standby: Huawei-only — when ``False`` (default), drop
+            PW endpoints whose H-VPLS role is ``slave`` / ``secondary``
+            (operationally blocked, no traffic). Set ``True`` to keep them
+            (debugging a failover). No effect on Nokia (SR OS does not
+            expose a per-spoke-sdp role at this layer; both members of a
+            PW-redundancy pair surface uniformly).
+        :type include_standby: bool
+        :param enrich_remote_system: Nokia-only — when ``True`` (default),
+            issue one extra brief query against ``/state/service/sdp`` to
+            populate :attr:`RemoteEndpoint.remote_system` (the originating
+            PE's loopback IP) on every PW. Set ``False`` to skip the round
+            trip; ``remote_system`` will then stay ``None`` on Nokia PWs.
+            Huawei publishes peer-IP inline on every PW record, so the
+            flag is a no-op on that vendor.
+        :type enrich_remote_system: bool
+        :return: Flat list of :class:`Endpoint` objects with
+            ``type == EndpointType.REMOTE``.
+        :rtype: List[Endpoint]
+        """
+        services = self.get_l2vpn_services(
+            name=service_name,
+            enrich_remote_system=enrich_remote_system,
+        )
+        result: List[Endpoint] = []
+        for svc in services:
+            for pw in svc.pseudowires():
+                if not include_standby and self.vendor == "huawei":
+                    # PW-redundancy "slave" / "secondary" half is blocked
+                    # in hardware — operator usually wants only the active
+                    # side. The role is normalised on RemoteEndpoint.role
+                    # by the Huawei parser. None = unknown role → keep.
+                    role = (pw.remote.role if pw.remote else None) or ""
+                    if role in ("slave", "secondary"):
+                        continue
+                result.append(pw)
         return result
 
     # -------------------- L3VPN / VRF services -------------------- #
@@ -269,9 +342,9 @@ class ServicesClient:
                 pairing map L3→L2, and look up the L2 sub-interface in the
                 VSI SAP list (two extra RPCs total).
               * Nokia — query ``/configure/service/vprn[<vrf>]/interface/vpls``
-                and read the bound VPLS name (one extra RPC; only meaningful
-                when ``vrf`` names a VPRN — Base router currently not
-                covered).
+                for VPRNs, or ``/configure/router[router-name='Base']/interface/vpls``
+                for the Base router (one extra RPC; both VRF-scoped VPRN R-VPLS
+                and Base-router R-VPLS bindings are covered).
 
             Pure-L3 interfaces (no L2 binding) leave ``l2_service`` at
             ``None``.
@@ -288,7 +361,10 @@ class ServicesClient:
                 scoped_vrf = vrf or "Base"
             resp = self.nc.get(req.get_request_filter())
             ifaces = list(nokia.parse_l3_interface_response(resp, vrf=scoped_vrf))
-            if enrich_l2_service and scoped_vrf not in (None, "Base", "base"):
+            # Enrichment covers both Base router R-VPLS and per-VPRN bindings —
+            # the adapter picks the right configure-namespace path internally
+            # based on the VRF name.
+            if enrich_l2_service and scoped_vrf is not None:
                 self._enrich_nokia_l2_service(ifaces, scoped_vrf)
             return ifaces
 
@@ -299,10 +375,19 @@ class ServicesClient:
         if vrf is not None:
             ifaces = [i for i in ifaces if i.vrf == vrf]
         if enrich_l2_service:
-            self._enrich_huawei_l2_service(ifaces)
+            self._enrich_huawei_l2_service(ifaces, vrf=vrf)
         return ifaces
 
-    def _enrich_huawei_l2_service(self, l3_interfaces: List[L3Interface]) -> None:
+    # Class-level flag so we log the "huawei L2VPN dump is unfiltered" warning
+    # at most once per ServicesClient instance — repeated warnings on every
+    # get_l3_interfaces call would spam structured logs without adding info.
+    _huawei_l2vpn_unfiltered_warned: bool = False
+
+    def _enrich_huawei_l2_service(
+        self,
+        l3_interfaces: List[L3Interface],
+        vrf: Optional[str] = None,
+    ) -> None:
         """Populate ``l2_service`` on Huawei L3 sub-interfaces via VE-group join.
 
         Algorithm:
@@ -315,9 +400,26 @@ class ServicesClient:
              ``l2_service``. Misses leave the field at None.
 
         Two RPCs total; cheap regardless of the number of L3 interfaces.
+
+        ``vrf`` is accepted for API symmetry with the Nokia path
+        (:meth:`_enrich_nokia_l2_service` requires a VRF to scope its
+        configure-namespace query). On Huawei neither ``huawei-fim-ifm``
+        (VE-groups, /ifm/global) nor ``huawei-l2vpn`` (/l2vpn/instances)
+        accepts a ``vrf-name`` filter — they are global subtrees. We log
+        a single warning so operators know the L2VPN dump can be heavy on
+        big BSC-class boxes, then proceed unfiltered.
         """
         if not l3_interfaces:
             return
+        if vrf and not self._huawei_l2vpn_unfiltered_warned:
+            self.log.warning(
+                "Huawei L2VPN dump is unfiltered: huawei-fim-ifm / "
+                "huawei-l2vpn YANG models do not support vrf scoping; "
+                "this RPC may be heavy on big BSC nodes. (vrf=%r)",
+                vrf,
+            )
+            self._huawei_l2vpn_unfiltered_warned = True
+
         # Step 1 — ve-groups → l3_parent → l2_parent
         ve_resp = self.nc.get(HuaweiVeGroupRPCRequest().get_request_filter())
         ve_groups = huawei.parse_ve_group_response(ve_resp)
@@ -353,24 +455,36 @@ class ServicesClient:
         l3_interfaces: List[L3Interface],
         vrf_name: str,
     ) -> None:
-        """Populate ``l2_service`` on Nokia VPRN interfaces via vpls-binding.
+        """Populate ``l2_service`` on Nokia router/VPRN interfaces via vpls-binding.
 
-        One ``get-config`` round-trip on the configure namespace, narrowed to
-        ``/service/vprn[<vrf>]/interface/vpls``. Pure-L3 interfaces (no
-        ``vpls`` element) are absent from the binding map and leave
-        ``l2_service`` at ``None``.
+        One ``get-config`` round-trip on the configure namespace, narrowed
+        either to ``/router[router-name='Base']/interface/vpls`` (when
+        ``vrf_name`` is ``"Base"`` / ``"base"``) or to
+        ``/service/vprn[<vrf>]/interface/vpls`` (any other VRF name).
+        Pure-L3 interfaces (no ``vpls`` element) are absent from the
+        binding map and leave ``l2_service`` at ``None``.
         """
         if not l3_interfaces:
             return
+        if vrf_name and vrf_name.lower() == "base":
+            # Base router R-VPLS bindings live under /configure/router[...=Base].
+            req = NokiaBaseRouterInterfaceVplsRPCRequest()
+            resp = self.nc.get_config(
+                source="running",
+                filter_subtree=req.get_request_filter(),
+            )
+            binding_map = nokia.parse_base_router_interface_vpls_response(resp)
+            # Adapter keys by ("Base", iface); L3Interface.vrf parser sets the
+            # same string for Base-router IRBs.
+            for iface in l3_interfaces:
+                iface.l2_service = binding_map.get(("Base", iface.name))
+            return
+        # VPRN — configure namespace, scoped by VRF name.
         req = NokiaVprnInterfaceVplsRPCRequest(vprn_service_name=vrf_name)
-        # configure namespace — use get-config(running), not get(state).
-        from ncclient.xml_ import to_ele
-        import xmltodict
-        raw = self.nc.session.get_config(
+        resp = self.nc.get_config(
             source="running",
-            filter=("subtree", to_ele(req.get_request_filter())),
+            filter_subtree=req.get_request_filter(),
         )
-        resp = xmltodict.parse(str(raw))
         binding_map = nokia.parse_vprn_interface_vpls_response(resp)
         for iface in l3_interfaces:
             iface.l2_service = binding_map.get((vrf_name, iface.name))
@@ -384,7 +498,7 @@ class ServicesClient:
         entry_type: Optional[str] = None,
         learned_via: Optional[str] = None,
         include_standby: bool = False,
-        enrich_pw_remote: bool = True,
+        enrich_remote_system: bool = True,
     ) -> List[MacEntry]:
         """Return MAC table entries with optional filtering.
 
@@ -415,7 +529,7 @@ class ServicesClient:
             traffic. Set True to include slave entries (useful for debugging
             a failover scenario). No effect on Nokia (the SR OS FDB natively
             surfaces only the active sdp-bind).
-        enrich_pw_remote:
+        enrich_remote_system:
             Nokia-only. When True (default), after parsing the FDB the client
             issues one extra brief query against ``/state/service/sdp`` and
             populates :attr:`MacEntry.remote_system` on every PW-learned
@@ -425,7 +539,8 @@ class ServicesClient:
             extra round-trip — ``remote_system`` will then remain ``None``
             on Nokia PW MACs. No effect on Huawei (peer-IP is already
             embedded in every FDB record there, so no follow-up RPC is
-            needed).
+            needed). Same flag name as on :meth:`get_l2vpn_services` /
+            :meth:`get_pseudowires` for consistency.
 
         Notes
         -----
@@ -452,7 +567,7 @@ class ServicesClient:
             entries: List[MacEntry] = list(
                 nokia.parse_fdb_response(resp, service_name=service_name)
             )
-            if enrich_pw_remote:
+            if enrich_remote_system:
                 self._enrich_nokia_pw_remote(entries)
         else:
             req = HuaweiMacRPCRequest(vsi_name=service_name, mac_address=mac)
@@ -646,8 +761,8 @@ class ServicesClient:
         ``l2_service`` is ``None`` when:
           * the IP lives on a pure-L3 interface (no L2 binding), or
           * the platform lacks the binding leaves (Huawei without
-            VE-groups configured; Nokia Base router — currently not
-            covered by enrichment).
+            VE-groups configured). Nokia Base router is covered by the
+            enrichment now (configure/router/Base/interface/vpls).
 
         Returns ``None`` if the IP is not in ARP on any candidate VRF.
         """
@@ -767,17 +882,36 @@ class ServicesClient:
 
     def _find_nokia_l3_gateways(self, l2_service_name: str) -> List[L3Interface]:
         # Discover all VPRNs once; for each VPRN, fetch its binding map.
+        # Also include Base router R-VPLS bindings.
         vrfs = [v.name for v in self.get_l3vpn_services() if v.name]
         gateways: List[L3Interface] = []
+
+        # Base router R-VPLS — check first; small subtree.
+        base_req = NokiaBaseRouterInterfaceVplsRPCRequest()
+        base_resp = self.nc.get_config(
+            source="running",
+            filter_subtree=base_req.get_request_filter(),
+        )
+        base_binding = nokia.parse_base_router_interface_vpls_response(base_resp)
+        base_matching = [
+            iface_name
+            for (router_name, iface_name), vpls in base_binding.items()
+            if vpls == l2_service_name and router_name == "Base"
+        ]
+        if base_matching:
+            l3_list = self.get_l3_interfaces(vrf="Base")
+            for iface in l3_list:
+                if iface.name in base_matching:
+                    iface.l2_service = l2_service_name
+                    gateways.append(iface)
+
+        # Per-VPRN bindings.
         for vrf in vrfs:
             req = NokiaVprnInterfaceVplsRPCRequest(vprn_service_name=vrf)
-            from ncclient.xml_ import to_ele
-            import xmltodict
-            raw = self.nc.session.get_config(
+            resp = self.nc.get_config(
                 source="running",
-                filter=("subtree", to_ele(req.get_request_filter())),
+                filter_subtree=req.get_request_filter(),
             )
-            resp = xmltodict.parse(str(raw))
             binding = nokia.parse_vprn_interface_vpls_response(resp)
             matching_ifaces = [
                 iface_name

@@ -50,13 +50,39 @@ class NetconfClient:
         )
         
 
-    def get_config(self):
-        self.logger.debug(f'Get config')
-        config = self.session.get_config(source="running")
-        # config = self.session.get_configuration()
-        # print('########################################')
-        # print(config)
-        return xmltodict.parse(config.xml)
+    def get_config(self, source: str = "running", filter_subtree: Optional[str] = None) -> dict:
+        """Low-level ``<get-config>`` wrapper that returns parsed XML as dict.
+
+        :param source: NETCONF datastore — ``"running"`` (default),
+            ``"candidate"``, ``"startup"`` (vendor-dependent).
+        :type source: str
+        :param filter_subtree: Optional XML fragment passed as a subtree
+            filter. Same shape the :class:`*RPCRequest` builders return
+            from ``get_request_filter()``. When ``None``, no filter is
+            applied and the entire datastore is fetched (use with care on
+            big devices).
+        :type filter_subtree: Optional[str]
+        :return: ``xmltodict.parse(...)``-shaped dict, root key normally
+            ``"data"`` (or ``"rpc-reply"`` if the device returned the
+            full envelope).
+        :rtype: dict
+
+        Lives here rather than in :mod:`services_client` so all NETCONF
+        I/O for the package is funnelled through one class — keeps the
+        higher-level facade free of ncclient imports.
+        """
+        self.logger.debug(f'Get config (source={source}, filter={"yes" if filter_subtree else "no"})')
+        if filter_subtree:
+            config = self.session.get_config(
+                source=source,
+                filter=("subtree", to_ele(filter_subtree)),
+            )
+        else:
+            config = self.session.get_config(source=source)
+        # ncclient возвращает GetReply без атрибута .xml — используем str(),
+        # парсер ниже по стеку уже под полный rpc-reply envelope (исторически
+        # services_client делал str(raw)).
+        return xmltodict.parse(str(config))
     
     def get(self, request_filter):
         self.logger.debug(f'Get request with filter: {request_filter}')

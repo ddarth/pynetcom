@@ -64,6 +64,7 @@ above is the common subset across NE40E / NE8000 / ATN-910C / OC-NE-X.
 
 from __future__ import annotations
 
+import re
 from typing import List, Optional
 
 from pynetcom.utils.helpers.netconf.rpc_data_containers.services import (
@@ -104,15 +105,27 @@ def _to_bool(value) -> Optional[bool]:
 
 
 def _normalise_mac(value) -> Optional[str]:
-    """Convert Huawei's ``aabb-ccdd-eeff`` notation to canonical colon form."""
+    """Return canonical colon-form ``aa:bb:cc:dd:ee:ff`` for any valid input.
+
+    Accepts every common separator style operators paste/devices return:
+
+      * Huawei ``aabb-ccdd-eeff`` (u16 groups)
+      * IEEE colon ``aa:bb:cc:dd:ee:ff``
+      * Cisco dot ``aabb.ccdd.eeff``
+      * Bare 12 hex digits ``aabbccddeeff``
+
+    Returns ``None`` for anything else (NULL, empty, malformed, wrong length)
+    so callers can rely on the field being either canonical or absent —
+    never a half-normalised mix. Symmetric with
+    :func:`pynetcom.utils.helpers.netconf.rpc_requests.normalize_mac`
+    used by the request builders.
+    """
     if value is None:
         return None
-    s = str(value).strip().lower()
-    if "-" in s and ":" not in s:
-        hex_only = s.replace("-", "")
-        if len(hex_only) == 12:
-            return ":".join(hex_only[i:i + 2] for i in range(0, 12, 2))
-    return s
+    hex_only = re.sub(r"[:\-\.\s]", "", str(value).strip()).lower()
+    if not re.fullmatch(r"[0-9a-f]{12}", hex_only):
+        return None
+    return ":".join(hex_only[i:i + 2] for i in range(0, 12, 2))
 
 
 def _to_int(value) -> Optional[int]:
@@ -122,6 +135,34 @@ def _to_int(value) -> Optional[int]:
         return int(value)
     except (TypeError, ValueError):
         return None
+
+
+def _normalise_vrf(ni: Optional[str]) -> Optional[str]:
+    """Canonicalise a Huawei network-instance name to operator-facing form.
+
+    Huawei encodes the global routing table as the pseudo-VPN ``"_public_"``
+    and various management constructs as ``"__LOCAL_OAM_VPN__"`` /
+    ``"__dcn_vpn__"``. Real operator VRFs are plain names like ``"MGNT_VPN"``.
+
+    Mapping rules:
+      * ``"_public_"``                       → ``"Base"``   (vendor-symmetric
+        with Nokia, which natively names its global routing instance Base).
+      * any name starting with ``"__"`` (synthetic management VPN) → ``None``.
+      * any other name starting with ``"_"`` (other synthetic / reserved)
+                                             → ``None``.
+      * normal operator VRF name             → unchanged.
+      * ``None`` / empty                     → ``None``.
+    """
+    if not ni:
+        return None
+    if ni == "_public_":
+        return "Base"
+    if ni.startswith("_"):
+        # All other underscore-prefixed names are synthetic / management
+        # markers (``__LOCAL_OAM_VPN__``, ``__dcn_vpn__``, ...). Treat them
+        # as "no VRF" so they don't pollute the operator's view.
+        return None
+    return ni
 
 
 # ---- Service instance → NetworkInstance --------------------------------- #
@@ -209,6 +250,17 @@ class HuaweiL2vpnInstance(NetworkInstance):
         remote.virtual_circuit_identifier = vc_id
         remote.pw_type = info.get("pw-type") or pw.get("encapsulation-type")
         remote.oper_status = info.get("pw-state") or info.get("session-state") or pw.get("state")
+        # H-VPLS / PW-redundancy role. Huawei publishes it under several
+        # leaf names depending on signaling mode (``role`` is the canonical
+        # one on ldp-signaled PWs; some platforms use ``pw-role`` on the
+        # endpoint as well). Normalise to lower-case string.
+        role = (
+            pw.get("role")
+            or pw.get("pw-role")
+            or info.get("role")
+            or info.get("pw-role")
+        )
+        remote.role = role.strip().lower() if isinstance(role, str) and role.strip() else None
 
         ep = Endpoint()
         ep.endpoint_id = f"{peer}:{vc_id}" if peer and vc_id else (peer or (str(vc_id) if vc_id else None))
@@ -261,6 +313,9 @@ class HuaweiMacEntry(MacEntry):
         else:
             self.source_type = None
         self.age = _to_int(entry.get("age"))
+        # Huawei's standard MAC subtree does not surface a learn timestamp;
+        # leave ``last_update`` at its default ``None``. Field is reserved
+        # for forward compatibility with platform-specific YANG augments.
         # PW-learned enrichment — both fields ship as native YANG leaves
         # on every vsi-dynamic-mac entry with out-interface-type=pw, so no
         # extra RPC is needed. ``peer-ip`` is the remote PE's system /
@@ -307,11 +362,16 @@ class HuaweiArpEntry(Neighbor):
             or entry.get("work-if-name")
         )
         ni = entry.get("ni-name") or entry.get("vpn-instance")
-        # Hide Huawei's synthetic pseudo-VPN markers from the operator-facing field.
-        if ni and not ni.startswith("__"):
-            self.vrf = ni
-        else:
-            self.vrf = None
+        # Canonicalise the routing-instance name across vendors:
+        #   * "_public_"            → "Base" (Huawei's global routing instance,
+        #                             aligned with Nokia's name for the same).
+        #   * "__LOCAL_OAM_VPN__",
+        #     "__dcn_vpn__" (any
+        #     double-underscore)    → None  (synthetic management constructs;
+        #                             not operator-configured VRFs).
+        #   * "_other_synth_"       → None  (other single-underscore synthetics).
+        #   * normal name           → kept verbatim.
+        self.vrf = _normalise_vrf(ni)
         huawei_type = (entry.get("style-type") or entry.get("type") or "").strip().lower()
         self.origin = self._ORIGIN_MAP.get(huawei_type, NeighborOrigin.OTHER)
         self.age = _to_int(entry.get("age") or entry.get("expire-time"))
@@ -563,7 +623,9 @@ class HuaweiL3Interface(L3Interface):
         if not isinstance(entry, dict):
             return
         self.name = entry.get("name")
-        self.vrf = entry.get("vrf-name")
+        # Same canonicalisation rules as for ARP — "_public_" → "Base",
+        # synthetic management VPNs ("__...__") → None.
+        self.vrf = _normalise_vrf(entry.get("vrf-name"))
         self.admin_status = entry.get("admin-status")
         ipv4 = entry.get("ipv4")
         if isinstance(ipv4, dict):

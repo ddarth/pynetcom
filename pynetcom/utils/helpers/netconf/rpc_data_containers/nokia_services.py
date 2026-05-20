@@ -30,6 +30,7 @@ fixtures and CLI replay.
 
 from __future__ import annotations
 
+import re
 from typing import List, Optional
 
 from pynetcom.utils.helpers.netconf.rpc_data_containers.services import (
@@ -77,10 +78,19 @@ def _to_bool(value) -> Optional[bool]:
 
 
 def _normalise_mac(value) -> Optional[str]:
-    """Normalise Nokia MAC notation ('aa:bb:cc:dd:ee:ff') to lower-case colon form."""
+    """Return canonical colon-form ``aa:bb:cc:dd:ee:ff`` for any valid input.
+
+    Nokia state model emits MAC in colon form already, but we still funnel
+    through the same canonical helper so the field always has identical
+    shape across vendors (Nokia ↔ Huawei) — and so any non-conforming
+    legacy YANG leaf produces ``None`` rather than a half-normalised value.
+    """
     if value is None:
         return None
-    return str(value).lower().replace("-", ":")
+    hex_only = re.sub(r"[:\-\.\s]", "", str(value).strip()).lower()
+    if not re.fullmatch(r"[0-9a-f]{12}", hex_only):
+        return None
+    return ":".join(hex_only[i:i + 2] for i in range(0, 12, 2))
 
 
 # ---- Shared builders for SAP / SDP-bind entries ------------------------- #
@@ -308,6 +318,54 @@ def parse_vprn_interface_vpls_response(response: dict) -> dict:
     return out
 
 
+def parse_base_router_interface_vpls_response(response: dict) -> dict:
+    """Parse a NokiaBaseRouterInterfaceVplsRPCRequest reply into a binding map.
+
+    Counterpart of :func:`parse_vprn_interface_vpls_response` for the
+    Base router. Returns ``{("Base", interface_name): vpls_name}`` for
+    every Base-router interface that has a ``vpls/vpls-name`` element
+    configured. Pure-L3 Base interfaces (no ``vpls`` element) are absent
+    from the map.
+
+    The response shape (configure namespace)::
+
+        configure/router[router-name='Base']/interface[<interface-name>]/vpls/vpls-name
+
+    We key by ``("Base", iface)`` to keep the result shape identical to
+    :func:`parse_vprn_interface_vpls_response` so the two maps can be
+    merged with ``dict.update`` in :class:`ServicesClient`.
+    """
+    if not isinstance(response, dict):
+        return {}
+    container = NetworkInstance()
+    cleaned = container.remove_namespaces(container._unwrap_data_node(response))
+    configure_root = (
+        cleaned.get("configure")
+        or cleaned  # in case caller already unwrapped one level
+    )
+    router_root = configure_root.get("router")
+    out: dict = {}
+    for router in _as_list(router_root):
+        if not isinstance(router, dict):
+            continue
+        # We only ever request router-name=Base so the canonical key is "Base";
+        # honour the device's echoed value too in case future SR OS releases
+        # surface more router-names here.
+        router_name = router.get("router-name") or "Base"
+        for iface in _as_list(router.get("interface")):
+            if not isinstance(iface, dict):
+                continue
+            iface_name = iface.get("interface-name")
+            vpls = iface.get("vpls") or {}
+            if isinstance(vpls, dict):
+                vpls_name = vpls.get("vpls-name")
+            else:
+                vpls_name = None
+            if router_name and iface_name and vpls_name:
+                out[(router_name, iface_name)] = vpls_name
+    return out
+
+
 def _attach_sdp_far_end(service: NetworkInstance, sdp_far_end: dict) -> None:
     """Populate ``remote.remote_system`` on a service's REMOTE endpoints.
 
@@ -398,16 +456,19 @@ class NokiaMacEntry(MacEntry):
         self.source_type = self._LOCALE_MAP.get(locale)
         nokia_type = (mac_entry.get("type") or mac_entry.get("mac-type") or "").strip().lower()
         self.entry_type = self._MAC_TYPE_MAP.get(nokia_type)
-        # Prefer the explicit "age" leaf (seconds) when present; fall back to
-        # the last-update timestamp string so callers can still derive recency.
+        # ``age`` is strictly Optional[int]: int-coerce the leaf when present,
+        # ``None`` on missing / garbage. The ISO-8601 ``last-update`` /
+        # ``last-update-time`` leaf goes into the dedicated ``last_update``
+        # string field instead of overloading ``age`` with mixed types.
         age_raw = mac_entry.get("age")
         if age_raw is not None:
             try:
                 self.age = int(age_raw)
             except (TypeError, ValueError):
-                self.age = age_raw
-        else:
-            self.age = mac_entry.get("last-update") or mac_entry.get("last-update-time")
+                self.age = None
+        self.last_update = (
+            mac_entry.get("last-update") or mac_entry.get("last-update-time")
+        )
         self.network_instance = service_name
 
 
@@ -474,12 +535,13 @@ class NokiaArpEntry(Neighbor):
         # Nokia exposes time-to-expiry as ``timer`` (seconds). We surface it
         # on the OpenConfig ``age`` field for shape parity with Huawei; the
         # semantic difference (TTL vs age-since-learned) is documented in the
-        # adapter docstring.
+        # adapter docstring. Strictly Optional[int] — fall back to None on
+        # anything non-numeric rather than letting a string leak through.
         timer = arp_entry.get("timer")
         try:
             self.age = int(timer) if timer is not None else None
         except (TypeError, ValueError):
-            self.age = timer
+            self.age = None
         self.vrf = vrf
 
 
@@ -627,7 +689,11 @@ class NokiaVprnService(NetworkInstance):
         self.name = vprn_entry.get("service-name")
         self.type = NetworkInstanceType.L3VPN
         self.oper_status = vprn_entry.get("oper-state")
-        self.enabled = _to_bool(vprn_entry.get("oper-state"))
+        # ``enabled`` reflects the **admin** intent — same convention as
+        # NokiaVplsService / NokiaEpipeService. ``oper_status`` separately
+        # carries the runtime state so callers can compare the two when
+        # diagnosing a down service.
+        self.enabled = _to_bool(vprn_entry.get("admin-state"))
         self.route_distinguisher = vprn_entry.get("oper-route-distinguisher")
 
 

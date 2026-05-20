@@ -330,7 +330,7 @@ ServicesClient.get_mac_table(
     entry_type: str | None = None,
     learned_via: str | None = None,
     include_standby: bool = False,
-    enrich_pw_remote: bool = True,
+    enrich_remote_system: bool = True,
 ) -> List[MacEntry]
 ```
 
@@ -342,7 +342,7 @@ ServicesClient.get_mac_table(
 | `entry_type` | **client** | `"STATIC"` or `"DYNAMIC"` (exact). |
 | `learned_via` | **client** | `"sap"` or `"pw"` (exact) — restricts to MACs learned on a local SAP/AC vs. over a remote PW. Maps to `MacEntry.source_type`. |
 | `include_standby` | **client** | Huawei-only. When `False` (default), `pw-role=slave` FDB records (the blocked half of an H-VPLS PW-redundancy pair) are filtered out so the table reflects only paths that actually carry traffic. Set `True` for failover debugging. No effect on Nokia (its FDB already exposes only the active sdp-bind). |
-| `enrich_pw_remote` | **client** | Nokia-only. When `True` (default), after parsing the FDB the client issues one extra brief query against `/state/service/sdp` and stamps `MacEntry.remote_system` on every PW row by joining the parsed `sdp-id` (left half of `sdp-bind`) with the SDP's `oper-tunnel-far-end-inet-address`. Set `False` to skip the extra round-trip. No effect on Huawei (`peer-ip` is already inline on every FDB record there). |
+| `enrich_remote_system` | **client** | Nokia-only. When `True` (default), after parsing the FDB the client issues one extra brief query against `/state/service/sdp` and stamps `MacEntry.remote_system` on every PW row by joining the parsed `sdp-id` (left half of `sdp-bind`) with the SDP's `oper-tunnel-far-end-inet-address`. Set `False` to skip the extra round-trip. No effect on Huawei (`peer-ip` is already inline on every FDB record there). |
 
 When `service_name is None and mac is None` the device returns the entire FDB —
 on big boxes that can be tens of MB and tens of seconds. A WARNING is logged in
@@ -372,7 +372,7 @@ endpoint). `null` only for rare host/oam entries.
 vendors** and let callers identify the originating remote PE. On Huawei
 `peer-ip` is inline in every FDB record (no extra RPC). On Nokia
 `remote_system` is filled by a follow-up `/state/service/sdp` join (one
-brief query per `get_mac_table` call — controlled by `enrich_pw_remote`;
+brief query per `get_mac_table` call — controlled by `enrich_remote_system`;
 default on). `remote_system` is the remote PE's **system / loopback IP**,
 not its management IP — match it against your inventory's router-ID column.
 
@@ -386,7 +386,7 @@ not its management IP — match it against your inventory's router-ID column.
 | `locale` (`sap` → SAP, `sdp-bind` → PW) | `out-interface-type` (`ac` → SAP, `pw` → PW) | `source_type` |
 | `age` or `last-update` | `age` (often null) | `age` |
 | context | `vsi-name` | `network_instance` |
-| `oper-tunnel-far-end-inet-address` on `/state/service/sdp[sdp-id]` (via `enrich_pw_remote` join) | `peer-ip` | `remote_system` |
+| `oper-tunnel-far-end-inet-address` on `/state/service/sdp[sdp-id]` (via `enrich_remote_system` join) | `peer-ip` | `remote_system` |
 | `sdp-bind` vc-id half (`"10179:1100010331"` → `"1100010331"`) | `pw-id` | `pw_id` |
 
 ### PW-learned duplicates
