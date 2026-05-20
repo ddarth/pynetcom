@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<data xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+	<ifm xmlns="urn:huawei:yang:huawei-ifm">
+		<global>
+			<ve-groups xmlns="urn:huawei:yang:huawei-fim-ifm">
+				<ve-group>
+					<ve-group-id>1</ve-group-id>
+					<slot-id>0</slot-id>
+					<l2-ve-ifname>Virtual-Ethernet0/2/2(L2)</l2-ve-ifname>
+					<l3-ve-ifname>Virtual-Ethernet0/2/3(L3)</l3-ve-ifname>
+				</ve-group>
+			</ve-groups>
+		</global>
+	</ifm>
+</data>

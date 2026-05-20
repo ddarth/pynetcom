@@ -1,0 +1,7 @@
+<mac xmlns="urn:huawei:yang:huawei-mac">
+  <vsi-dynamic-macs>
+    <vsi-dynamic-mac>
+      <vsi-name>VPLS_A002</vsi-name>
+    </vsi-dynamic-mac>
+  </vsi-dynamic-macs>
+</mac>

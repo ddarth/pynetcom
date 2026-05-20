@@ -1,0 +1,5 @@
+<mac xmlns="urn:huawei:yang:huawei-mac">
+  <mac-unicast-stations>
+    <mac-unicast-station/>
+  </mac-unicast-stations>
+</mac>

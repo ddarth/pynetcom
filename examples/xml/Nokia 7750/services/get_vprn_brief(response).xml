@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rpc-reply xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="urn:uuid:4ccd5cf7-14ea-007b-2842-6b8564fc4267">
+	<data>
+		<state xmlns="urn:nokia.com:sros:ns:yang:sr:state">
+			<service>
+				<vprn>
+					<service-name>VPRN_A001</service-name>
+					<oper-state>up</oper-state>
+				</vprn>
+				<vprn>
+					<service-name>vpn_A001</service-name>
+					<oper-state>up</oper-state>
+				</vprn>
+			</service>
+		</state>
+	</data>
+</rpc-reply>

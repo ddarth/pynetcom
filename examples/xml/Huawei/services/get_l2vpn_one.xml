@@ -1,0 +1,7 @@
+<l2vpn xmlns="urn:huawei:yang:huawei-l2vpn">
+  <instances>
+    <instance>
+      <name>VPLS_A002</name>
+    </instance>
+  </instances>
+</l2vpn>

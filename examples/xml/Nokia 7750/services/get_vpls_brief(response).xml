@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rpc-reply xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="urn:uuid:dc62d93a-3cce-f8ad-5182-27462abef940">
+	<data>
+		<state xmlns="urn:nokia.com:sros:ns:yang:sr:state">
+			<service>
+				<vpls>
+					<service-name>VPLS_A014</service-name>
+					<oper-state>up</oper-state>
+				</vpls>
+				<vpls>
+					<service-name>VPLS_A015</service-name>
+					<oper-state>up</oper-state>
+				</vpls>
+				<vpls>
+					<service-name>VPLS_A016</service-name>
+					<oper-state>up</oper-state>
+				</vpls>
+				<vpls>
+					<service-name>VPLS_A017</service-name>
+					<oper-state>up</oper-state>
+				</vpls>
+				<vpls>
+					<service-name>VPLS_A018</service-name>
+					<oper-state>up</oper-state>
+				</vpls>
+				<vpls>
+					<service-name>VPLS_A019</service-name>
+					<oper-state>up</oper-state>
+				</vpls>
+				<vpls>
+					<service-name>VPLS_A020</service-name>
+					<oper-state>up</oper-state>
+				</vpls>
+				<vpls>
+					<service-name>VPLS_A021</service-name>
+					<oper-state>up</oper-state>
+				</vpls>
+			</service>
+		</state>
+	</data>
+</rpc-reply>

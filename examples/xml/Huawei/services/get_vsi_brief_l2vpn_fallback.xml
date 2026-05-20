@@ -1,0 +1,7 @@
+<l2vpn xmlns="urn:huawei:yang:huawei-l2vpn">
+  <vsis>
+    <vsi>
+      <name/>
+    </vsi>
+  </vsis>
+</l2vpn>

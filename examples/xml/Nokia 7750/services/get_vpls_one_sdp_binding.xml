@@ -1,0 +1,9 @@
+<state xmlns="urn:nokia.com:sros:ns:yang:sr:state">
+  <service>
+    <vpls>
+      <service-name>VPLS_A014</service-name>
+      <spoke-sdp/>
+      <mesh-sdp/>
+    </vpls>
+  </service>
+</state>

@@ -30,3 +30,4 @@ examples/nokia_nsp_topology_test.py
 .claude/
 TODO.md
 dwdm_topology_fast.html
+tests/

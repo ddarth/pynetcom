@@ -1,0 +1,869 @@
+<?xml version="1.0" encoding="utf-8"?>
+<data xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+	<l2vpn xmlns="urn:huawei:yang:huawei-l2vpn">
+		<instances>
+			<instance>
+				<name>VPLS_A002</name>
+				<type>vpls</type>
+				<state>up</state>
+				<vpls>
+					<member-discovery-mode>static</member-discovery-mode>
+					<work-mode>normal</work-mode>
+					<encapsulation-type>vlan</encapsulation-type>
+					<mtu>1500</mtu>
+					<tunnel-policy>LSP_RSVP-LDP-BGP</tunnel-policy>
+					<shutdown>false</shutdown>
+					<isolate-spoken>false</isolate-spoken>
+					<ignore-ac-state>false</ignore-ac-state>
+					<admin-vsi>false</admin-vsi>
+					<unknown-unicast-action>broadcast</unknown-unicast-action>
+					<unknown-multicast-action>broadcast</unknown-multicast-action>
+					<p2p-vsi>false</p2p-vsi>
+					<traffic-statistics-collection>false</traffic-statistics-collection>
+					<mac-remove-mode>invalid</mac-remove-mode>
+					<mac-learn>true</mac-learn>
+					<mac-learn-style>unqualify</mac-learn-style>
+					<mac-withdraw>false</mac-withdraw>
+					<interface-change-mac-withdraw>false</interface-change-mac-withdraw>
+					<interface-change-mac-withdraw-type>all</interface-change-mac-withdraw-type>
+					<propagate-mac-withdraw>false</propagate-mac-withdraw>
+					<vrrp-mac-withdraw-retry>0</vrrp-mac-withdraw-retry>
+					<token-exceed>false</token-exceed>
+					<ac-count>10</ac-count>
+					<create-time>239 days, 12 hours, 19 minutes, 37 seconds</create-time>
+					<ignore-ac-state-effect>false</ignore-ac-state-effect>
+					<ldp-signaling>
+						<vsi-id>1100013060</vsi-id>
+						<traffic-statistics-collection>false</traffic-statistics-collection>
+						<control-word>disable</control-word>
+						<hard-pipe>false</hard-pipe>
+						<mac-withdraw>false</mac-withdraw>
+						<interface-change-mac-withdraw>false</interface-change-mac-withdraw>
+						<interface-change-mac-withdraw-type>all</interface-change-mac-withdraw-type>
+						<upe-upe-mac-withdraw>false</upe-upe-mac-withdraw>
+						<upe-npe-mac-withdraw>false</upe-npe-mac-withdraw>
+						<npe-upe-mac-withdraw>false</npe-upe-mac-withdraw>
+						<pws>
+							<pw>
+								<peer-ip>192.0.2.1</peer-ip>
+								<negotiation-vc-id>1100013060</negotiation-vc-id>
+								<encapsulation-type>unsupport</encapsulation-type>
+								<role>primary</role>
+								<signal-type>ldp</signal-type>
+								<ignore-standby>false</ignore-standby>
+								<upe>false</upe>
+								<traffic-statistics-collection>default</traffic-statistics-collection>
+								<pw-info>
+									<peer-ip>192.0.2.1</peer-ip>
+									<negotiation-vc-id>1100013060</negotiation-vc-id>
+									<pw-type>label</pw-type>
+									<session-state>up</session-state>
+									<pw-state>up</pw-state>
+									<local-vc-label>2049</local-vc-label>
+									<remote-vc-label>48487</remote-vc-label>
+									<remote-control-word>disable</remote-control-word>
+									<last-up-time>2025/10/15 23:09:44</last-up-time>
+									<total-up-time>239 days, 11 hours, 41 minutes, 34 seconds</total-up-time>
+									<c-key>2</c-key>
+									<n-key>16777494</n-key>
+									<spe-count>0</spe-count>
+									<stp-enable>false</stp-enable>
+									<mac-flapping-state>default</mac-flapping-state>
+									<pw-index>2</pw-index>
+									<remote-group-id>0</remote-group-id>
+									<remote-mtu>1500</remote-mtu>
+									<remote-state-code>forward</remote-state-code>
+									<received-flow-label>default</received-flow-label>
+									<negotiated-flow-label>default</negotiated-flow-label>
+									<remote-vccv-code>0x20a</remote-vccv-code>
+									<bfd-enable>false</bfd-enable>
+									<bfd-state>invalid</bfd-state>
+									<dynamic-bfd-session>false</dynamic-bfd-session>
+									<block-status>unblocked</block-status>
+									<pw-token-exceed>false</pw-token-exceed>
+									<tunnels>
+										<tunnel>
+											<tunnel-key>0x000000000300000001</tunnel-key>
+											<tunnel-type>te</tunnel-type>
+											<out-interface>Tunnel0/0/1</out-interface>
+											<tunnel-name>Tunnel0/0/1</tunnel-name>
+											<public-next-hop>192.0.2.1</public-next-hop>
+										</tunnel>
+									</tunnels>
+									<label-stacks>
+										<label-stack>
+											<label-stack>1</label-stack>
+											<level>1</level>
+											<type>VPLS</type>
+											<label>48487</label>
+										</label-stack>
+										<label-stack>
+											<label-stack>1</label-stack>
+											<level>2</level>
+											<type>TE</type>
+											<label>49485</label>
+											<out-interface>GigabitEthernet0/2/1</out-interface>
+										</label-stack>
+									</label-stacks>
+									<status-changes>
+										<status-change>
+											<index>1</index>
+											<timestamp>2025/10/16 05:06:50</timestamp>
+											<reason>New LDP mapping message was received.</reason>
+										</status-change>
+										<status-change>
+											<index>2</index>
+											<timestamp>2025/10/16 04:48:32</timestamp>
+											<reason>Tunnel was Down.</reason>
+										</status-change>
+										<status-change>
+											<index>3</index>
+											<timestamp>2025/10/15 01:44:28</timestamp>
+											<reason>New LDP mapping message was received.</reason>
+										</status-change>
+										<status-change>
+											<index>4</index>
+											<timestamp>2025/10/15 01:25:41</timestamp>
+											<reason>Tunnel was Down.</reason>
+										</status-change>
+										<status-change>
+											<index>5</index>
+											<timestamp>2025/09/16 00:50:02</timestamp>
+											<reason>New LDP mapping message was received.</reason>
+										</status-change>
+									</status-changes>
+								</pw-info>
+							</pw>
+							<pw>
+								<peer-ip>192.0.2.2</peer-ip>
+								<negotiation-vc-id>1100013060</negotiation-vc-id>
+								<encapsulation-type>unsupport</encapsulation-type>
+								<role>primary</role>
+								<signal-type>ldp</signal-type>
+								<ignore-standby>false</ignore-standby>
+								<upe>false</upe>
+								<traffic-statistics-collection>default</traffic-statistics-collection>
+								<pw-info>
+									<peer-ip>192.0.2.2</peer-ip>
+									<negotiation-vc-id>1100013060</negotiation-vc-id>
+									<pw-type>label</pw-type>
+									<session-state>up</session-state>
+									<pw-state>backup</pw-state>
+									<local-vc-label>2058</local-vc-label>
+									<remote-vc-label>48501</remote-vc-label>
+									<remote-control-word>disable</remote-control-word>
+									<last-up-time>2025/10/15 22:43:01</last-up-time>
+									<total-up-time>239 days, 11 hours, 41 minutes, 15 seconds</total-up-time>
+									<c-key>3</c-key>
+									<n-key>16777496</n-key>
+									<spe-count>0</spe-count>
+									<stp-enable>false</stp-enable>
+									<mac-flapping-state>default</mac-flapping-state>
+									<pw-index>3</pw-index>
+									<remote-group-id>0</remote-group-id>
+									<remote-mtu>1500</remote-mtu>
+									<remote-state-code>forward</remote-state-code>
+									<received-flow-label>default</received-flow-label>
+									<negotiated-flow-label>default</negotiated-flow-label>
+									<remote-vccv-code>0x20a</remote-vccv-code>
+									<bfd-enable>false</bfd-enable>
+									<bfd-state>invalid</bfd-state>
+									<dynamic-bfd-session>false</dynamic-bfd-session>
+									<block-status>unblocked</block-status>
+									<pw-token-exceed>false</pw-token-exceed>
+									<tunnels>
+										<tunnel>
+											<tunnel-key>0x000000000300000002</tunnel-key>
+											<tunnel-type>te</tunnel-type>
+											<out-interface>Tunnel0/0/2</out-interface>
+											<tunnel-name>Tunnel0/0/2</tunnel-name>
+											<public-next-hop>192.0.2.2</public-next-hop>
+										</tunnel>
+									</tunnels>
+									<label-stacks>
+										<label-stack>
+											<label-stack>1</label-stack>
+											<level>1</level>
+											<type>VPLS</type>
+											<label>48501</label>
+										</label-stack>
+										<label-stack>
+											<label-stack>1</label-stack>
+											<level>2</level>
+											<type>TE</type>
+											<label>48015</label>
+											<out-interface>GigabitEthernet0/2/0</out-interface>
+										</label-stack>
+									</label-stacks>
+									<status-changes>
+										<status-change>
+											<index>1</index>
+											<timestamp>2025/10/16 04:40:07</timestamp>
+											<reason>New LDP mapping message was received.</reason>
+										</status-change>
+										<status-change>
+											<index>2</index>
+											<timestamp>2025/10/16 04:21:33</timestamp>
+											<reason>Tunnel was Down.</reason>
+										</status-change>
+										<status-change>
+											<index>3</index>
+											<timestamp>2025/10/15 01:44:27</timestamp>
+											<reason>New LDP mapping message was received.</reason>
+										</status-change>
+										<status-change>
+											<index>4</index>
+											<timestamp>2025/10/15 01:25:41</timestamp>
+											<reason>Tunnel was Down.</reason>
+										</status-change>
+										<status-change>
+											<index>5</index>
+											<timestamp>2025/09/16 00:50:07</timestamp>
+											<reason>New LDP mapping message was received.</reason>
+										</status-change>
+									</status-changes>
+								</pw-info>
+							</pw>
+						</pws>
+						<redundancy-protect-groups>
+							<redundancy-protect-group>
+								<name>PG_3060</name>
+								<protect-mode>master</protect-mode>
+								<dual-receive>false</dual-receive>
+								<reroute-policy>
+									<policy>delay</policy>
+									<delay-time>60</delay-time>
+									<last-switchback-time>2025/10/16 05:07:54</last-switchback-time>
+									<last-reroute-action>192.0.2.2:1100013060 to 192.0.2.1:1100013060</last-reroute-action>
+									<last-switchback-reason>PW up</last-switchback-reason>
+								</reroute-policy>
+								<pw-members>
+									<pw-member>
+										<peer-ip>192.0.2.1</peer-ip>
+										<negotiation-vc-id>1100013060</negotiation-vc-id>
+										<encapsulation-type>unsupport</encapsulation-type>
+										<preference>1</preference>
+										<role>primary</role>
+										<active-state>true</active-state>
+									</pw-member>
+									<pw-member>
+										<peer-ip>192.0.2.2</peer-ip>
+										<negotiation-vc-id>1100013060</negotiation-vc-id>
+										<encapsulation-type>unsupport</encapsulation-type>
+										<preference>2</preference>
+										<role>secondary</role>
+										<active-state>false</active-state>
+									</pw-member>
+								</pw-members>
+								<historys>
+									<history>
+										<num>1</num>
+										<reroute-time>2025/10/15 01:25:41</reroute-time>
+										<reroute-action>192.0.2.2:1100013060 to --</reroute-action>
+										<reroute-reason>PW down</reroute-reason>
+									</history>
+									<history>
+										<num>2</num>
+										<reroute-time>2025/10/15 01:44:27</reroute-time>
+										<reroute-action>-- to 192.0.2.2:1100013060</reroute-action>
+										<reroute-reason>PW up</reroute-reason>
+									</history>
+									<history>
+										<num>3</num>
+										<reroute-time>2025/10/15 01:45:30</reroute-time>
+										<reroute-action>192.0.2.2:1100013060 to 192.0.2.1:1100013060</reroute-action>
+										<reroute-reason>PW up</reroute-reason>
+									</history>
+									<history>
+										<num>4</num>
+										<reroute-time>2025/10/16 04:48:32</reroute-time>
+										<reroute-action>192.0.2.1:1100013060 to 192.0.2.2:1100013060</reroute-action>
+										<reroute-reason>PW down</reroute-reason>
+									</history>
+									<history>
+										<num>5</num>
+										<reroute-time>2025/10/16 05:07:54</reroute-time>
+										<reroute-action>192.0.2.2:1100013060 to 192.0.2.1:1100013060</reroute-action>
+										<reroute-reason>PW up</reroute-reason>
+									</history>
+								</historys>
+							</redundancy-protect-group>
+						</redundancy-protect-groups>
+					</ldp-signaling>
+					<acs>
+						<ac>
+							<interface-name>GigabitEthernet0/2/27</interface-name>
+							<hub-mode>false</hub-mode>
+							<access-port>false</access-port>
+							<state>up</state>
+							<block-state>unblocked</block-state>
+							<last-up-time>2026/04/30 05:17:14</last-up-time>
+							<total-up-time>239 days, 12 hours, 12 minutes, 41 seconds</total-up-time>
+							<token-exceed>false</token-exceed>
+							<oam-state>up</oam-state>
+							<vpls-ac-suppression xmlns="urn:huawei:yang:huawei-l2vpn-vpls-ext">
+								<unicast-in-flag>false</unicast-in-flag>
+								<unicast-in-pass-packets>0</unicast-in-pass-packets>
+								<unicast-in-pass-bytes>0</unicast-in-pass-bytes>
+								<unicast-in-drop-packets>0</unicast-in-drop-packets>
+								<unicast-in-drop-bytes>0</unicast-in-drop-bytes>
+								<unicast-out-flag>false</unicast-out-flag>
+								<unicast-out-pass-packets>0</unicast-out-pass-packets>
+								<unicast-out-pass-bytes>0</unicast-out-pass-bytes>
+								<unicast-out-drop-packets>0</unicast-out-drop-packets>
+								<unicast-out-drop-bytes>0</unicast-out-drop-bytes>
+								<multicast-in-flag>false</multicast-in-flag>
+								<multicast-in-pass-packets>0</multicast-in-pass-packets>
+								<multicast-in-pass-bytes>0</multicast-in-pass-bytes>
+								<multicast-in-drop-packets>0</multicast-in-drop-packets>
+								<multicast-in-drop-bytes>0</multicast-in-drop-bytes>
+								<multicast-out-flag>false</multicast-out-flag>
+								<multicast-out-pass-packets>0</multicast-out-pass-packets>
+								<multicast-out-pass-bytes>0</multicast-out-pass-bytes>
+								<multicast-out-drop-packets>0</multicast-out-drop-packets>
+								<multicast-out-drop-bytes>0</multicast-out-drop-bytes>
+								<broadcast-in-flag>false</broadcast-in-flag>
+								<broadcast-in-pass-packets>0</broadcast-in-pass-packets>
+								<broadcast-in-pass-bytes>0</broadcast-in-pass-bytes>
+								<broadcast-in-drop-packets>0</broadcast-in-drop-packets>
+								<broadcast-in-drop-bytes>0</broadcast-in-drop-bytes>
+								<broadcast-out-flag>false</broadcast-out-flag>
+								<broadcast-out-pass-packets>0</broadcast-out-pass-packets>
+								<broadcast-out-pass-bytes>0</broadcast-out-pass-bytes>
+								<broadcast-out-drop-packets>0</broadcast-out-drop-packets>
+								<broadcast-out-drop-bytes>0</broadcast-out-drop-bytes>
+							</vpls-ac-suppression>
+						</ac>
+						<ac>
+							<interface-name>GigabitEthernet0/2/28</interface-name>
+							<hub-mode>false</hub-mode>
+							<access-port>false</access-port>
+							<state>up</state>
+							<block-state>unblocked</block-state>
+							<last-up-time>2025/09/15 18:52:24</last-up-time>
+							<total-up-time>239 days, 12 hours, 18 minutes, 58 seconds</total-up-time>
+							<token-exceed>false</token-exceed>
+							<oam-state>up</oam-state>
+							<vpls-ac-suppression xmlns="urn:huawei:yang:huawei-l2vpn-vpls-ext">
+								<unicast-in-flag>false</unicast-in-flag>
+								<unicast-in-pass-packets>0</unicast-in-pass-packets>
+								<unicast-in-pass-bytes>0</unicast-in-pass-bytes>
+								<unicast-in-drop-packets>0</unicast-in-drop-packets>
+								<unicast-in-drop-bytes>0</unicast-in-drop-bytes>
+								<unicast-out-flag>false</unicast-out-flag>
+								<unicast-out-pass-packets>0</unicast-out-pass-packets>
+								<unicast-out-pass-bytes>0</unicast-out-pass-bytes>
+								<unicast-out-drop-packets>0</unicast-out-drop-packets>
+								<unicast-out-drop-bytes>0</unicast-out-drop-bytes>
+								<multicast-in-flag>false</multicast-in-flag>
+								<multicast-in-pass-packets>0</multicast-in-pass-packets>
+								<multicast-in-pass-bytes>0</multicast-in-pass-bytes>
+								<multicast-in-drop-packets>0</multicast-in-drop-packets>
+								<multicast-in-drop-bytes>0</multicast-in-drop-bytes>
+								<multicast-out-flag>false</multicast-out-flag>
+								<multicast-out-pass-packets>0</multicast-out-pass-packets>
+								<multicast-out-pass-bytes>0</multicast-out-pass-bytes>
+								<multicast-out-drop-packets>0</multicast-out-drop-packets>
+								<multicast-out-drop-bytes>0</multicast-out-drop-bytes>
+								<broadcast-in-flag>false</broadcast-in-flag>
+								<broadcast-in-pass-packets>0</broadcast-in-pass-packets>
+								<broadcast-in-pass-bytes>0</broadcast-in-pass-bytes>
+								<broadcast-in-drop-packets>0</broadcast-in-drop-packets>
+								<broadcast-in-drop-bytes>0</broadcast-in-drop-bytes>
+								<broadcast-out-flag>false</broadcast-out-flag>
+								<broadcast-out-pass-packets>0</broadcast-out-pass-packets>
+								<broadcast-out-pass-bytes>0</broadcast-out-pass-bytes>
+								<broadcast-out-drop-packets>0</broadcast-out-drop-packets>
+								<broadcast-out-drop-bytes>0</broadcast-out-drop-bytes>
+							</vpls-ac-suppression>
+						</ac>
+						<ac>
+							<interface-name>GigabitEthernet0/2/8.3060</interface-name>
+							<hub-mode>false</hub-mode>
+							<access-port>false</access-port>
+							<state>up</state>
+							<block-state>unblocked</block-state>
+							<last-up-time>2025/09/15 18:52:24</last-up-time>
+							<total-up-time>239 days, 12 hours, 18 minutes, 58 seconds</total-up-time>
+							<token-exceed>false</token-exceed>
+							<oam-state>up</oam-state>
+							<vpls-ac-suppression xmlns="urn:huawei:yang:huawei-l2vpn-vpls-ext">
+								<unicast-in-flag>false</unicast-in-flag>
+								<unicast-in-pass-packets>0</unicast-in-pass-packets>
+								<unicast-in-pass-bytes>0</unicast-in-pass-bytes>
+								<unicast-in-drop-packets>0</unicast-in-drop-packets>
+								<unicast-in-drop-bytes>0</unicast-in-drop-bytes>
+								<unicast-out-flag>false</unicast-out-flag>
+								<unicast-out-pass-packets>0</unicast-out-pass-packets>
+								<unicast-out-pass-bytes>0</unicast-out-pass-bytes>
+								<unicast-out-drop-packets>0</unicast-out-drop-packets>
+								<unicast-out-drop-bytes>0</unicast-out-drop-bytes>
+								<multicast-in-flag>false</multicast-in-flag>
+								<multicast-in-pass-packets>0</multicast-in-pass-packets>
+								<multicast-in-pass-bytes>0</multicast-in-pass-bytes>
+								<multicast-in-drop-packets>0</multicast-in-drop-packets>
+								<multicast-in-drop-bytes>0</multicast-in-drop-bytes>
+								<multicast-out-flag>false</multicast-out-flag>
+								<multicast-out-pass-packets>0</multicast-out-pass-packets>
+								<multicast-out-pass-bytes>0</multicast-out-pass-bytes>
+								<multicast-out-drop-packets>0</multicast-out-drop-packets>
+								<multicast-out-drop-bytes>0</multicast-out-drop-bytes>
+								<broadcast-in-flag>false</broadcast-in-flag>
+								<broadcast-in-pass-packets>0</broadcast-in-pass-packets>
+								<broadcast-in-pass-bytes>0</broadcast-in-pass-bytes>
+								<broadcast-in-drop-packets>0</broadcast-in-drop-packets>
+								<broadcast-in-drop-bytes>0</broadcast-in-drop-bytes>
+								<broadcast-out-flag>false</broadcast-out-flag>
+								<broadcast-out-pass-packets>0</broadcast-out-pass-packets>
+								<broadcast-out-pass-bytes>0</broadcast-out-pass-bytes>
+								<broadcast-out-drop-packets>0</broadcast-out-drop-packets>
+								<broadcast-out-drop-bytes>0</broadcast-out-drop-bytes>
+							</vpls-ac-suppression>
+							<vpls-ac-statistics xmlns="urn:huawei:yang:huawei-l2vpn-vpls-ext">
+								<total-in-packets>0</total-in-packets>
+								<total-in-bytes>0</total-in-bytes>
+								<total-out-packets>0</total-out-packets>
+								<total-out-bytes>0</total-out-bytes>
+								<unicast-in-packets>0</unicast-in-packets>
+								<multicast-in-packets>0</multicast-in-packets>
+								<broadcast-in-packets>0</broadcast-in-packets>
+								<unknown-unicast-in-packets>0</unknown-unicast-in-packets>
+								<unicast-out-packets>0</unicast-out-packets>
+								<multicast-out-packets>0</multicast-out-packets>
+								<broadcast-out-packets>0</broadcast-out-packets>
+								<unknown-unicast-out-packets>0</unknown-unicast-out-packets>
+							</vpls-ac-statistics>
+						</ac>
+						<ac>
+							<interface-name>GigabitEthernet0/2/9.3060</interface-name>
+							<hub-mode>false</hub-mode>
+							<access-port>false</access-port>
+							<state>up</state>
+							<block-state>unblocked</block-state>
+							<last-up-time>2025/09/15 18:52:24</last-up-time>
+							<total-up-time>239 days, 12 hours, 18 minutes, 58 seconds</total-up-time>
+							<token-exceed>false</token-exceed>
+							<oam-state>up</oam-state>
+							<vpls-ac-suppression xmlns="urn:huawei:yang:huawei-l2vpn-vpls-ext">
+								<unicast-in-flag>false</unicast-in-flag>
+								<unicast-in-pass-packets>0</unicast-in-pass-packets>
+								<unicast-in-pass-bytes>0</unicast-in-pass-bytes>
+								<unicast-in-drop-packets>0</unicast-in-drop-packets>
+								<unicast-in-drop-bytes>0</unicast-in-drop-bytes>
+								<unicast-out-flag>false</unicast-out-flag>
+								<unicast-out-pass-packets>0</unicast-out-pass-packets>
+								<unicast-out-pass-bytes>0</unicast-out-pass-bytes>
+								<unicast-out-drop-packets>0</unicast-out-drop-packets>
+								<unicast-out-drop-bytes>0</unicast-out-drop-bytes>
+								<multicast-in-flag>false</multicast-in-flag>
+								<multicast-in-pass-packets>0</multicast-in-pass-packets>
+								<multicast-in-pass-bytes>0</multicast-in-pass-bytes>
+								<multicast-in-drop-packets>0</multicast-in-drop-packets>
+								<multicast-in-drop-bytes>0</multicast-in-drop-bytes>
+								<multicast-out-flag>false</multicast-out-flag>
+								<multicast-out-pass-packets>0</multicast-out-pass-packets>
+								<multicast-out-pass-bytes>0</multicast-out-pass-bytes>
+								<multicast-out-drop-packets>0</multicast-out-drop-packets>
+								<multicast-out-drop-bytes>0</multicast-out-drop-bytes>
+								<broadcast-in-flag>false</broadcast-in-flag>
+								<broadcast-in-pass-packets>0</broadcast-in-pass-packets>
+								<broadcast-in-pass-bytes>0</broadcast-in-pass-bytes>
+								<broadcast-in-drop-packets>0</broadcast-in-drop-packets>
+								<broadcast-in-drop-bytes>0</broadcast-in-drop-bytes>
+								<broadcast-out-flag>false</broadcast-out-flag>
+								<broadcast-out-pass-packets>0</broadcast-out-pass-packets>
+								<broadcast-out-pass-bytes>0</broadcast-out-pass-bytes>
+								<broadcast-out-drop-packets>0</broadcast-out-drop-packets>
+								<broadcast-out-drop-bytes>0</broadcast-out-drop-bytes>
+							</vpls-ac-suppression>
+							<vpls-ac-statistics xmlns="urn:huawei:yang:huawei-l2vpn-vpls-ext">
+								<total-in-packets>0</total-in-packets>
+								<total-in-bytes>0</total-in-bytes>
+								<total-out-packets>0</total-out-packets>
+								<total-out-bytes>0</total-out-bytes>
+								<unicast-in-packets>0</unicast-in-packets>
+								<multicast-in-packets>0</multicast-in-packets>
+								<broadcast-in-packets>0</broadcast-in-packets>
+								<unknown-unicast-in-packets>0</unknown-unicast-in-packets>
+								<unicast-out-packets>0</unicast-out-packets>
+								<multicast-out-packets>0</multicast-out-packets>
+								<broadcast-out-packets>0</broadcast-out-packets>
+								<unknown-unicast-out-packets>0</unknown-unicast-out-packets>
+							</vpls-ac-statistics>
+						</ac>
+						<ac>
+							<interface-name>GigabitEthernet0/2/10.3060</interface-name>
+							<hub-mode>false</hub-mode>
+							<access-port>false</access-port>
+							<state>up</state>
+							<block-state>unblocked</block-state>
+							<last-up-time>2025/09/15 18:52:24</last-up-time>
+							<total-up-time>239 days, 12 hours, 18 minutes, 58 seconds</total-up-time>
+							<token-exceed>false</token-exceed>
+							<oam-state>up</oam-state>
+							<vpls-ac-suppression xmlns="urn:huawei:yang:huawei-l2vpn-vpls-ext">
+								<unicast-in-flag>false</unicast-in-flag>
+								<unicast-in-pass-packets>0</unicast-in-pass-packets>
+								<unicast-in-pass-bytes>0</unicast-in-pass-bytes>
+								<unicast-in-drop-packets>0</unicast-in-drop-packets>
+								<unicast-in-drop-bytes>0</unicast-in-drop-bytes>
+								<unicast-out-flag>false</unicast-out-flag>
+								<unicast-out-pass-packets>0</unicast-out-pass-packets>
+								<unicast-out-pass-bytes>0</unicast-out-pass-bytes>
+								<unicast-out-drop-packets>0</unicast-out-drop-packets>
+								<unicast-out-drop-bytes>0</unicast-out-drop-bytes>
+								<multicast-in-flag>false</multicast-in-flag>
+								<multicast-in-pass-packets>0</multicast-in-pass-packets>
+								<multicast-in-pass-bytes>0</multicast-in-pass-bytes>
+								<multicast-in-drop-packets>0</multicast-in-drop-packets>
+								<multicast-in-drop-bytes>0</multicast-in-drop-bytes>
+								<multicast-out-flag>false</multicast-out-flag>
+								<multicast-out-pass-packets>0</multicast-out-pass-packets>
+								<multicast-out-pass-bytes>0</multicast-out-pass-bytes>
+								<multicast-out-drop-packets>0</multicast-out-drop-packets>
+								<multicast-out-drop-bytes>0</multicast-out-drop-bytes>
+								<broadcast-in-flag>false</broadcast-in-flag>
+								<broadcast-in-pass-packets>0</broadcast-in-pass-packets>
+								<broadcast-in-pass-bytes>0</broadcast-in-pass-bytes>
+								<broadcast-in-drop-packets>0</broadcast-in-drop-packets>
+								<broadcast-in-drop-bytes>0</broadcast-in-drop-bytes>
+								<broadcast-out-flag>false</broadcast-out-flag>
+								<broadcast-out-pass-packets>0</broadcast-out-pass-packets>
+								<broadcast-out-pass-bytes>0</broadcast-out-pass-bytes>
+								<broadcast-out-drop-packets>0</broadcast-out-drop-packets>
+								<broadcast-out-drop-bytes>0</broadcast-out-drop-bytes>
+							</vpls-ac-suppression>
+							<vpls-ac-statistics xmlns="urn:huawei:yang:huawei-l2vpn-vpls-ext">
+								<total-in-packets>0</total-in-packets>
+								<total-in-bytes>0</total-in-bytes>
+								<total-out-packets>0</total-out-packets>
+								<total-out-bytes>0</total-out-bytes>
+								<unicast-in-packets>0</unicast-in-packets>
+								<multicast-in-packets>0</multicast-in-packets>
+								<broadcast-in-packets>0</broadcast-in-packets>
+								<unknown-unicast-in-packets>0</unknown-unicast-in-packets>
+								<unicast-out-packets>0</unicast-out-packets>
+								<multicast-out-packets>0</multicast-out-packets>
+								<broadcast-out-packets>0</broadcast-out-packets>
+								<unknown-unicast-out-packets>0</unknown-unicast-out-packets>
+							</vpls-ac-statistics>
+						</ac>
+						<ac>
+							<interface-name>GigabitEthernet0/2/11.3060</interface-name>
+							<hub-mode>false</hub-mode>
+							<access-port>false</access-port>
+							<state>up</state>
+							<block-state>unblocked</block-state>
+							<last-up-time>2025/09/15 18:52:24</last-up-time>
+							<total-up-time>239 days, 12 hours, 18 minutes, 58 seconds</total-up-time>
+							<token-exceed>false</token-exceed>
+							<oam-state>up</oam-state>
+							<vpls-ac-suppression xmlns="urn:huawei:yang:huawei-l2vpn-vpls-ext">
+								<unicast-in-flag>false</unicast-in-flag>
+								<unicast-in-pass-packets>0</unicast-in-pass-packets>
+								<unicast-in-pass-bytes>0</unicast-in-pass-bytes>
+								<unicast-in-drop-packets>0</unicast-in-drop-packets>
+								<unicast-in-drop-bytes>0</unicast-in-drop-bytes>
+								<unicast-out-flag>false</unicast-out-flag>
+								<unicast-out-pass-packets>0</unicast-out-pass-packets>
+								<unicast-out-pass-bytes>0</unicast-out-pass-bytes>
+								<unicast-out-drop-packets>0</unicast-out-drop-packets>
+								<unicast-out-drop-bytes>0</unicast-out-drop-bytes>
+								<multicast-in-flag>false</multicast-in-flag>
+								<multicast-in-pass-packets>0</multicast-in-pass-packets>
+								<multicast-in-pass-bytes>0</multicast-in-pass-bytes>
+								<multicast-in-drop-packets>0</multicast-in-drop-packets>
+								<multicast-in-drop-bytes>0</multicast-in-drop-bytes>
+								<multicast-out-flag>false</multicast-out-flag>
+								<multicast-out-pass-packets>0</multicast-out-pass-packets>
+								<multicast-out-pass-bytes>0</multicast-out-pass-bytes>
+								<multicast-out-drop-packets>0</multicast-out-drop-packets>
+								<multicast-out-drop-bytes>0</multicast-out-drop-bytes>
+								<broadcast-in-flag>false</broadcast-in-flag>
+								<broadcast-in-pass-packets>0</broadcast-in-pass-packets>
+								<broadcast-in-pass-bytes>0</broadcast-in-pass-bytes>
+								<broadcast-in-drop-packets>0</broadcast-in-drop-packets>
+								<broadcast-in-drop-bytes>0</broadcast-in-drop-bytes>
+								<broadcast-out-flag>false</broadcast-out-flag>
+								<broadcast-out-pass-packets>0</broadcast-out-pass-packets>
+								<broadcast-out-pass-bytes>0</broadcast-out-pass-bytes>
+								<broadcast-out-drop-packets>0</broadcast-out-drop-packets>
+								<broadcast-out-drop-bytes>0</broadcast-out-drop-bytes>
+							</vpls-ac-suppression>
+							<vpls-ac-statistics xmlns="urn:huawei:yang:huawei-l2vpn-vpls-ext">
+								<total-in-packets>0</total-in-packets>
+								<total-in-bytes>0</total-in-bytes>
+								<total-out-packets>0</total-out-packets>
+								<total-out-bytes>0</total-out-bytes>
+								<unicast-in-packets>0</unicast-in-packets>
+								<multicast-in-packets>0</multicast-in-packets>
+								<broadcast-in-packets>0</broadcast-in-packets>
+								<unknown-unicast-in-packets>0</unknown-unicast-in-packets>
+								<unicast-out-packets>0</unicast-out-packets>
+								<multicast-out-packets>0</multicast-out-packets>
+								<broadcast-out-packets>0</broadcast-out-packets>
+								<unknown-unicast-out-packets>0</unknown-unicast-out-packets>
+							</vpls-ac-statistics>
+						</ac>
+						<ac>
+							<interface-name>GigabitEthernet0/2/16.3060</interface-name>
+							<hub-mode>false</hub-mode>
+							<access-port>false</access-port>
+							<state>up</state>
+							<block-state>unblocked</block-state>
+							<last-up-time>2025/09/15 18:52:24</last-up-time>
+							<total-up-time>239 days, 12 hours, 18 minutes, 58 seconds</total-up-time>
+							<token-exceed>false</token-exceed>
+							<oam-state>up</oam-state>
+							<vpls-ac-suppression xmlns="urn:huawei:yang:huawei-l2vpn-vpls-ext">
+								<unicast-in-flag>false</unicast-in-flag>
+								<unicast-in-pass-packets>0</unicast-in-pass-packets>
+								<unicast-in-pass-bytes>0</unicast-in-pass-bytes>
+								<unicast-in-drop-packets>0</unicast-in-drop-packets>
+								<unicast-in-drop-bytes>0</unicast-in-drop-bytes>
+								<unicast-out-flag>false</unicast-out-flag>
+								<unicast-out-pass-packets>0</unicast-out-pass-packets>
+								<unicast-out-pass-bytes>0</unicast-out-pass-bytes>
+								<unicast-out-drop-packets>0</unicast-out-drop-packets>
+								<unicast-out-drop-bytes>0</unicast-out-drop-bytes>
+								<multicast-in-flag>false</multicast-in-flag>
+								<multicast-in-pass-packets>0</multicast-in-pass-packets>
+								<multicast-in-pass-bytes>0</multicast-in-pass-bytes>
+								<multicast-in-drop-packets>0</multicast-in-drop-packets>
+								<multicast-in-drop-bytes>0</multicast-in-drop-bytes>
+								<multicast-out-flag>false</multicast-out-flag>
+								<multicast-out-pass-packets>0</multicast-out-pass-packets>
+								<multicast-out-pass-bytes>0</multicast-out-pass-bytes>
+								<multicast-out-drop-packets>0</multicast-out-drop-packets>
+								<multicast-out-drop-bytes>0</multicast-out-drop-bytes>
+								<broadcast-in-flag>false</broadcast-in-flag>
+								<broadcast-in-pass-packets>0</broadcast-in-pass-packets>
+								<broadcast-in-pass-bytes>0</broadcast-in-pass-bytes>
+								<broadcast-in-drop-packets>0</broadcast-in-drop-packets>
+								<broadcast-in-drop-bytes>0</broadcast-in-drop-bytes>
+								<broadcast-out-flag>false</broadcast-out-flag>
+								<broadcast-out-pass-packets>0</broadcast-out-pass-packets>
+								<broadcast-out-pass-bytes>0</broadcast-out-pass-bytes>
+								<broadcast-out-drop-packets>0</broadcast-out-drop-packets>
+								<broadcast-out-drop-bytes>0</broadcast-out-drop-bytes>
+							</vpls-ac-suppression>
+							<vpls-ac-statistics xmlns="urn:huawei:yang:huawei-l2vpn-vpls-ext">
+								<total-in-packets>0</total-in-packets>
+								<total-in-bytes>0</total-in-bytes>
+								<total-out-packets>0</total-out-packets>
+								<total-out-bytes>0</total-out-bytes>
+								<unicast-in-packets>0</unicast-in-packets>
+								<multicast-in-packets>0</multicast-in-packets>
+								<broadcast-in-packets>0</broadcast-in-packets>
+								<unknown-unicast-in-packets>0</unknown-unicast-in-packets>
+								<unicast-out-packets>0</unicast-out-packets>
+								<multicast-out-packets>0</multicast-out-packets>
+								<broadcast-out-packets>0</broadcast-out-packets>
+								<unknown-unicast-out-packets>0</unknown-unicast-out-packets>
+							</vpls-ac-statistics>
+						</ac>
+						<ac>
+							<interface-name>GigabitEthernet0/2/18.3060</interface-name>
+							<hub-mode>false</hub-mode>
+							<access-port>false</access-port>
+							<state>down</state>
+							<block-state>unblocked</block-state>
+							<last-up-time>2025/09/15 18:47:45</last-up-time>
+							<total-up-time>205 days, 9 hours, 28 minutes, 24 seconds</total-up-time>
+							<token-exceed>false</token-exceed>
+							<oam-state>up</oam-state>
+							<vpls-ac-suppression xmlns="urn:huawei:yang:huawei-l2vpn-vpls-ext">
+								<unicast-in-flag>false</unicast-in-flag>
+								<unicast-in-pass-packets>0</unicast-in-pass-packets>
+								<unicast-in-pass-bytes>0</unicast-in-pass-bytes>
+								<unicast-in-drop-packets>0</unicast-in-drop-packets>
+								<unicast-in-drop-bytes>0</unicast-in-drop-bytes>
+								<unicast-out-flag>false</unicast-out-flag>
+								<unicast-out-pass-packets>0</unicast-out-pass-packets>
+								<unicast-out-pass-bytes>0</unicast-out-pass-bytes>
+								<unicast-out-drop-packets>0</unicast-out-drop-packets>
+								<unicast-out-drop-bytes>0</unicast-out-drop-bytes>
+								<multicast-in-flag>false</multicast-in-flag>
+								<multicast-in-pass-packets>0</multicast-in-pass-packets>
+								<multicast-in-pass-bytes>0</multicast-in-pass-bytes>
+								<multicast-in-drop-packets>0</multicast-in-drop-packets>
+								<multicast-in-drop-bytes>0</multicast-in-drop-bytes>
+								<multicast-out-flag>false</multicast-out-flag>
+								<multicast-out-pass-packets>0</multicast-out-pass-packets>
+								<multicast-out-pass-bytes>0</multicast-out-pass-bytes>
+								<multicast-out-drop-packets>0</multicast-out-drop-packets>
+								<multicast-out-drop-bytes>0</multicast-out-drop-bytes>
+								<broadcast-in-flag>false</broadcast-in-flag>
+								<broadcast-in-pass-packets>0</broadcast-in-pass-packets>
+								<broadcast-in-pass-bytes>0</broadcast-in-pass-bytes>
+								<broadcast-in-drop-packets>0</broadcast-in-drop-packets>
+								<broadcast-in-drop-bytes>0</broadcast-in-drop-bytes>
+								<broadcast-out-flag>false</broadcast-out-flag>
+								<broadcast-out-pass-packets>0</broadcast-out-pass-packets>
+								<broadcast-out-pass-bytes>0</broadcast-out-pass-bytes>
+								<broadcast-out-drop-packets>0</broadcast-out-drop-packets>
+								<broadcast-out-drop-bytes>0</broadcast-out-drop-bytes>
+							</vpls-ac-suppression>
+							<vpls-ac-statistics xmlns="urn:huawei:yang:huawei-l2vpn-vpls-ext">
+								<total-in-packets>0</total-in-packets>
+								<total-in-bytes>0</total-in-bytes>
+								<total-out-packets>0</total-out-packets>
+								<total-out-bytes>0</total-out-bytes>
+								<unicast-in-packets>0</unicast-in-packets>
+								<multicast-in-packets>0</multicast-in-packets>
+								<broadcast-in-packets>0</broadcast-in-packets>
+								<unknown-unicast-in-packets>0</unknown-unicast-in-packets>
+								<unicast-out-packets>0</unicast-out-packets>
+								<multicast-out-packets>0</multicast-out-packets>
+								<broadcast-out-packets>0</broadcast-out-packets>
+								<unknown-unicast-out-packets>0</unknown-unicast-out-packets>
+							</vpls-ac-statistics>
+						</ac>
+						<ac>
+							<interface-name>Eth-Trunk1.3060</interface-name>
+							<hub-mode>false</hub-mode>
+							<access-port>false</access-port>
+							<state>up</state>
+							<block-state>unblocked</block-state>
+							<last-up-time>2025/09/15 18:52:25</last-up-time>
+							<total-up-time>239 days, 12 hours, 18 minutes, 57 seconds</total-up-time>
+							<token-exceed>false</token-exceed>
+							<oam-state>up</oam-state>
+							<vpls-ac-suppression xmlns="urn:huawei:yang:huawei-l2vpn-vpls-ext">
+								<unicast-in-flag>false</unicast-in-flag>
+								<unicast-in-pass-packets>0</unicast-in-pass-packets>
+								<unicast-in-pass-bytes>0</unicast-in-pass-bytes>
+								<unicast-in-drop-packets>0</unicast-in-drop-packets>
+								<unicast-in-drop-bytes>0</unicast-in-drop-bytes>
+								<unicast-out-flag>false</unicast-out-flag>
+								<unicast-out-pass-packets>0</unicast-out-pass-packets>
+								<unicast-out-pass-bytes>0</unicast-out-pass-bytes>
+								<unicast-out-drop-packets>0</unicast-out-drop-packets>
+								<unicast-out-drop-bytes>0</unicast-out-drop-bytes>
+								<multicast-in-flag>false</multicast-in-flag>
+								<multicast-in-pass-packets>0</multicast-in-pass-packets>
+								<multicast-in-pass-bytes>0</multicast-in-pass-bytes>
+								<multicast-in-drop-packets>0</multicast-in-drop-packets>
+								<multicast-in-drop-bytes>0</multicast-in-drop-bytes>
+								<multicast-out-flag>false</multicast-out-flag>
+								<multicast-out-pass-packets>0</multicast-out-pass-packets>
+								<multicast-out-pass-bytes>0</multicast-out-pass-bytes>
+								<multicast-out-drop-packets>0</multicast-out-drop-packets>
+								<multicast-out-drop-bytes>0</multicast-out-drop-bytes>
+								<broadcast-in-flag>false</broadcast-in-flag>
+								<broadcast-in-pass-packets>0</broadcast-in-pass-packets>
+								<broadcast-in-pass-bytes>0</broadcast-in-pass-bytes>
+								<broadcast-in-drop-packets>0</broadcast-in-drop-packets>
+								<broadcast-in-drop-bytes>0</broadcast-in-drop-bytes>
+								<broadcast-out-flag>false</broadcast-out-flag>
+								<broadcast-out-pass-packets>0</broadcast-out-pass-packets>
+								<broadcast-out-pass-bytes>0</broadcast-out-pass-bytes>
+								<broadcast-out-drop-packets>0</broadcast-out-drop-packets>
+								<broadcast-out-drop-bytes>0</broadcast-out-drop-bytes>
+							</vpls-ac-suppression>
+							<vpls-ac-statistics xmlns="urn:huawei:yang:huawei-l2vpn-vpls-ext">
+								<total-in-packets>0</total-in-packets>
+								<total-in-bytes>0</total-in-bytes>
+								<total-out-packets>0</total-out-packets>
+								<total-out-bytes>0</total-out-bytes>
+								<unicast-in-packets>0</unicast-in-packets>
+								<multicast-in-packets>0</multicast-in-packets>
+								<broadcast-in-packets>0</broadcast-in-packets>
+								<unknown-unicast-in-packets>0</unknown-unicast-in-packets>
+								<unicast-out-packets>0</unicast-out-packets>
+								<multicast-out-packets>0</multicast-out-packets>
+								<broadcast-out-packets>0</broadcast-out-packets>
+								<unknown-unicast-out-packets>0</unknown-unicast-out-packets>
+							</vpls-ac-statistics>
+						</ac>
+						<ac>
+							<interface-name>Eth-Trunk2.3060</interface-name>
+							<hub-mode>false</hub-mode>
+							<access-port>false</access-port>
+							<state>up</state>
+							<block-state>unblocked</block-state>
+							<last-up-time>2025/09/15 18:52:27</last-up-time>
+							<total-up-time>239 days, 12 hours, 18 minutes, 55 seconds</total-up-time>
+							<token-exceed>false</token-exceed>
+							<oam-state>up</oam-state>
+							<vpls-ac-suppression xmlns="urn:huawei:yang:huawei-l2vpn-vpls-ext">
+								<unicast-in-flag>false</unicast-in-flag>
+								<unicast-in-pass-packets>0</unicast-in-pass-packets>
+								<unicast-in-pass-bytes>0</unicast-in-pass-bytes>
+								<unicast-in-drop-packets>0</unicast-in-drop-packets>
+								<unicast-in-drop-bytes>0</unicast-in-drop-bytes>
+								<unicast-out-flag>false</unicast-out-flag>
+								<unicast-out-pass-packets>0</unicast-out-pass-packets>
+								<unicast-out-pass-bytes>0</unicast-out-pass-bytes>
+								<unicast-out-drop-packets>0</unicast-out-drop-packets>
+								<unicast-out-drop-bytes>0</unicast-out-drop-bytes>
+								<multicast-in-flag>false</multicast-in-flag>
+								<multicast-in-pass-packets>0</multicast-in-pass-packets>
+								<multicast-in-pass-bytes>0</multicast-in-pass-bytes>
+								<multicast-in-drop-packets>0</multicast-in-drop-packets>
+								<multicast-in-drop-bytes>0</multicast-in-drop-bytes>
+								<multicast-out-flag>false</multicast-out-flag>
+								<multicast-out-pass-packets>0</multicast-out-pass-packets>
+								<multicast-out-pass-bytes>0</multicast-out-pass-bytes>
+								<multicast-out-drop-packets>0</multicast-out-drop-packets>
+								<multicast-out-drop-bytes>0</multicast-out-drop-bytes>
+								<broadcast-in-flag>false</broadcast-in-flag>
+								<broadcast-in-pass-packets>0</broadcast-in-pass-packets>
+								<broadcast-in-pass-bytes>0</broadcast-in-pass-bytes>
+								<broadcast-in-drop-packets>0</broadcast-in-drop-packets>
+								<broadcast-in-drop-bytes>0</broadcast-in-drop-bytes>
+								<broadcast-out-flag>false</broadcast-out-flag>
+								<broadcast-out-pass-packets>0</broadcast-out-pass-packets>
+								<broadcast-out-pass-bytes>0</broadcast-out-pass-bytes>
+								<broadcast-out-drop-packets>0</broadcast-out-drop-packets>
+								<broadcast-out-drop-bytes>0</broadcast-out-drop-bytes>
+							</vpls-ac-suppression>
+							<vpls-ac-statistics xmlns="urn:huawei:yang:huawei-l2vpn-vpls-ext">
+								<total-in-packets>0</total-in-packets>
+								<total-in-bytes>0</total-in-bytes>
+								<total-out-packets>0</total-out-packets>
+								<total-out-bytes>0</total-out-bytes>
+								<unicast-in-packets>0</unicast-in-packets>
+								<multicast-in-packets>0</multicast-in-packets>
+								<broadcast-in-packets>0</broadcast-in-packets>
+								<unknown-unicast-in-packets>0</unknown-unicast-in-packets>
+								<unicast-out-packets>0</unicast-out-packets>
+								<multicast-out-packets>0</multicast-out-packets>
+								<broadcast-out-packets>0</broadcast-out-packets>
+								<unknown-unicast-out-packets>0</unknown-unicast-out-packets>
+							</vpls-ac-statistics>
+						</ac>
+					</acs>
+					<statistic>
+						<up-pw-num>1</up-pw-num>
+						<down-pw-num>0</down-pw-num>
+						<backup-pw-num>1</backup-pw-num>
+						<up-bfd-num>0</up-bfd-num>
+						<down-bfd-num>0</down-bfd-num>
+						<up-ac-num>9</up-ac-num>
+						<down-ac-num>1</down-ac-num>
+						<down-acoam-num>0</down-acoam-num>
+					</statistic>
+					<vsi-pipe xmlns="urn:huawei:yang:huawei-l2vpn-vpls-ext">
+						<split-mode>false</split-mode>
+						<pipe-mode>uniform</pipe-mode>
+					</vsi-pipe>
+					<vpls-ext xmlns="urn:huawei:yang:huawei-l2vpn-vpls-ext">
+						<pw-packet-type-traffic-statistic>false</pw-packet-type-traffic-statistic>
+					</vpls-ext>
+					<mac-flapping xmlns="urn:huawei:yang:huawei-mac-flapping">
+						<loop-detect>
+							<loop-times>3</loop-times>
+							<detect-cycle>10</detect-cycle>
+							<cycles>3</cycles>
+							<action>block</action>
+							<retry-times>2</retry-times>
+							<block-time>1000</block-time>
+						</loop-detect>
+						<precise-block></precise-block>
+					</mac-flapping>
+				</vpls>
+			</instance>
+		</instances>
+	</l2vpn>
+</data>

@@ -1,0 +1,13 @@
+<state xmlns="urn:nokia.com:sros:ns:yang:sr:state">
+  <router>
+    <router-name>Base</router-name>
+    <interface>
+      <interface-name/>
+      <ipv4>
+        <neighbor-discovery>
+          <neighbor/>
+        </neighbor-discovery>
+      </ipv4>
+    </interface>
+  </router>
+</state>

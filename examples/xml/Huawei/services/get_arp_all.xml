@@ -1,0 +1,5 @@
+<arp xmlns="urn:huawei:yang:huawei-arp">
+  <query-entries>
+    <query-entry/>
+  </query-entries>
+</arp>

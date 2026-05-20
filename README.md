@@ -4,12 +4,21 @@
 
 ## Features
 
-- Connect to network devices using REST API and CLI.
+- Connect to network devices using REST API, NETCONF, and CLI.
 - Interact with management systems (e.g., Huawei NCE, Nokia NSP).
 - Retrieve inventory data.
 - Obtain alarm lists.
+- Retrieve L2VPN services (VPLS/VPWS), FDB (MAC tables) and ARP tables via
+  NETCONF, with vendor-agnostic OpenConfig-shaped responses on Nokia SR OS
+  and Huawei VRP — see [`docs/public/SERVICES_CLIENT.md`](docs/public/SERVICES_CLIENT.md).
 - Convenient token management for authorization.
 - Automatic token refresh upon expiration.
+
+## API references
+
+- [Huawei NCE REST API](docs/public/NCE_API_REFERENCE.md) — `RestNCE` / `NceDataProvider`
+- [Nokia NSP REST API](docs/public/NSP_API_REFERENCE.md) — `RestNSP` / `NspDataProvider`
+- [NETCONF Services Client](docs/public/SERVICES_CLIENT.md) — `ServicesClient` for L2VPN / FDB / ARP across Nokia + Huawei
 
 ## Installation
 
@@ -96,7 +105,7 @@ To run examples, follow these steps:
 
 ## Usage
 
-Here is an example of how to use the library:
+### REST API (Huawei NCE)
 
 ```python
 from pynetcom import RestNCE
@@ -109,7 +118,40 @@ nce.send_request("/restconf/v2/data/huawei-nce-resource-inventory:subnets")
 items = nce.get_data()
 print(items)
 ```
-For additional info see examples/ folder
+
+### NETCONF Services Client (Nokia + Huawei)
+
+```python
+from pynetcom import NetconfClient, ServicesClient
+
+# Nokia uses port 830, Huawei uses port 22
+nc = NetconfClient(
+    host=NETCONF_HOST, port=NETCONF_PORT,
+    user=NETCONF_USER, password=NETCONF_PASSWORD,
+    device_params={"name": "sros"},        # Nokia; use "huaweiyang" for Huawei
+)
+sc = ServicesClient(nc, vendor="nokia")    # or vendor="huawei"
+
+# List all L2VPN (VPLS) and VPWS services
+for svc in sc.get_l2vpn_services():
+    print(svc.name, svc.type, svc.oper_status)
+
+# Full detail of one service — SAPs, PWs, and remote_system (far-end IP) populated
+detail = sc.get_l2vpn_services(name="VPLS-100")[0]
+
+# MAC table scoped to one service (server-side YANG-key narrowing)
+macs = sc.get_mac_table(service_name="VPLS-100")
+
+# ARP table for a VRF (server-side narrowing)
+arps = sc.get_arp_table(vrf="VPRN-200")
+
+nc.close()
+```
+
+For the full API reference (vendor YANG paths, JSON output shape, performance
+notes, filtering strategy) see [`docs/public/SERVICES_CLIENT.md`](docs/public/SERVICES_CLIENT.md).
+
+For additional examples see the `examples/` folder.
 
 ## License
 

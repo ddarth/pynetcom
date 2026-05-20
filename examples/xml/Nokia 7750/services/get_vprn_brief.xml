@@ -1,0 +1,8 @@
+<state xmlns="urn:nokia.com:sros:ns:yang:sr:state">
+  <service>
+    <vprn>
+      <service-name/>
+      <oper-state/>
+    </vprn>
+  </service>
+</state>

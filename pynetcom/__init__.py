@@ -3,6 +3,7 @@
 from pynetcom.rest_nce import RestNCE, NCEAuthenticationError
 from pynetcom.rest_nsp import RestNSP
 from pynetcom.netconf_client import NetconfClient
+from pynetcom.services_client import ServicesClient
 from pynetcom import utils
 
 # REST API helpers
@@ -10,6 +11,25 @@ from pynetcom.utils.helpers.rest_api import (
     RestNMSDataFilter,
     NspDataProvider,
     NceDataProvider,
+)
+
+# Service-layer data containers (OpenConfig-aligned)
+from pynetcom.utils.helpers.netconf.rpc_data_containers.services import (
+    NetworkInstance,
+    ConnectionPoint,
+    Endpoint,
+    LocalEndpoint,
+    RemoteEndpoint,
+    Fdb,
+    MacTable,
+    MacEntry,
+    Neighbor,
+    L3Interface,
+    NetworkInstanceType,
+    EndpointType,
+    MacEntryType,
+    MacSourceType,
+    NeighborOrigin,
 )
 
 # from pynetcom.cli_client import EquipCLI, NokiaEquipCLI, HuaweiEquipCLI, cli_caret
@@ -34,9 +54,26 @@ __all__ = [
     "RestNCE",
     "RestNSP",
     "NetconfClient",
+    "ServicesClient",
     "utils",
     "RestNMSDataFilter",
     "NspDataProvider",
     "NceDataProvider",
     "NCEAuthenticationError",
+    # Service-layer (OpenConfig-aligned) data containers
+    "NetworkInstance",
+    "ConnectionPoint",
+    "Endpoint",
+    "LocalEndpoint",
+    "RemoteEndpoint",
+    "Fdb",
+    "MacTable",
+    "MacEntry",
+    "Neighbor",
+    "L3Interface",
+    "NetworkInstanceType",
+    "EndpointType",
+    "MacEntryType",
+    "MacSourceType",
+    "NeighborOrigin",
 ]

@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rpc-reply xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" message-id="urn:uuid:d49f7702-0a6d-b02a-7ad1-40d72a11305c">
+	<data>
+		<state xmlns="urn:nokia.com:sros:ns:yang:sr:state">
+			<service>
+				<sdp>
+					<sdp-id>1</sdp-id>
+					<oper-tunnel-far-end-inet-address>192.0.2.1</oper-tunnel-far-end-inet-address>
+				</sdp>
+				<sdp>
+					<sdp-id>2</sdp-id>
+					<oper-tunnel-far-end-inet-address>192.0.2.2</oper-tunnel-far-end-inet-address>
+				</sdp>
+				<sdp>
+					<sdp-id>10179</sdp-id>
+					<oper-tunnel-far-end-inet-address>192.0.2.179</oper-tunnel-far-end-inet-address>
+				</sdp>
+				<sdp>
+					<sdp-id>15041</sdp-id>
+					<oper-tunnel-far-end-inet-address>198.51.100.41</oper-tunnel-far-end-inet-address>
+				</sdp>
+			</service>
+		</state>
+	</data>
+</rpc-reply>

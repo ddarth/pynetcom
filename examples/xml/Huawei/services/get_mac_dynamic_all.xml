@@ -1,0 +1,5 @@
+<mac xmlns="urn:huawei:yang:huawei-mac">
+  <vsi-dynamic-macs>
+    <vsi-dynamic-mac/>
+  </vsi-dynamic-macs>
+</mac>
