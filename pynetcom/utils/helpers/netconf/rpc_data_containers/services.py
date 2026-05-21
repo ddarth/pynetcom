@@ -22,9 +22,11 @@ The ``Neighbor`` projection deserves a comment: in pure OpenConfig, ARP/ND
 entries live under each subinterface and you would walk every interface bound
 to a network-instance to gather them. For practical operator queries (e.g.
 "give me every ARP entry on VRF X") that nesting is awkward, so we flatten
-neighbors into a list on NetworkInstance and carry the originating ``vrf`` /
-``interface`` as plain fields on every Neighbor. The field names still follow
-OpenConfig (``ip``, ``link_layer_address``, ``origin``).
+neighbors into a list on NetworkInstance and carry the originating
+``vprn_name`` / ``interface`` as plain fields on every Neighbor. The field
+names still follow OpenConfig (``ip``, ``link_layer_address``, ``origin``).
+The routing-instance name lives on ``vprn_name`` (canonical value ``"Base"``
+for the global routing table, vendor-symmetric across Nokia/Huawei).
 
 These classes are intentionally usable in three ways:
 
@@ -287,8 +289,15 @@ class Neighbor(RPCDataContainer):
     """Projection of OpenConfig ipv4/neighbors/neighbor onto a flat list.
 
     See module docstring for the rationale: ARP entries are exposed flat with
-    explicit ``vrf`` and ``interface`` fields so that filtering by VRF or by
-    MAC is a simple list comprehension, not an interface walk.
+    explicit ``vprn_name`` and ``interface`` fields so that filtering by VRF
+    or by MAC is a simple list comprehension, not an interface walk.
+
+    Field semantics
+    ---------------
+    ``vprn_name`` — routing-instance name (string). Canonical value
+    ``"Base"`` for the global routing table on both vendors (Nokia: native;
+    Huawei: ``_public_`` is normalised to ``"Base"`` by the adapter). Any
+    other value is a configured L3VPN / VPRN service name.
     """
     prefix: list = None
     field_mapping: dict = None
@@ -298,7 +307,7 @@ class Neighbor(RPCDataContainer):
     link_layer_address: Optional[str] = None
     interface: Optional[str] = None
     origin: Optional[NeighborOrigin] = None
-    vrf: Optional[str] = None
+    vprn_name: Optional[str] = None
     age: Optional[int] = None
 
     def __init__(self, data: Optional[dict] = None):
@@ -309,18 +318,20 @@ class Neighbor(RPCDataContainer):
 # ---- L3Interface --------------------------------------------------------- #
 @dataclass
 class L3Interface(RPCDataContainer):
-    """An L3 (IP-bearing) interface, flattened with an explicit ``vrf`` field.
+    """An L3 (IP-bearing) interface, flattened with an explicit ``vprn_name``
+    field.
 
     OpenConfig models this as ``/interfaces/interface`` plus the
     ``subinterfaces/.../ipv4/addresses/address`` subtree, cross-referenced
     from ``/network-instances/network-instance/interfaces``. As with
     :class:`Neighbor`, we project it flat: one object per IP interface with
-    ``vrf`` carried directly, so "list the L3 interfaces of VRF X" is a plain
-    query rather than a multi-subtree walk.
+    ``vprn_name`` carried directly, so "list the L3 interfaces of VRF X" is
+    a plain query rather than a multi-subtree walk.
 
     Vendor notes:
-      - ``vrf`` is the routing-instance name. For the global instance it is
-        ``"Base"`` on Nokia and ``"_public_"`` on Huawei.
+      - ``vprn_name`` is the routing-instance name. Canonical value for the
+        global instance is ``"Base"`` on both vendors (Nokia: native;
+        Huawei: ``_public_`` is normalised to ``"Base"`` by the adapter).
       - ``ipv4_prefix_length`` is populated on Huawei (derived from the
         netmask the device returns) but stays ``None`` on Nokia — the SR OS
         state model exposes the operational address without a mask.
@@ -336,7 +347,7 @@ class L3Interface(RPCDataContainer):
     serialization_exclude = RPCDataContainer.serialization_exclude
 
     name: Optional[str] = None
-    vrf: Optional[str] = None
+    vprn_name: Optional[str] = None
     ipv4_address: Optional[str] = None
     ipv4_prefix_length: Optional[int] = None
     oper_status: Optional[str] = None

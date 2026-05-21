@@ -137,7 +137,7 @@ def _to_int(value) -> Optional[int]:
         return None
 
 
-def _normalise_vrf(ni: Optional[str]) -> Optional[str]:
+def _normalise_vprn_name(ni: Optional[str]) -> Optional[str]:
     """Canonicalise a Huawei network-instance name to operator-facing form.
 
     Huawei encodes the global routing table as the pseudo-VPN ``"_public_"``
@@ -371,7 +371,7 @@ class HuaweiArpEntry(Neighbor):
         #                             not operator-configured VRFs).
         #   * "_other_synth_"       → None  (other single-underscore synthetics).
         #   * normal name           → kept verbatim.
-        self.vrf = _normalise_vrf(ni)
+        self.vprn_name = _normalise_vprn_name(ni)
         huawei_type = (entry.get("style-type") or entry.get("type") or "").strip().lower()
         self.origin = self._ORIGIN_MAP.get(huawei_type, NeighborOrigin.OTHER)
         self.age = _to_int(entry.get("age") or entry.get("expire-time"))
@@ -608,7 +608,7 @@ class HuaweiL3Interface(L3Interface):
     Fields consumed (field-selected by :class:`HuaweiL3InterfaceRPCRequest`):
 
         name          -> name
-        vrf-name      -> vrf      ("_public_" = global routing instance)
+        vrf-name      -> vprn_name ("_public_" normalised to "Base")
         admin-status  -> admin_status
         ipv4/addresses/address (huawei-ip ns) -> ipv4_address + ipv4_prefix_length
 
@@ -625,7 +625,7 @@ class HuaweiL3Interface(L3Interface):
         self.name = entry.get("name")
         # Same canonicalisation rules as for ARP — "_public_" → "Base",
         # synthetic management VPNs ("__...__") → None.
-        self.vrf = _normalise_vrf(entry.get("vrf-name"))
+        self.vprn_name = _normalise_vprn_name(entry.get("vrf-name"))
         self.admin_status = entry.get("admin-status")
         ipv4 = entry.get("ipv4")
         if isinstance(ipv4, dict):

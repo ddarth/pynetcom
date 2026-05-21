@@ -232,15 +232,15 @@ Returns the L3 (IP-bearing) interfaces, optionally scoped to one VRF, as
 
 ```python
 ServicesClient.get_l3_interfaces(
-    vrf: str | None = None,
+    vprn_name: str | None = None,
     enrich_l2_service: bool = False,
 ) -> List[L3Interface]
 ```
 
 | Parameter | Side | Description |
 |-----------|------|-------------|
-| `vrf` | **server** (Nokia) / **client** (Huawei) | Routing-instance name. Nokia: `None`/`"Base"` → global router; any other name → that VPRN (server-side scoped). Huawei: a single `huawei-ifm` query is filtered client-side on each interface's `vrf-name` (`"_public_"` = global). |
-| `enrich_l2_service` | **client** | Resolve the L2-L3 binding and populate `L3Interface.l2_service` on each returned interface. Huawei: 2 extra RPCs (`huawei-fim-ifm` ve-groups + L2VPN VSI list). Nokia: 1 extra RPC per VRF (`/configure/service/vprn/<vrf>/interface/vpls`). Pure-L3 interfaces leave `l2_service` at `None`. |
+| `vprn_name` | **server** (Nokia) / **client** (Huawei) | Routing-instance name. Canonical value `"Base"` for the global routing table on both vendors. Nokia: `None`/`"Base"` → global router; any other name → that VPRN (server-side scoped). Huawei: a single `huawei-ifm` query is filtered client-side on each interface's `vrf-name` (`"_public_"` is normalised to `"Base"` by the adapter). |
+| `enrich_l2_service` | **client** | Resolve the L2-L3 binding and populate `L3Interface.l2_service` on each returned interface. Huawei: 2 extra RPCs (`huawei-fim-ifm` ve-groups + L2VPN VSI list). Nokia: 1 extra RPC per VRF (`/configure/service/vprn/<name>/interface/vpls`). Pure-L3 interfaces leave `l2_service` at `None`. |
 
 Only interfaces that actually carry an IPv4 address are returned — L1/L2-only
 ports are excluded. Like `get_arp_table`, Nokia does NOT auto-iterate every
@@ -251,7 +251,7 @@ VPRN — pass a VRF name to reach one.
 ```json
 {
   "name": "Virtual-Ethernet0/2/3.2300",
-  "vrf": "VPRN_EXAMPLE",
+  "vprn_name": "VPRN_EXAMPLE",
   "ipv4_address": "198.51.100.11",
   "ipv4_prefix_length": 24,        // Huawei: from netmask; Nokia: null (no mask in state model)
   "oper_status": "up",
@@ -266,13 +266,13 @@ VPRN — pass a VRF name to reach one.
 | Nokia (`/state/router|vprn/.../interface`) | Huawei (`/ifm/interfaces/interface`) | Unified |
 |--------------------------------------------|--------------------------------------|---------|
 | `interface-name` | `name` | `name` |
-| router-name / VPRN service-name (list context) | `vrf-name` | `vrf` |
+| router-name / VPRN service-name (list context) | `vrf-name` (`"_public_"` → `"Base"`) | `vprn_name` |
 | `ipv4/primary/oper-address` | `ipv4/addresses/address/ip` (huawei-ip ns) | `ipv4_address` |
 | — (not in state model) | `ipv4/addresses/address/mask` → prefix length | `ipv4_prefix_length` |
 | `oper-state` | — | `oper_status` |
 | — | `admin-status` | `admin_status` |
 | `oper-ip-mtu` | — | `mtu` |
-| `/configure/service/vprn[<vrf>]/interface[<>]/vpls/vpls-name` (1-step join, opt-in) | `huawei-fim-ifm` ve-group + VSI SAP cross-reference (2-step, opt-in) | `l2_service` |
+| `/configure/service/vprn[<name>]/interface[<>]/vpls/vpls-name` (1-step join, opt-in) | `huawei-fim-ifm` ve-group + VSI SAP cross-reference (2-step, opt-in) | `l2_service` |
 
 ### L2-L3 binding resolution (`l2_service`)
 
@@ -281,7 +281,7 @@ non-empty `l2_service` (the VPLS / VSI it routes into) or stays at `None`
 (pure-L3 interface with no L2 binding — a normal case).
 
 * **Nokia** — one extra `get-config` query to
-  `/configure/service/vprn[<vrf>]/interface[...]/vpls/vpls-name`. The
+  `/configure/service/vprn[<name>]/interface[...]/vpls/vpls-name`. The
   binding is one-step (the VPRN-interface directly references the VPLS).
 * **Huawei** — two extra queries: `huawei-fim-ifm` `/ifm/global/ve-groups`
   for the L3-parent ↔ L2-parent pairing, plus the L2VPN VSI list. The
@@ -295,9 +295,9 @@ non-empty `l2_service` (the VPLS / VSI it routes into) or stays at `None`
 # Forward: IP → MAC + L2 service (deterministic, no MAC-name guessing)
 ServicesClient.find_l2_service_by_ip(
     ip: str,
-    vrf_candidates: list[str] | None = None,
+    vprn_name_candidates: list[str] | None = None,
 ) -> dict | None
-# Returns {"ip", "mac", "vrf", "l3_interface", "l2_service"} or None.
+# Returns {"ip", "mac", "vprn_name", "l3_interface", "l2_service"} or None.
 
 # Reverse: VPLS → L3 gateway(s); empty list for pure-L2 VPLSes
 ServicesClient.find_l3_gateways_for_l2_service(
@@ -432,7 +432,7 @@ Concrete numbers from `ROUTER_BSC`, service
 
 ```python
 ServicesClient.get_arp_table(
-    vrf: str | None = None,
+    vprn_name: str | None = None,
     ip: str | None = None,
     mac: str | None = None,
     interface: str | None = None,
@@ -442,7 +442,7 @@ ServicesClient.get_arp_table(
 
 | Parameter | Side | Description |
 |-----------|------|-------------|
-| `vrf` | **server** | Routing instance name. Nokia: `"Base"` (global) or VPRN service name. Huawei: VPN-instance name; `None` = global. |
+| `vprn_name` | **server** | Routing-instance name. Canonical value `"Base"` for the global routing table on both vendors. Nokia: `"Base"` selects the base router; any other name → that VPRN service name. Huawei: a `vpn-instance` name; `None` = global routing table (Huawei's `/arp/query-entries` is a global subtree). |
 | `ip` | **server** | IPv4 address (YANG list key). |
 | `mac` | **client** | Substring match on `link_layer_address`. |
 | `interface` | **client** | Substring match on `interface`. |
@@ -456,7 +456,7 @@ ServicesClient.get_arp_table(
   "link_layer_address": "aa:bb:cc:dd:ee:ff",
   "interface": "to-core-1",
   "origin": "DYNAMIC",                      // "STATIC" | "DYNAMIC" | "OTHER"
-  "vrf": "Base",                            // or VPN name; null = global on Huawei
+  "vprn_name": "Base",                      // canonical "Base" for global; null on Huawei when row carried a synthetic VPN
   "age": 13864                              // seconds-to-expiry (Nokia) or null (Huawei)
 }
 ```
@@ -495,7 +495,7 @@ issue the request via a non-pynetcom transport). Every builder exposes
 | `NokiaSdpRPCRequest` | `/state/service/sdp` | `sdp_id`, `brief` |
 | `NokiaFdbRPCRequest` | `/state/service/vpls/<n>/fdb/mac` | `service_name`, `mac_address` |
 | `NokiaArpRPCRequest` | `/state/router/<n>/interface/.../neighbor-discovery/neighbor` or VPRN variant | `router_name`, `vprn_service_name`, `interface_name`, `ipv4_address` |
-| `NokiaVprnRPCRequest` | `/state/service/vprn` | `service_name`, `brief` |
+| `NokiaVprnRPCRequest` | `/state/service/vprn` | `service_name` |
 | `NokiaL3InterfaceRPCRequest` | `/state/router/<n>/interface` or `/state/service/vprn/<n>/interface` | `router_name`, `vprn_service_name`, `interface_name` |
 | `HuaweiL2vpnRPCRequest` | `/l2vpn/instances/instance` | `name` |
 | `HuaweiMacRPCRequest` | `/mac/vsi-dynamic-macs/vsi-dynamic-mac` (+ static/blackhole) | `vsi_name`, `mac_address`, `include_static` |
@@ -522,8 +522,8 @@ All are dataclass-style; `.to_dict()` produces the JSON shape shown above.
 | `LocalEndpoint` | `/.../endpoints/endpoint/local` | SAP-side fields (port, VLAN, encapsulation) |
 | `RemoteEndpoint` | `/.../endpoints/endpoint/remote` | PW-side fields (vc-id, peer IP, sdp-id) |
 | `Fdb` / `MacTable` / `MacEntry` | `/.../fdb/mac-table/entries/entry` | L2 forwarding entries |
-| `Neighbor` | `/interfaces/.../ipv4/neighbors/neighbor` (projected flat with `vrf`) | ARP / ND entries |
-| `L3Interface` | `/interfaces/interface` + ipv4 address (projected flat with `vrf`) | L3 (IP-bearing) interfaces |
+| `Neighbor` | `/interfaces/.../ipv4/neighbors/neighbor` (projected flat with `vprn_name`) | ARP / ND entries |
+| `L3Interface` | `/interfaces/interface` + ipv4 address (projected flat with `vprn_name`) | L3 (IP-bearing) interfaces |
 
 Enums (in the same module):
 
@@ -563,7 +563,7 @@ nokia.parse_vpls_response(resp)        -> List[NokiaVplsService]
 nokia.parse_epipe_response(resp)       -> List[NokiaEpipeService]
 nokia.parse_sdp_response(resp)         -> dict[int, dict]    # {sdp_id: {far_end_ip, ...}}
 nokia.parse_fdb_response(resp, service_name=None)  -> List[NokiaMacEntry]
-nokia.parse_arp_response(resp, vrf="Base")         -> List[NokiaArpEntry]
+nokia.parse_arp_response(resp, vprn_name="Base")   -> List[NokiaArpEntry]
 
 huawei.parse_l2vpn_response(resp)      -> List[HuaweiL2vpnInstance]
 huawei.parse_mac_response(resp)        -> List[HuaweiMacEntry]
@@ -592,9 +592,9 @@ automatically when `enrich_remote_system=True`.
 |-----------|------------------|------------------------|
 | `get_l2vpn_services` | `name` (= `service-name` / `instance/name`) | — |
 | `get_l3vpn_services` | `name` (= `service-name` / `instance/name`) | — |
-| `get_l3_interfaces` | `vrf` (Nokia — server; Huawei — client) | — |
+| `get_l3_interfaces` | `vprn_name` (Nokia — server; Huawei — client) | — |
 | `get_mac_table` | `service_name`, `mac` | `port` (substring), `entry_type`, `learned_via` |
-| `get_arp_table` | `vrf` (Nokia: router-instance / VPRN service name; Huawei: `ni-name`), `ip` | `mac` (substring), `interface` (substring), `origin` |
+| `get_arp_table` | `vprn_name` (Nokia: router-instance / VPRN service name; Huawei: `ni-name`), `ip` | `mac` (substring), `interface` (substring), `origin` |
 
 ---
 
@@ -611,13 +611,13 @@ it — it's a method parameter — but it does not reduce what the device ships)
 | `get_l2vpn_services` | `include_fdb` | request shape | Nokia VPLS | — | embeds FDB subtree in the same query |
 | `get_l2vpn_services` | `enrich_remote_system` | extra round-trip | Nokia | — | one extra `/state/service/sdp` query to fill `RemoteEndpoint.remote_system` |
 | `get_l3vpn_services` | `name` | server | both | exact (YANG key) | VPRN service-name (Nokia) / network-instance name (Huawei) |
-| `get_l3_interfaces` | `vrf` | server (Nokia) / client (Huawei) | both | exact | Nokia scopes the subtree to one router/VPRN; Huawei filters `vrf-name` after parsing |
+| `get_l3_interfaces` | `vprn_name` | server (Nokia) / client (Huawei) | both | exact | Nokia scopes the subtree to one router/VPRN; Huawei filters `vrf-name` after parsing |
 | `get_mac_table` | `service_name` | server | both | exact (YANG key) | VPLS/VSI name |
 | `get_mac_table` | `mac` | server | both | exact (YANG key) | any separator style accepted, normalised per vendor |
 | `get_mac_table` | `port` | client | both | substring, case-insensitive | matched on `MacEntry.interface` |
 | `get_mac_table` | `entry_type` | client | both | exact | `STATIC` / `DYNAMIC` |
 | `get_mac_table` | `learned_via` | client | both | exact | `sap` / `pw` → `MacEntry.source_type` |
-| `get_arp_table` | `vrf` | server | both | exact | Nokia: `Base` or VPRN name; Huawei: `ni-name` |
+| `get_arp_table` | `vprn_name` | server | both | exact | Nokia: `Base` or VPRN name; Huawei: `ni-name` |
 | `get_arp_table` | `ip` | server | both | exact (YANG key) | IPv4 address |
 | `get_arp_table` | `mac` | client | both | substring | any separator style accepted |
 | `get_arp_table` | `interface` | client | both | substring | matched on `Neighbor.interface` |
@@ -690,7 +690,7 @@ and prints unified JSON. Each script is self-contained.
 | `services_get_vsi_huawei.py` | List + JSON of all L2VPN instances on Huawei |
 | `services_macs_by_vsi.py` | MAC table scoped to one service (server-side narrowing) |
 | `services_macs_by_port.py` | MAC table filtered by port substring (client-side) |
-| `services_arp_by_vrf.py` | ARP for global routing instance or named VRF |
+| `services_arp_by_vrf.py` | ARP for global routing instance or named VRF (`vprn_name="Base"` or a VPRN name) |
 | `services_arp_by_mac.py` | "Where is this host?" — find ARP entries by MAC across VRFs |
 | `benchmark_services.py` | Performance benchmark — writes `benchmark_results.md` |
 | `services_e2e_check.py` | Combined end-to-end check (VPLS + EPIPE + L3VPN + L3 interfaces, both vendors) |

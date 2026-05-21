@@ -284,16 +284,19 @@ class NokiaServiceRPCRequest:
     Setting ``service_name`` switches the filter from "list all" to "fetch
     one by list-key", which Nokia handles entirely server-side.
 
-    Operational note (verified on SR OS 23 with ~10 VPLS services and tens
-    of thousands of FDB entries): the *unfiltered* full-subtree query under
-    ``/state/service/vpls`` can return tens of MB and exceed ncclient's
-    default 120s timeout. Use ``brief=True`` for enumeration (returns only
-    service-name + oper-state) and only request the full subtree for one
-    service at a time. The high-level :class:`ServicesClient` does this
-    automatically.
+    Operational note (verified on SR OS 23): a true full-subtree query under
+    ``/state/service/vpls/<service-name>`` pulls per-SAP statistics counters
+    and takes ~45 s for a service with only 6 SAPs (measured on the BSC
+    device set). To keep latency predictable this builder *always* emits a
+    field-selector even in the non-brief case: VPLS ``oper-state`` plus
+    minimal SAP / spoke-sdp / mesh-sdp fields (id + type + oper-state).
+    This is sufficient for :class:`~.services.NetworkInstance` reconstruction
+    and reduces the same RPC to ~0.3-0.5 s.
 
-    ``include_fdb=True`` adds the FDB subtree under the named service so a
-    single round-trip can fetch service state + MACs together.
+    Use ``brief=True`` for cheap enumeration (only service-name + oper-state,
+    no SAP / SDP lists at all). ``include_fdb=True`` adds the FDB subtree
+    under the named service so a single round-trip can fetch service state +
+    MACs together.
     """
 
     def __init__(
@@ -319,10 +322,33 @@ class NokiaServiceRPCRequest:
                 f'</state>'
             )
         fdb_xml = "<fdb><mac/></fdb>" if self.include_fdb else ""
+        # Field-selector: avoid pulling per-SAP statistics counters (which add
+        # ~45 s on a 6-SAP service). Only the leaves used by the
+        # NetworkInstance reconstruction are requested.
+        # NB: ``<type/>`` is NOT a leaf under spoke-sdp / mesh-sdp in the
+        # Nokia state model — the PW type is conveyed by the parent container
+        # name (spoke-sdp vs mesh-sdp), and the parser uses that. Requesting
+        # ``<type/>`` here triggers ``MGMT_CORE #2201: Unknown element``.
         return (
             f'<state xmlns="urn:nokia.com:sros:ns:yang:sr:state">'
             f'  <service>'
-            f'    <vpls>{name_xml}{fdb_xml}</vpls>'
+            f'    <vpls>'
+            f'      {name_xml}'
+            f'      <oper-state/>'
+            f'      <sap>'
+            f'        <sap-id/>'
+            f'        <oper-state/>'
+            f'      </sap>'
+            f'      <spoke-sdp>'
+            f'        <sdp-bind-id/>'
+            f'        <oper-state/>'
+            f'      </spoke-sdp>'
+            f'      <mesh-sdp>'
+            f'        <sdp-bind-id/>'
+            f'        <oper-state/>'
+            f'      </mesh-sdp>'
+            f'      {fdb_xml}'
+            f'    </vpls>'
             f'  </service>'
             f'</state>'
         )
@@ -406,10 +432,25 @@ class NokiaEpipeRPCRequest:
                 f'  </service>'
                 f'</state>'
             )
+        # Field-selector for the same reason as VPLS (see NokiaServiceRPCRequest).
+        # EPIPE is point-to-point, so no <mesh-sdp> — only <sap> + <spoke-sdp>.
+        # NB: ``<type/>`` is omitted from spoke-sdp for the same reason as
+        # VPLS — it's not a leaf in the Nokia state model.
         return (
             f'<state xmlns="urn:nokia.com:sros:ns:yang:sr:state">'
             f'  <service>'
-            f'    <epipe>{name_xml}</epipe>'
+            f'    <epipe>'
+            f'      {name_xml}'
+            f'      <oper-state/>'
+            f'      <sap>'
+            f'        <sap-id/>'
+            f'        <oper-state/>'
+            f'      </sap>'
+            f'      <spoke-sdp>'
+            f'        <sdp-bind-id/>'
+            f'        <oper-state/>'
+            f'      </spoke-sdp>'
+            f'    </epipe>'
             f'  </service>'
             f'</state>'
         )
@@ -652,17 +693,25 @@ class NokiaVprnRPCRequest:
     ``oper-route-distinguisher``. ``route-distinguisher`` / ``vrf-target``
     do NOT exist as top-level leaves (rpc-error "Unknown element"); the RD
     we surface is the operational one.
+
+    Known schema constraint
+    -----------------------
+    The Nokia VPRN state-tree does NOT expose ``<admin-state/>`` as a leaf —
+    including it triggers ``MGMT_CORE #2201 Unknown element`` and the whole
+    RPC fails (the device returns an empty / error response, so the
+    ``service-name`` filter silently yields zero parsed VPRNs). This is a
+    schema gap, not a pynetcom bug: only ``oper-state`` is published. As a
+    result :attr:`NokiaVprnService.enabled` stays ``None`` for VPRNs —
+    vendor-asymmetric with VPLS/EPIPE, but unavoidable.
     """
 
-    # ``admin-state`` selects the operator-configured intent (admin shutdown
-    # vs no shutdown); ``oper-state`` carries the runtime status. The adapter
-    # uses admin-state for the ``enabled`` boolean (vendor-symmetric with
-    # VPLS / EPIPE) and oper-state for ``oper_status``.
-    _FIELDS = "<admin-state/><oper-state/><oper-route-distinguisher/>"
+    # ``oper-state`` carries the runtime status, ``oper-route-distinguisher``
+    # the operational RD. ``admin-state`` is deliberately NOT requested — see
+    # the class docstring for why.
+    _FIELDS = "<oper-state/><oper-route-distinguisher/>"
 
-    def __init__(self, service_name: str | None = None, brief: bool = False):
+    def __init__(self, service_name: str | None = None):
         self.service_name = service_name
-        self.brief = brief
         name_xml = (
             f"<service-name>{service_name}</service-name>"
             if service_name

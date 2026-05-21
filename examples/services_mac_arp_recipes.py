@@ -36,7 +36,8 @@ THE TWO DATA OBJECTS
     link_layer_address  canonical "aa:bb:cc:dd:ee:ff"
     interface           L3 interface the entry sits on
     origin              NeighborOrigin.STATIC | DYNAMIC | OTHER
-    vrf                 routing instance ("Base", a VPRN name, or None=global)
+    vprn_name           routing instance ("Base" = global on both vendors,
+                        any VPRN name, or None on Huawei when scoped globally)
     age                 seconds (Nokia=TTL-to-expiry, Huawei=age, often None)
 
 ================================================================================
@@ -50,7 +51,7 @@ get_mac_table(...)
     learned_via    CLIENT-SIDE   exact "sap" / "pw"  -> MacEntry.source_type
 
 get_arp_table(...)
-    vrf            SERVER-SIDE   Nokia: "Base" or VPRN name; Huawei: VPN name
+    vprn_name      SERVER-SIDE   "Base" (global, both vendors) or a VPRN name
     ip             SERVER-SIDE   YANG list key
     mac            CLIENT-SIDE   substring (any MAC format accepted)
     interface      CLIENT-SIDE   substring
@@ -122,31 +123,31 @@ def _dump(obj) -> None:
 # ============================================================================
 # SCENARIO 1 — Find a MAC by IP, then check which port sees that MAC.
 # ============================================================================
-def scenario_1_find_mac_by_ip(sc: ServicesClient, ip: str, vrf_candidates: list[str]):
+def scenario_1_find_mac_by_ip(sc: ServicesClient, ip: str, vprn_candidates: list[str]):
     """Q: "I have an IP. What's its MAC, and on which port does the device see it?"
 
     Two library calls, no custom filtering:
-      1. get_arp_table(vrf=..., ip=...)  — both params SERVER-SIDE. On Nokia ARP
-         is per-routing-instance, so we try each candidate VRF until we hit one
-         (Huawei returns all VPNs in one query, so a single call suffices —
-         pass vrf=None there).
+      1. get_arp_table(vprn_name=..., ip=...)  — both params SERVER-SIDE. On
+         Nokia ARP is per-routing-instance, so we try each candidate VRF until
+         we hit one (Huawei returns all VPNs in one query, so a single call
+         suffices — pass vprn_name=None there).
       2. get_mac_table(mac=...)          — mac is SERVER-SIDE. With no
          service_name the device walks every service but returns only rows
          matching this MAC, so the response stays small.
     """
     _banner(f"SCENARIO 1 — find MAC for IP {ip}, then locate it in the FDB")
 
-    # Step 1: locate the IP in ARP. [SERVER-SIDE] vrf + ip.
+    # Step 1: locate the IP in ARP. [SERVER-SIDE] vprn_name + ip.
     arp_hit = None
-    for vrf in vrf_candidates:
-        arps = sc.get_arp_table(vrf=vrf, ip=ip)
+    for vprn_name in vprn_candidates:
+        arps = sc.get_arp_table(vprn_name=vprn_name, ip=ip)
         if arps:
             arp_hit = arps[0]
             print(f"ARP: {ip} -> {arp_hit.link_layer_address} "
-                  f"(vrf={arp_hit.vrf}, interface={arp_hit.interface})")
+                  f"(vprn_name={arp_hit.vprn_name}, interface={arp_hit.interface})")
             break
     if arp_hit is None:
-        print(f"ARP: {ip} not found in any of {vrf_candidates}")
+        print(f"ARP: {ip} not found in any of {vprn_candidates}")
         return
     mac = arp_hit.link_layer_address
 
@@ -266,18 +267,19 @@ def scenario_6_macs_by_sap(sc: ServicesClient, service_name: str, sap: str):
 # ============================================================================
 # SCENARIO 7 — Given a MAC, find its IP inside a specific VRF.
 # ============================================================================
-def scenario_7_ip_by_mac_in_vrf(sc: ServicesClient, mac: str, vrf: str):
+def scenario_7_ip_by_mac_in_vrf(sc: ServicesClient, mac: str, vprn_name: str):
     """Q: "I have a MAC. What IP does it have inside VRF X?"
 
-    One call: get_arp_table(vrf=..., mac=...).
-      - vrf is SERVER-SIDE — the device returns only that VRF's ARP cache.
+    One call: get_arp_table(vprn_name=..., mac=...).
+      - vprn_name is SERVER-SIDE — the device returns only that VRF's ARP
+        cache.
       - mac is CLIENT-SIDE — substring match on link_layer_address. Any MAC
         format is accepted (normalised internally).
     """
-    _banner(f"SCENARIO 7 — IP for MAC {mac} inside VRF {vrf}")
-    neighbors = sc.get_arp_table(vrf=vrf, mac=mac)
+    _banner(f"SCENARIO 7 — IP for MAC {mac} inside VRF {vprn_name}")
+    neighbors = sc.get_arp_table(vprn_name=vprn_name, mac=mac)
     if not neighbors:
-        print(f"MAC {mac} has no ARP entry in {vrf}")
+        print(f"MAC {mac} has no ARP entry in {vprn_name}")
         return
     for n in neighbors:
         print(f"  {n.ip}  <-  {n.link_layer_address}  (iface={n.interface})")
@@ -287,14 +289,14 @@ def scenario_7_ip_by_mac_in_vrf(sc: ServicesClient, mac: str, vrf: str):
 # ============================================================================
 # SCENARIO 8 — End-to-end: IP -> MAC -> service -> port / SAP / PW.
 # ============================================================================
-def scenario_8_locate_host(sc: ServicesClient, ip: str, vrf_candidates: list[str]):
+def scenario_8_locate_host(sc: ServicesClient, ip: str, vprn_candidates: list[str]):
     """Q: "Where does host <IP> live? Give me MAC, service, and port/SAP/PW."
 
     The 'complex' workflow. There is intentionally no single find_host() method
     — it is just three library calls composed. This recipe IS the canonical
     composition; copy it verbatim.
 
-      step 1  get_arp_table(vrf, ip)          -> MAC                [SERVER-SIDE]
+      step 1  get_arp_table(vprn_name, ip)    -> MAC                [SERVER-SIDE]
       step 2  get_mac_table(mac=...)          -> service + interface[SERVER-SIDE]
       step 3  get_l2vpn_services(name=svc)    -> classify the endpoint as a
               LOCAL (SAP) or REMOTE (PW) connection point             [SERVER-SIDE]
@@ -303,16 +305,16 @@ def scenario_8_locate_host(sc: ServicesClient, ip: str, vrf_candidates: list[str
 
     # step 1 — IP -> MAC
     arp_hit = None
-    for vrf in vrf_candidates:
-        hits = sc.get_arp_table(vrf=vrf, ip=ip)
+    for vprn_name in vprn_candidates:
+        hits = sc.get_arp_table(vprn_name=vprn_name, ip=ip)
         if hits:
             arp_hit = hits[0]
             break
     if arp_hit is None:
-        print(f"  step 1: {ip} not found in ARP ({vrf_candidates}) — stop")
+        print(f"  step 1: {ip} not found in ARP ({vprn_candidates}) — stop")
         return
     mac = arp_hit.link_layer_address
-    print(f"  step 1: {ip} -> MAC {mac}  (L3 vrf={arp_hit.vrf}, "
+    print(f"  step 1: {ip} -> MAC {mac}  (L3 vprn_name={arp_hit.vprn_name}, "
           f"L3 iface={arp_hit.interface})")
 
     # step 2 — MAC -> service + L2 interface
@@ -352,12 +354,12 @@ def scenario_9_vrf_discovery_and_l3_interfaces(sc: ServicesClient):
     """Q: "What VRFs exist, and what L3 interfaces live in one of them?"
 
     Two library calls, no hardcoded VRF list:
-      1. get_l3vpn_services()        — enumerate VRFs.            [SERVER-SIDE]
-      2. get_l3_interfaces(vrf=...)  — L3 (IP) interfaces of a VRF.
+      1. get_l3vpn_services()              — enumerate VRFs.       [SERVER-SIDE]
+      2. get_l3_interfaces(vprn_name=...)  — L3 (IP) interfaces of a VRF.
          Nokia: server-side scoped to that VPRN.   [SERVER-SIDE]
          Huawei: one huawei-ifm query, filtered by vrf-name.  [CLIENT-SIDE]
 
-    This is what replaces the old hardcoded ``vrf_candidates`` list used by
+    This is what replaces the old hardcoded ``vprn_candidates`` list used by
     scenarios 1 and 8 — see run_nokia() below.
     """
     _banner("SCENARIO 9 — VRF discovery + L3 interfaces")
@@ -369,7 +371,7 @@ def scenario_9_vrf_discovery_and_l3_interfaces(sc: ServicesClient):
         print("  (no configured VRFs)")
         return
     target = vrfs[0].name
-    l3 = sc.get_l3_interfaces(vrf=target)           # [SERVER/CLIENT-SIDE]
+    l3 = sc.get_l3_interfaces(vprn_name=target)     # [SERVER/CLIENT-SIDE]
     print(f"\n{len(l3)} L3 interface(s) in VRF {target!r}:")
     for i in l3:
         suffix = f"/{i.ipv4_prefix_length}" if i.ipv4_prefix_length else ""
@@ -384,14 +386,14 @@ def scenario_9_vrf_discovery_and_l3_interfaces(sc: ServicesClient):
 def scenario_10_locate_bs_via_pw_peer(
     sc_local: ServicesClient,
     ip: str,
-    vrf_candidates: list,
+    vprn_candidates: list,
     resolve_remote=None,
 ):
     """Q: "I have a BS IP on a backbone PE. Which remote PE actually owns
     the BS on a local SAP, and on which port?"
 
     Cross-router chain WITHOUT brute-force:
-      1. get_arp_table(vrf=..., ip=ip)  →  MAC of the BS.
+      1. get_arp_table(vprn_name=..., ip=ip)  →  MAC of the BS.
       2. get_mac_table(mac=..., service_name=...)  on the LOCAL PE:
          every PW-learned entry now carries ``remote_system`` (the
          originating PE's system / loopback IP) and ``pw_id`` — server-side
@@ -411,15 +413,15 @@ def scenario_10_locate_bs_via_pw_peer(
 
     # Step 1: IP → MAC via ARP.
     arp_hit = None
-    for vrf in vrf_candidates:
-        arps = sc_local.get_arp_table(vrf=vrf, ip=ip)
+    for vprn_name in vprn_candidates:
+        arps = sc_local.get_arp_table(vprn_name=vprn_name, ip=ip)
         if arps:
             arp_hit = arps[0]
             print(f"  step 1: ARP  {ip}  ->  {arp_hit.link_layer_address}  "
-                  f"(vrf={arp_hit.vrf!r})")
+                  f"(vprn_name={arp_hit.vprn_name!r})")
             break
     if arp_hit is None:
-        print(f"  step 1: ARP miss for {ip} in {vrf_candidates} — abort")
+        print(f"  step 1: ARP miss for {ip} in {vprn_candidates} — abort")
         return
     mac = arp_hit.link_layer_address
 
@@ -466,7 +468,7 @@ def scenario_10_locate_bs_via_pw_peer(
 # ============================================================================
 # SCENARIO 11 — Deterministic IP → L2 service via the L2-L3 binding.
 # ============================================================================
-def scenario_11_l2_service_by_ip(sc: ServicesClient, ip: str, vrf_candidates: list):
+def scenario_11_l2_service_by_ip(sc: ServicesClient, ip: str, vprn_candidates: list):
     """Q: "I have an IP. Which L2 service owns it — DETERMINISTICALLY?"
 
     A single library call: `find_l2_service_by_ip`. The chain walks
@@ -476,13 +478,13 @@ def scenario_11_l2_service_by_ip(sc: ServicesClient, ip: str, vrf_candidates: li
     multiple VPLSes (multi-tenant / shared-infra configs).
     """
     _banner(f"SCENARIO 11 — IP -> L2 service via L2-L3 binding for {ip}")
-    hit = sc.find_l2_service_by_ip(ip, vrf_candidates=vrf_candidates)
+    hit = sc.find_l2_service_by_ip(ip, vprn_name_candidates=vprn_candidates)
     if not hit:
-        print(f"  {ip} not in ARP across {vrf_candidates}")
+        print(f"  {ip} not in ARP across {vprn_candidates}")
         return
     print(f"  IP            = {hit['ip']}")
     print(f"  MAC           = {hit['mac']}")
-    print(f"  VRF           = {hit['vrf']}")
+    print(f"  VPRN          = {hit['vprn_name']}")
     print(f"  L3 interface  = {hit['l3_interface']}")
     print(f"  L2 service    = {hit['l2_service']!r}  "
           f"({'resolved via binding' if hit['l2_service'] else 'pure-L3, no L2 binding'})")
@@ -507,7 +509,7 @@ def scenario_12_l3_gateways_for_vpls(sc: ServicesClient, vpls_name: str):
     print(f"  {len(gws)} gateway(s):")
     for g in gws:
         prefix = f"/{g.ipv4_prefix_length}" if g.ipv4_prefix_length else ""
-        print(f"    {g.name}  vrf={g.vrf}  ip={g.ipv4_address}{prefix}  l2_service={g.l2_service}")
+        print(f"    {g.name}  vprn_name={g.vprn_name}  ip={g.ipv4_address}{prefix}  l2_service={g.l2_service}")
 
 
 # ============================================================================
@@ -525,15 +527,15 @@ def run_nokia() -> None:
         # Nokia ARP is per-routing-instance. Build the candidate VRF list by
         # DISCOVERY — "Base" (the global instance) plus every configured VPRN.
         # No more hardcoding: get_l3vpn_services() enumerates the VRFs.
-        vrf_candidates = ["Base"] + [v.name for v in sc.get_l3vpn_services()]
-        scenario_1_find_mac_by_ip(sc, NOKIA_TEST_IP, vrf_candidates)
+        vprn_candidates = ["Base"] + [v.name for v in sc.get_l3vpn_services()]
+        scenario_1_find_mac_by_ip(sc, NOKIA_TEST_IP, vprn_candidates)
         scenario_3_macs_sap_only(sc, NOKIA_TEST_VPLS)
         scenario_4_macs_pw_only(sc, NOKIA_TEST_VPLS)
         scenario_5_service_macs_no_remote(sc, NOKIA_TEST_VPLS)
         scenario_7_ip_by_mac_in_vrf(sc, NOKIA_TEST_MAC, NOKIA_TEST_VPRN)
-        scenario_8_locate_host(sc, NOKIA_TEST_IP, vrf_candidates)
+        scenario_8_locate_host(sc, NOKIA_TEST_IP, vprn_candidates)
         scenario_9_vrf_discovery_and_l3_interfaces(sc)
-        scenario_11_l2_service_by_ip(sc, NOKIA_TEST_IP, vrf_candidates)
+        scenario_11_l2_service_by_ip(sc, NOKIA_TEST_IP, vprn_candidates)
         scenario_12_l3_gateways_for_vpls(sc, NOKIA_TEST_VPLS)
     finally:
         nc.close()
@@ -548,7 +550,7 @@ def run_huawei() -> None:
     )
     try:
         sc = ServicesClient(nc, vendor="huawei")
-        # Huawei returns all VPNs in one ARP query — vrf=None is enough.
+        # Huawei returns all VPNs in one ARP query — vprn_name=None is enough.
         scenario_2_macs_by_port(sc, HUAWEI_TEST_PORT)
         scenario_6_macs_by_sap(sc, HUAWEI_TEST_VPLS, HUAWEI_TEST_PORT)
         scenario_8_locate_host(sc, HUAWEI_TEST_IP, [None])

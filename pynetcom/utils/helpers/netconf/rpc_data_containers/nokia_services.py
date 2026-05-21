@@ -278,7 +278,7 @@ def parse_sdp_response(response: dict) -> dict:
 def parse_vprn_interface_vpls_response(response: dict) -> dict:
     """Parse a NokiaVprnInterfaceVplsRPCRequest reply into a binding map.
 
-    Returns ``{(vrf_name, interface_name): vpls_name}`` for every VPRN
+    Returns ``{(vprn_name, interface_name): vpls_name}`` for every VPRN
     interface that has a ``vpls/vpls-name`` element configured. Pure-L3
     interfaces (no ``vpls`` element) are absent from the map entirely.
 
@@ -286,9 +286,10 @@ def parse_vprn_interface_vpls_response(response: dict) -> dict:
 
         configure/service/vprn[<service-name>]/interface[<interface-name>]/vpls/vpls-name
 
-    We key by ``(vrf, iface)`` rather than just ``iface`` because the same
-    interface name can appear in multiple VPRNs simultaneously on different
-    routers — keeping the VRF qualifier avoids cross-VRF false matches.
+    We key by ``(vprn_name, iface)`` rather than just ``iface`` because the
+    same interface name can appear in multiple VPRNs simultaneously on
+    different routers — keeping the VPRN qualifier avoids cross-VRF false
+    matches.
     """
     if not isinstance(response, dict):
         return {}
@@ -303,7 +304,7 @@ def parse_vprn_interface_vpls_response(response: dict) -> dict:
     for vp in _as_list(vprn_root):
         if not isinstance(vp, dict):
             continue
-        vrf = vp.get("service-name")
+        vprn_name = vp.get("service-name")
         for iface in _as_list(vp.get("interface")):
             if not isinstance(iface, dict):
                 continue
@@ -313,8 +314,8 @@ def parse_vprn_interface_vpls_response(response: dict) -> dict:
                 vpls_name = vpls.get("vpls-name")
             else:
                 vpls_name = None
-            if vrf and iface_name and vpls_name:
-                out[(vrf, iface_name)] = vpls_name
+            if vprn_name and iface_name and vpls_name:
+                out[(vprn_name, iface_name)] = vpls_name
     return out
 
 
@@ -521,7 +522,7 @@ class NokiaArpEntry(Neighbor):
     def __init__(
         self,
         arp_entry: dict,
-        vrf: Optional[str] = None,
+        vprn_name: Optional[str] = None,
         interface: Optional[str] = None,
     ):
         super().__init__(data=None)
@@ -542,7 +543,7 @@ class NokiaArpEntry(Neighbor):
             self.age = int(timer) if timer is not None else None
         except (TypeError, ValueError):
             self.age = None
-        self.vrf = vrf
+        self.vprn_name = vprn_name
 
 
 # ---- Top-level result parsers ------------------------------------------- #
@@ -612,7 +613,7 @@ def parse_fdb_response(response: dict, service_name: Optional[str] = None) -> Li
     return entries
 
 
-def parse_arp_response(response: dict, vrf: str = "Base") -> List[NokiaArpEntry]:
+def parse_arp_response(response: dict, vprn_name: str = "Base") -> List[NokiaArpEntry]:
     """Parse a NokiaArpRPCRequest reply into a flat list of Neighbor objects.
 
     Walks the nested structure::
@@ -625,10 +626,14 @@ def parse_arp_response(response: dict, vrf: str = "Base") -> List[NokiaArpEntry]
         state/service/vprn[service-name]/interface[interface-name]
             /ipv4/neighbor-discovery/neighbor[ipv4-address]
 
-    Each entry carries no interface/VRF reference of its own — the list
-    keys higher up the path are the only place those names appear. The
-    parser propagates them into the flat ``Neighbor.interface`` / ``vrf``
-    fields so callers can filter without re-walking the path.
+    Each entry carries no interface/routing-instance reference of its own —
+    the list keys higher up the path are the only place those names appear.
+    The parser propagates them into the flat ``Neighbor.interface`` /
+    ``vprn_name`` fields so callers can filter without re-walking the path.
+
+    ``vprn_name`` is the fallback routing-instance name used when the YANG
+    list-key is absent from the response (rare). Canonical default is
+    ``"Base"`` for the global routing table.
     """
     if not isinstance(response, dict):
         return []
@@ -637,7 +642,7 @@ def parse_arp_response(response: dict, vrf: str = "Base") -> List[NokiaArpEntry]
 
     entries: List[NokiaArpEntry] = []
 
-    def harvest_interfaces(parent: dict, scoped_vrf: str) -> None:
+    def harvest_interfaces(parent: dict, scoped_vprn_name: str) -> None:
         for iface in _as_list(parent.get("interface")):
             if not isinstance(iface, dict):
                 continue
@@ -647,7 +652,7 @@ def parse_arp_response(response: dict, vrf: str = "Base") -> List[NokiaArpEntry]
                 continue
             for nb in _as_list(nd.get("neighbor")):
                 entries.append(
-                    NokiaArpEntry(nb, vrf=scoped_vrf, interface=iface_name)
+                    NokiaArpEntry(nb, vprn_name=scoped_vprn_name, interface=iface_name)
                 )
 
     state = cleaned.get("state") or {}
@@ -656,15 +661,15 @@ def parse_arp_response(response: dict, vrf: str = "Base") -> List[NokiaArpEntry]
     for router in _as_list(state.get("router")):
         if not isinstance(router, dict):
             continue
-        scoped_vrf = router.get("router-name") or vrf
-        harvest_interfaces(router, scoped_vrf)
+        scoped_vprn_name = router.get("router-name") or vprn_name
+        harvest_interfaces(router, scoped_vprn_name)
 
     # VPRN service (L3VPN).
     for vprn in _as_list((state.get("service") or {}).get("vprn")):
         if not isinstance(vprn, dict):
             continue
-        scoped_vrf = vprn.get("service-name") or vrf
-        harvest_interfaces(vprn, scoped_vrf)
+        scoped_vprn_name = vprn.get("service-name") or vprn_name
+        harvest_interfaces(vprn, scoped_vprn_name)
 
     return entries
 
@@ -689,11 +694,13 @@ class NokiaVprnService(NetworkInstance):
         self.name = vprn_entry.get("service-name")
         self.type = NetworkInstanceType.L3VPN
         self.oper_status = vprn_entry.get("oper-state")
-        # ``enabled`` reflects the **admin** intent — same convention as
-        # NokiaVplsService / NokiaEpipeService. ``oper_status`` separately
-        # carries the runtime state so callers can compare the two when
-        # diagnosing a down service.
-        self.enabled = _to_bool(vprn_entry.get("admin-state"))
+        # ``enabled`` (admin intent) is intentionally left ``None`` for
+        # VPRN: the Nokia VPRN state-tree does not expose ``admin-state``
+        # as a leaf — requesting it triggers ``MGMT_CORE #2201 Unknown
+        # element`` and breaks the whole RPC (see NokiaVprnRPCRequest).
+        # This is vendor-asymmetric with NokiaVplsService / NokiaEpipeService
+        # but unavoidable until Nokia ships the leaf in state. ``oper_status``
+        # remains the authoritative runtime signal.
         self.route_distinguisher = vprn_entry.get("oper-route-distinguisher")
 
 
@@ -729,11 +736,11 @@ class NokiaL3Interface(L3Interface):
         oper-ip-mtu              -> mtu
         ipv4/primary/oper-address -> ipv4_address
 
-    ``vrf`` and ``ipv4_prefix_length`` are set by the parser / left None —
-    the SR OS state model exposes no netmask at this level.
+    ``vprn_name`` and ``ipv4_prefix_length`` are set by the parser / left
+    None — the SR OS state model exposes no netmask at this level.
     """
 
-    def __init__(self, iface_entry: dict, vrf: Optional[str] = None):
+    def __init__(self, iface_entry: dict, vprn_name: Optional[str] = None):
         super().__init__(data=None)
         if not isinstance(iface_entry, dict):
             return
@@ -749,22 +756,26 @@ class NokiaL3Interface(L3Interface):
             primary = ipv4.get("primary")
             if isinstance(primary, dict):
                 self.ipv4_address = primary.get("oper-address")
-        self.vrf = vrf
+        self.vprn_name = vprn_name
 
 
 def parse_l3_interface_response(
-    response: dict, vrf: str = "Base"
+    response: dict, vprn_name: str = "Base"
 ) -> List[NokiaL3Interface]:
     """Parse a NokiaL3InterfaceRPCRequest reply into L3Interface objects.
 
     Walks both ``state/router[router-name]/interface`` and
     ``state/service/vprn[service-name]/interface`` (mirrors
     :func:`parse_arp_response`), propagating the router-name / VPRN
-    service-name into each interface's ``vrf`` field.
+    service-name into each interface's ``vprn_name`` field.
 
     Only interfaces that carry an IPv4 ``primary`` address are returned —
     a Nokia router lists many L1/L2-only ports under the same list, and
     "L3 interfaces" by definition have an IP.
+
+    ``vprn_name`` is the fallback routing-instance name used when the YANG
+    list-key is absent from the response (rare). Canonical default is
+    ``"Base"`` for the global routing table.
     """
     if not isinstance(response, dict):
         return []
@@ -775,20 +786,20 @@ def parse_l3_interface_response(
 
     out: List[NokiaL3Interface] = []
 
-    def harvest(parent: dict, scoped_vrf: str) -> None:
+    def harvest(parent: dict, scoped_vprn_name: str) -> None:
         for iface in _as_list(parent.get("interface")):
             if not isinstance(iface, dict):
                 continue
-            l3 = NokiaL3Interface(iface, vrf=scoped_vrf)
+            l3 = NokiaL3Interface(iface, vprn_name=scoped_vprn_name)
             if l3.ipv4_address:
                 out.append(l3)
 
     state = cleaned.get("state") or {}
     for router in _as_list(state.get("router")):
         if isinstance(router, dict):
-            harvest(router, router.get("router-name") or vrf)
+            harvest(router, router.get("router-name") or vprn_name)
     for vprn in _as_list((state.get("service") or {}).get("vprn")):
         if isinstance(vprn, dict):
-            harvest(vprn, vprn.get("service-name") or vrf)
+            harvest(vprn, vprn.get("service-name") or vprn_name)
 
     return out

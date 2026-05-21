@@ -33,7 +33,7 @@ Typical usage::
         print(svc.name, svc.oper_status, len(svc.saps()), "SAPs")
 
     macs = sc.get_mac_table(service_name="VPLS-100", port="1/1/1")
-    arps = sc.get_arp_table(vrf="VPRN-200")
+    arps = sc.get_arp_table(vprn_name="VPRN-200")
 """
 
 from __future__ import annotations
@@ -304,7 +304,7 @@ class ServicesClient:
         L3VPNs.
         """
         if self.vendor == "nokia":
-            req = NokiaVprnRPCRequest(service_name=name, brief=name is None)
+            req = NokiaVprnRPCRequest(service_name=name)
             resp = self.nc.get(req.get_request_filter())
             return list(nokia.parse_vprn_response(resp))
 
@@ -316,24 +316,25 @@ class ServicesClient:
     # -------------------- L3 interfaces -------------------- #
     def get_l3_interfaces(
         self,
-        vrf: Optional[str] = None,
+        vprn_name: Optional[str] = None,
         enrich_l2_service: bool = False,
     ) -> List[L3Interface]:
         """Return the L3 (IP-bearing) interfaces, optionally scoped to a VRF.
 
         Parameters
         ----------
-        vrf:
+        vprn_name:
             Routing-instance name.
 
             * Nokia — ``None`` or ``"Base"`` → the global router's interfaces
               (``/state/router/Base/interface``); any other name → that
-              VPRN's interfaces (``/state/service/vprn/<vrf>/interface``).
+              VPRN's interfaces (``/state/service/vprn/<name>/interface``).
               Server-side scoped. Note: like :meth:`get_arp_table`, this does
-              NOT auto-iterate every VPRN — pass a VRF name to reach one.
+              NOT auto-iterate every VPRN — pass a name to reach one.
             * Huawei — a single ``huawei-ifm`` query returns every interface;
-              ``vrf`` then filters client-side on each interface's
-              ``vrf-name`` (``"_public_"`` is the global instance).
+              ``vprn_name`` then filters client-side on each interface's
+              ``vrf-name`` (``"_public_"`` is the global instance, normalised
+              to ``"Base"``).
         enrich_l2_service:
             When True, populate :attr:`L3Interface.l2_service` on each
             returned interface by resolving the L2-L3 binding:
@@ -341,7 +342,7 @@ class ServicesClient:
               * Huawei — read ``huawei-fim-ifm`` ve-groups, build a parent
                 pairing map L3→L2, and look up the L2 sub-interface in the
                 VSI SAP list (two extra RPCs total).
-              * Nokia — query ``/configure/service/vprn[<vrf>]/interface/vpls``
+              * Nokia — query ``/configure/service/vprn[<name>]/interface/vpls``
                 for VPRNs, or ``/configure/router[router-name='Base']/interface/vpls``
                 for the Base router (one extra RPC; both VRF-scoped VPRN R-VPLS
                 and Base-router R-VPLS bindings are covered).
@@ -353,29 +354,29 @@ class ServicesClient:
         L1/L2-only ports are excluded.
         """
         if self.vendor == "nokia":
-            if vrf and vrf not in ("Base", "base"):
-                req = NokiaL3InterfaceRPCRequest(vprn_service_name=vrf)
-                scoped_vrf = vrf
+            if vprn_name and vprn_name not in ("Base", "base"):
+                req = NokiaL3InterfaceRPCRequest(vprn_service_name=vprn_name)
+                scoped_vprn_name = vprn_name
             else:
-                req = NokiaL3InterfaceRPCRequest(router_name=vrf or "Base")
-                scoped_vrf = vrf or "Base"
+                req = NokiaL3InterfaceRPCRequest(router_name=vprn_name or "Base")
+                scoped_vprn_name = vprn_name or "Base"
             resp = self.nc.get(req.get_request_filter())
-            ifaces = list(nokia.parse_l3_interface_response(resp, vrf=scoped_vrf))
+            ifaces = list(nokia.parse_l3_interface_response(resp, vprn_name=scoped_vprn_name))
             # Enrichment covers both Base router R-VPLS and per-VPRN bindings —
             # the adapter picks the right configure-namespace path internally
             # based on the VRF name.
-            if enrich_l2_service and scoped_vrf is not None:
-                self._enrich_nokia_l2_service(ifaces, scoped_vrf)
+            if enrich_l2_service and scoped_vprn_name is not None:
+                self._enrich_nokia_l2_service(ifaces, scoped_vprn_name)
             return ifaces
 
         # huawei — one query for all interfaces, filter by vrf-name client-side
         req = HuaweiL3InterfaceRPCRequest()
         resp = self.nc.get(req.get_request_filter())
         ifaces = list(huawei.parse_l3_interface_response(resp))
-        if vrf is not None:
-            ifaces = [i for i in ifaces if i.vrf == vrf]
+        if vprn_name is not None:
+            ifaces = [i for i in ifaces if i.vprn_name == vprn_name]
         if enrich_l2_service:
-            self._enrich_huawei_l2_service(ifaces, vrf=vrf)
+            self._enrich_huawei_l2_service(ifaces, vprn_name=vprn_name)
         return ifaces
 
     # Class-level flag so we log the "huawei L2VPN dump is unfiltered" warning
@@ -386,7 +387,7 @@ class ServicesClient:
     def _enrich_huawei_l2_service(
         self,
         l3_interfaces: List[L3Interface],
-        vrf: Optional[str] = None,
+        vprn_name: Optional[str] = None,
     ) -> None:
         """Populate ``l2_service`` on Huawei L3 sub-interfaces via VE-group join.
 
@@ -401,7 +402,7 @@ class ServicesClient:
 
         Two RPCs total; cheap regardless of the number of L3 interfaces.
 
-        ``vrf`` is accepted for API symmetry with the Nokia path
+        ``vprn_name`` is accepted for API symmetry with the Nokia path
         (:meth:`_enrich_nokia_l2_service` requires a VRF to scope its
         configure-namespace query). On Huawei neither ``huawei-fim-ifm``
         (VE-groups, /ifm/global) nor ``huawei-l2vpn`` (/l2vpn/instances)
@@ -411,12 +412,12 @@ class ServicesClient:
         """
         if not l3_interfaces:
             return
-        if vrf and not self._huawei_l2vpn_unfiltered_warned:
+        if vprn_name and not self._huawei_l2vpn_unfiltered_warned:
             self.log.warning(
                 "Huawei L2VPN dump is unfiltered: huawei-fim-ifm / "
                 "huawei-l2vpn YANG models do not support vrf scoping; "
-                "this RPC may be heavy on big BSC nodes. (vrf=%r)",
-                vrf,
+                "this RPC may be heavy on big BSC nodes. (vprn_name=%r)",
+                vprn_name,
             )
             self._huawei_l2vpn_unfiltered_warned = True
 
@@ -453,20 +454,20 @@ class ServicesClient:
     def _enrich_nokia_l2_service(
         self,
         l3_interfaces: List[L3Interface],
-        vrf_name: str,
+        vprn_name: str,
     ) -> None:
         """Populate ``l2_service`` on Nokia router/VPRN interfaces via vpls-binding.
 
         One ``get-config`` round-trip on the configure namespace, narrowed
         either to ``/router[router-name='Base']/interface/vpls`` (when
-        ``vrf_name`` is ``"Base"`` / ``"base"``) or to
-        ``/service/vprn[<vrf>]/interface/vpls`` (any other VRF name).
+        ``vprn_name`` is ``"Base"`` / ``"base"``) or to
+        ``/service/vprn[<name>]/interface/vpls`` (any other VRF name).
         Pure-L3 interfaces (no ``vpls`` element) are absent from the
         binding map and leave ``l2_service`` at ``None``.
         """
         if not l3_interfaces:
             return
-        if vrf_name and vrf_name.lower() == "base":
+        if vprn_name and vprn_name.lower() == "base":
             # Base router R-VPLS bindings live under /configure/router[...=Base].
             req = NokiaBaseRouterInterfaceVplsRPCRequest()
             resp = self.nc.get_config(
@@ -474,20 +475,20 @@ class ServicesClient:
                 filter_subtree=req.get_request_filter(),
             )
             binding_map = nokia.parse_base_router_interface_vpls_response(resp)
-            # Adapter keys by ("Base", iface); L3Interface.vrf parser sets the
+            # Adapter keys by ("Base", iface); L3Interface.vprn_name parser sets the
             # same string for Base-router IRBs.
             for iface in l3_interfaces:
                 iface.l2_service = binding_map.get(("Base", iface.name))
             return
         # VPRN — configure namespace, scoped by VRF name.
-        req = NokiaVprnInterfaceVplsRPCRequest(vprn_service_name=vrf_name)
+        req = NokiaVprnInterfaceVplsRPCRequest(vprn_service_name=vprn_name)
         resp = self.nc.get_config(
             source="running",
             filter_subtree=req.get_request_filter(),
         )
         binding_map = nokia.parse_vprn_interface_vpls_response(resp)
         for iface in l3_interfaces:
-            iface.l2_service = binding_map.get((vrf_name, iface.name))
+            iface.l2_service = binding_map.get((vprn_name, iface.name))
 
     # -------------------- FDB / MAC table -------------------- #
     def get_mac_table(
@@ -655,7 +656,7 @@ class ServicesClient:
     # -------------------- ARP / Neighbor -------------------- #
     def get_arp_table(
         self,
-        vrf: Optional[str] = None,
+        vprn_name: Optional[str] = None,
         ip: Optional[str] = None,
         mac: Optional[str] = None,
         interface: Optional[str] = None,
@@ -665,10 +666,13 @@ class ServicesClient:
 
         Parameters
         ----------
-        vrf:
-            On Nokia, this is the router-instance name ("Base" for the global
-            instance, or a VPRN service name for an L3VPN). On Huawei, it is
-            the ``vpn-instance`` name; pass None for the global routing table.
+        vprn_name:
+            Routing-instance name. Canonical value ``"Base"`` for the global
+            routing table on both vendors. On Nokia, ``"Base"`` selects the
+            base router; any other name → a VPRN service name (L3VPN). On
+            Huawei this is the ``vpn-instance`` name; pass ``None`` for the
+            global routing table (Huawei does NOT need an explicit ``"Base"``
+            value — its ``/arp/query-entries`` is a global subtree).
         ip:
             Server-side filter on the IPv4 list key.
         mac, interface, origin:
@@ -676,21 +680,21 @@ class ServicesClient:
             ``"DYNAMIC"`` / ``"OTHER"``.
         """
         if self.vendor == "nokia":
-            if vrf and vrf not in ("Base", "base"):
-                # VRF on Nokia is a VPRN service name when it's not the base
-                # router. The RPC builder will route the request under
+            if vprn_name and vprn_name not in ("Base", "base"):
+                # vprn_name on Nokia is a VPRN service name when it's not the
+                # base router. The RPC builder will route the request under
                 # /service/vprn/<name>/arp accordingly.
-                req = NokiaArpRPCRequest(vprn_service_name=vrf, ipv4_address=ip)
-                scoped_vrf = vrf
+                req = NokiaArpRPCRequest(vprn_service_name=vprn_name, ipv4_address=ip)
+                scoped_vprn_name = vprn_name
             else:
-                req = NokiaArpRPCRequest(router_name=vrf or "Base", ipv4_address=ip)
-                scoped_vrf = vrf or "Base"
+                req = NokiaArpRPCRequest(router_name=vprn_name or "Base", ipv4_address=ip)
+                scoped_vprn_name = vprn_name or "Base"
             resp = self.nc.get(req.get_request_filter())
             neighbors: List[Neighbor] = list(
-                nokia.parse_arp_response(resp, vrf=scoped_vrf)
+                nokia.parse_arp_response(resp, vprn_name=scoped_vprn_name)
             )
         else:
-            req = HuaweiArpRPCRequest(vpn_instance=vrf, ip_address=ip)
+            req = HuaweiArpRPCRequest(vpn_instance=vprn_name, ip_address=ip)
             resp = self.nc.get(req.get_request_filter())
             neighbors = list(huawei.parse_arp_response(resp))
 
@@ -739,22 +743,24 @@ class ServicesClient:
     def find_l2_service_by_ip(
         self,
         ip: str,
-        vrf_candidates: Optional[List[str]] = None,
+        vprn_name_candidates: Optional[List[str]] = None,
     ) -> Optional[dict]:
         """Find the L2 service that owns an IP, via the L2-L3 binding.
 
         Deterministic chain (no MAC-name guessing):
           1. ARP for the IP across one or more VRFs (auto-discover via
-             :meth:`get_l3vpn_services` when ``vrf_candidates`` is None).
+             :meth:`get_l3vpn_services` when ``vprn_name_candidates`` is
+             None).
           2. Take the matched ARP entry's MAC + interface name.
-          3. ``get_l3_interfaces(vrf=<arp.vrf>, enrich_l2_service=True)`` →
-             look up the matching interface, read ``l2_service``.
+          3. ``get_l3_interfaces(vprn_name=<arp.vprn_name>,
+             enrich_l2_service=True)`` → look up the matching interface, read
+             ``l2_service``.
 
         Returns a dict::
 
             {"ip": ...,
              "mac": ...,
-             "vrf": ...,
+             "vprn_name": ...,
              "l3_interface": ...,
              "l2_service": <vpls_name> | None}
 
@@ -766,27 +772,27 @@ class ServicesClient:
 
         Returns ``None`` if the IP is not in ARP on any candidate VRF.
         """
-        candidates = vrf_candidates
+        candidates = vprn_name_candidates
         if candidates is None:
             # Auto-discover: Base + every configured L3VPN.
             if self.vendor == "nokia":
                 candidates = ["Base"] + [v.name for v in self.get_l3vpn_services()]
             else:
-                # Huawei: vrf=None means global routing table.
+                # Huawei: vprn_name=None means global routing table.
                 candidates = [None] + [v.name for v in self.get_l3vpn_services()]
 
         arp_hit = None
-        matched_vrf = None
-        for vrf in candidates:
-            arps = self.get_arp_table(vrf=vrf, ip=ip)
+        matched_vprn_name = None
+        for vprn_name in candidates:
+            arps = self.get_arp_table(vprn_name=vprn_name, ip=ip)
             if arps:
                 arp_hit = arps[0]
-                matched_vrf = vrf
+                matched_vprn_name = vprn_name
                 break
         if arp_hit is None:
             return None
 
-        ifaces = self.get_l3_interfaces(vrf=matched_vrf, enrich_l2_service=True)
+        ifaces = self.get_l3_interfaces(vprn_name=matched_vprn_name, enrich_l2_service=True)
         l2_service = None
         for iface in ifaces:
             # Match by interface name; ARP-side may use the sub-if name
@@ -799,11 +805,11 @@ class ServicesClient:
         return {
             "ip": ip,
             "mac": arp_hit.link_layer_address,
-            # Prefer the VRF reported by the ARP entry itself; fall back to
-            # whatever VRF the caller scoped to. On Huawei with vrf=None
-            # the device returns ARP across all VPNs and the per-row VRF
-            # is the authoritative answer.
-            "vrf": arp_hit.vrf or matched_vrf,
+            # Prefer the routing-instance name reported by the ARP entry
+            # itself; fall back to whatever scope the caller used. On Huawei
+            # with vprn_name=None the device returns ARP across all VPNs and
+            # the per-row vprn_name is the authoritative answer.
+            "vprn_name": arp_hit.vprn_name or matched_vprn_name,
             "l3_interface": arp_hit.interface,
             "l2_service": l2_service,
         }
@@ -899,15 +905,15 @@ class ServicesClient:
             if vpls == l2_service_name and router_name == "Base"
         ]
         if base_matching:
-            l3_list = self.get_l3_interfaces(vrf="Base")
+            l3_list = self.get_l3_interfaces(vprn_name="Base")
             for iface in l3_list:
                 if iface.name in base_matching:
                     iface.l2_service = l2_service_name
                     gateways.append(iface)
 
         # Per-VPRN bindings.
-        for vrf in vrfs:
-            req = NokiaVprnInterfaceVplsRPCRequest(vprn_service_name=vrf)
+        for vprn_name in vrfs:
+            req = NokiaVprnInterfaceVplsRPCRequest(vprn_service_name=vprn_name)
             resp = self.nc.get_config(
                 source="running",
                 filter_subtree=req.get_request_filter(),
@@ -916,12 +922,12 @@ class ServicesClient:
             matching_ifaces = [
                 iface_name
                 for (vr, iface_name), vpls in binding.items()
-                if vpls == l2_service_name and vr == vrf
+                if vpls == l2_service_name and vr == vprn_name
             ]
             if not matching_ifaces:
                 continue
             # Pull L3Interface state for the VRF, restrict to matching names.
-            l3_list = self.get_l3_interfaces(vrf=vrf)
+            l3_list = self.get_l3_interfaces(vprn_name=vprn_name)
             for iface in l3_list:
                 if iface.name in matching_ifaces:
                     iface.l2_service = l2_service_name
