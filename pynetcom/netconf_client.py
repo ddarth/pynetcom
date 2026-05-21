@@ -1,6 +1,7 @@
 from ncclient import manager
 # from ncclient.xml_ import to_ele
 from ncclient.xml_ import *
+from ncclient.operations.errors import TimeoutExpiredError
 import xmltodict
 import xml.dom.minidom
 import logging
@@ -8,7 +9,8 @@ from  typing import Type, Optional
 from lxml import etree
 
 class NetconfClient:
-    def __init__(self, host, port, user, password, device_params=None, hostkey_verify=False):
+    def __init__(self, host, port, user, password, device_params=None,
+                 hostkey_verify=False, rpc_timeout: int = 60):
         """
         When instantiating a connection to a known type of NETCONF server:
 
@@ -26,6 +28,21 @@ class NetconfClient:
                 device_params={'name':'huaweiyang'}
             Juniper: device_params={'name':'junos'}
             Server or anything not in above: device_params={'name':'default'}
+
+        Timeouts:
+            * Connection (SSH handshake) timeout — 120s, hardcoded in
+              ``__connect`` (passed to ``manager.connect``).
+            * RPC operation timeout — controlled by the ``rpc_timeout``
+              kwarg (default 60s). Applied to every subsequent
+              ``get`` / ``get-config`` / ``rpc`` call via
+              ``self.session.timeout``. Previously the ncclient default
+              (~30s) was used; this is now an explicit value.
+
+        :param rpc_timeout: Per-RPC timeout, in seconds — how long
+            ncclient waits for a reply on a single request before raising
+            ``TimeoutExpiredError``. Applied at session level after a
+            successful connect.
+        :type rpc_timeout: int
         """
         self.logger = logging.getLogger('pynetcom')
         self.host = host
@@ -34,6 +51,7 @@ class NetconfClient:
         self.password = password
         self.device_params = device_params
         self.hostkey_verify = hostkey_verify
+        self.rpc_timeout = rpc_timeout
         self.session : Optional[manager.Manager] = None
         self.__connect()
 
@@ -46,8 +64,11 @@ class NetconfClient:
             password=self.password,
             device_params=self.device_params,
             hostkey_verify=self.hostkey_verify,
-            timeout=120
+            timeout=120  # SSH handshake timeout, not the RPC timeout
         )
+        # Apply RPC operation timeout — affects every subsequent
+        # get / get-config / rpc call on this session.
+        self.session.timeout = self.rpc_timeout
         
 
     def get_config(
@@ -108,6 +129,18 @@ class NetconfClient:
         try:
             response = self.session.get(("subtree", request_filter))
             return xmltodict.parse(response.data_xml)
+        except TimeoutExpiredError:
+            # RPC timeout — the session is in a potentially bad state.
+            # A second RPC via get_raw() on the same timed-out session
+            # would hang even longer and may outlive the process kill
+            # (the NETCONF session on the device lives until its
+            # idle-timeout). Do NOT fall back here.
+            self.logger.error(
+                f'NETCONF RPC timed out after {self.rpc_timeout}s; '
+                f'not retrying via get_raw(). Filter snippet: '
+                f'{str(request_filter)[:200]}'
+            )
+            raise
         except Exception as e:
             # ncclient/lxml can't parse multi-root XML fragments for subtree filters.
             # Fall back to a raw <get> that embeds the fragment as-is under <filter>.
@@ -221,4 +254,28 @@ class NetconfClient:
 
 
     def close(self):
-        self.session.close_session()
+        """Idempotent close. After the call ``self.session is None``.
+
+        * A repeated ``close()`` is a no-op.
+        * Closing a session that is already broken does not raise —
+          any error from ``close_session()`` is logged as a warning and
+          swallowed.
+        """
+        if self.session is None:
+            return
+        try:
+            self.session.close_session()
+        except Exception as e:
+            self.logger.warning(
+                f'NetconfClient.close: session.close_session() raised '
+                f'{type(e).__name__}: {e}'
+            )
+        finally:
+            self.session = None
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
+        return False  # do not suppress the exception
