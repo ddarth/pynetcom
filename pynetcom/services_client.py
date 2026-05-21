@@ -44,6 +44,7 @@ from typing import List, Literal, Optional
 from pynetcom.netconf_client import NetconfClient
 from pynetcom.utils.helpers.netconf.rpc_requests import (
     HuaweiArpRPCRequest,
+    HuaweiInterfaceAdminOperStateRPCRequest,
     HuaweiL2vpnRPCRequest,
     HuaweiL3InterfaceRPCRequest,
     HuaweiL3vpnRPCRequest,
@@ -56,6 +57,7 @@ from pynetcom.utils.helpers.netconf.rpc_requests import (
     NokiaL3InterfaceRPCRequest,
     NokiaSdpRPCRequest,
     NokiaServiceRPCRequest,
+    NokiaServiceSapAdminStateRPCRequest,
     NokiaVprnInterfaceVplsRPCRequest,
     NokiaVprnRPCRequest,
     normalize_mac,
@@ -105,6 +107,7 @@ class ServicesClient:
         name: Optional[str] = None,
         include_fdb: bool = False,
         enrich_remote_system: bool = True,
+        enrich_admin_state: bool = False,
     ) -> List[NetworkInstance]:
         """Return all L2 services (VPLS multipoint + VPWS point-to-point).
 
@@ -127,18 +130,41 @@ class ServicesClient:
             matter. Has no effect when ``name`` is None (brief enumeration
             has no remote endpoints to enrich) or on Huawei (the L2VPN
             response there already carries far-end IPs).
+        enrich_admin_state:
+            Opt-in. When True, populate :attr:`LocalEndpoint.admin_status`
+            on every LOCAL endpoint (SAP / AC) with the canonical
+            ``"enabled"`` / ``"disabled"`` form via one extra vendor-specific
+            RPC:
+
+              * Nokia — ``<get-config source="running"
+                with-defaults="report-all">`` against
+                ``/configure/service/{vpls,epipe}/sap/admin-state`` (see
+                :class:`NokiaServiceSapAdminStateRPCRequest`). The state
+                tree does not expose admin intent at all.
+              * Huawei — ``<get>`` against ``/ifm/interfaces`` (see
+                :class:`HuaweiInterfaceAdminOperStateRPCRequest`).
+                Additionally, ``LocalEndpoint.oper_status`` is **overwritten**
+                with the authoritative ``ifm/dynamic/oper-status`` (the
+                ``huawei-l2vpn`` AC subtree carries a coarse aggregate that
+                can lag behind the per-interface state).
+
+            Default is False to preserve the cheap single-RPC behaviour.
         """
         if self.vendor == "nokia":
             return self._get_nokia_l2_services(
                 name=name,
                 include_fdb=include_fdb,
                 enrich_remote_system=enrich_remote_system,
+                enrich_admin_state=enrich_admin_state,
             )
 
         # huawei
         req = HuaweiL2vpnRPCRequest(name=name)
         resp = self.nc.get(req.get_request_filter())
-        return list(huawei.parse_l2vpn_response(resp))
+        services = list(huawei.parse_l2vpn_response(resp))
+        if enrich_admin_state and services:
+            self._enrich_huawei_endpoint_state(services)
+        return services
 
     def _get_nokia_l2_services(
         self,
@@ -146,6 +172,7 @@ class ServicesClient:
         name: Optional[str],
         include_fdb: bool,
         enrich_remote_system: bool,
+        enrich_admin_state: bool = False,
     ) -> List[NetworkInstance]:
         """Nokia branch of :meth:`get_l2vpn_services`.
 
@@ -160,6 +187,11 @@ class ServicesClient:
         The full-subtree path can be expensive on busy boxes — but the
         server-side narrowing by ``service-name`` (a YANG list key on both
         ``vpls`` and ``epipe``) keeps responses bounded by a single service.
+
+        When ``enrich_admin_state`` is True, an extra
+        ``<get-config source="running" with-defaults="report-all">`` query
+        against the configure namespace populates
+        :attr:`LocalEndpoint.admin_status` on every SAP.
         """
         brief = name is None
         services: List[NetworkInstance] = []
@@ -188,7 +220,88 @@ class ServicesClient:
             for svc in services:
                 nokia._attach_sdp_far_end(svc, far_end)
 
+        # Optional admin-state enrichment — extra get-config to populate
+        # LocalEndpoint.admin_status. Skip when there are no LOCAL endpoints
+        # to stamp (brief-mode responses carry no SAPs).
+        if enrich_admin_state and any(svc.saps() for svc in services):
+            self._enrich_nokia_sap_admin_state(services, name=name)
+
         return services
+
+    def _enrich_nokia_sap_admin_state(
+        self,
+        services: List[NetworkInstance],
+        name: Optional[str] = None,
+    ) -> None:
+        """Stamp ``LocalEndpoint.admin_status`` on Nokia SAPs in-place.
+
+        One ``<get-config source="running" with-defaults="report-all">``
+        round-trip against ``/configure/service/{vpls,epipe}/sap/admin-state``.
+        Each ``(service_name, sap_id)`` pair from the admin-state map is
+        matched against ``(svc.name, endpoint.local.subinterface)`` —
+        ``LocalEndpoint.subinterface`` carries the Nokia SAP id verbatim
+        (e.g. ``"1/1/11:100"``).
+
+        ``name`` is passed through so the get-config narrows to a single
+        VPLS / EPIPE when the caller asked for one service.
+        """
+        req = NokiaServiceSapAdminStateRPCRequest(service_name=name)
+        resp = self.nc.get_config(
+            source="running",
+            filter_subtree=req.get_request_filter(),
+            with_defaults="report-all",
+        )
+        admin_map = nokia.parse_sap_admin_state_response(resp)
+        if not admin_map:
+            return
+        for svc in services:
+            for cp in svc.connection_points or []:
+                for ep in cp.endpoints or []:
+                    if ep.local is None or not ep.local.subinterface:
+                        continue
+                    key = (svc.name, ep.local.subinterface)
+                    val = admin_map.get(key)
+                    if val is not None:
+                        ep.local.admin_status = val
+
+    def _enrich_huawei_endpoint_state(
+        self,
+        services: List[NetworkInstance],
+    ) -> None:
+        """Stamp Huawei AC ``admin_status`` and overwrite ``oper_status`` in-place.
+
+        One ``<get>`` round-trip against ``/ifm/interfaces``. The interface
+        name on each :class:`LocalEndpoint` (``subinterface`` field) is the
+        join key against the ifm map. Both leaves are canonicalised by
+        :func:`huawei_services.parse_interface_status_response`:
+
+          * ``admin_status``: ``"up"`` → ``"enabled"``, ``"down"`` →
+            ``"disabled"`` (matches Nokia / OpenConfig admin convention).
+          * ``oper_status``: kept as ``"up"`` / ``"down"`` (OpenConfig oper
+            canonical form). **Overwrites** the prior value from the L2VPN
+            AC subtree — ifm is authoritative for runtime status.
+
+        Interfaces missing from the ifm response (rare — e.g. management
+        interfaces filtered by NETCONF ACLs) leave the endpoint untouched,
+        so ``admin_status`` stays ``None`` and the operator can spot it.
+        """
+        req = HuaweiInterfaceAdminOperStateRPCRequest()
+        resp = self.nc.get(req.get_request_filter())
+        status_map = huawei.parse_interface_status_response(resp)
+        if not status_map:
+            return
+        for svc in services:
+            for cp in svc.connection_points or []:
+                for ep in cp.endpoints or []:
+                    if ep.local is None or not ep.local.subinterface:
+                        continue
+                    info = status_map.get(ep.local.subinterface)
+                    if not info:
+                        continue
+                    if info.get("admin_status") is not None:
+                        ep.local.admin_status = info["admin_status"]
+                    if info.get("oper_status") is not None:
+                        ep.local.oper_status = info["oper_status"]
 
     def get_endpoints(self, service_name: str) -> List[Endpoint]:
         """Return SAP + PW endpoints for one service.
@@ -208,22 +321,36 @@ class ServicesClient:
             result.extend(svc.pseudowires())
         return result
 
-    def get_saps(self, service_name: str) -> List[Endpoint]:
+    def get_saps(
+        self,
+        service_name: str,
+        enrich_admin_state: bool = False,
+    ) -> List[Endpoint]:
         """Return only the LOCAL endpoints (SAPs / ACs) of one L2 service.
 
         Lighter than :meth:`get_endpoints` semantically — it filters to the
         local side only and bypasses SDP enrichment entirely (SAPs have no
-        remote-system to fill). One :meth:`get_l2vpn_services` RPC.
+        remote-system to fill).
 
         :param service_name: VPLS / VSI / EPIPE service name (YANG list key,
             server-side narrowing).
         :type service_name: str
+        :param enrich_admin_state: Opt-in admin / oper state enrichment.
+            Pass through to :meth:`get_l2vpn_services`. When True, each
+            returned endpoint's ``local.admin_status`` is filled with the
+            canonical ``"enabled"`` / ``"disabled"`` string (one extra RPC),
+            and on Huawei ``local.oper_status`` is overwritten from
+            ``huawei-ifm`` (authoritative). Default False keeps the
+            single-RPC fast path.
+        :type enrich_admin_state: bool
         :return: Flat list of :class:`Endpoint` objects with
             ``type == EndpointType.LOCAL``.
         :rtype: List[Endpoint]
         """
         services = self.get_l2vpn_services(
-            name=service_name, enrich_remote_system=False
+            name=service_name,
+            enrich_remote_system=False,
+            enrich_admin_state=enrich_admin_state,
         )
         result: List[Endpoint] = []
         for svc in services:
@@ -416,7 +543,7 @@ class ServicesClient:
             self.log.warning(
                 "Huawei L2VPN dump is unfiltered: huawei-fim-ifm / "
                 "huawei-l2vpn YANG models do not support vrf scoping; "
-                "this RPC may be heavy on big BSC nodes. (vprn_name=%r)",
+                "this RPC may be heavy on large routers. (vprn_name=%r)",
                 vprn_name,
             )
             self._huawei_l2vpn_unfiltered_warned = True

@@ -225,7 +225,11 @@ class HuaweiL2vpnInstance(NetworkInstance):
         local = LocalEndpoint()
         local.subinterface = iface
         local.oper_status = ac.get("state") or ac.get("oper-state")
-        local.admin_status = ac.get("admin-state")
+        # ``admin-state`` is NOT a leaf on huawei-l2vpn AC — see
+        # HuaweiL2vpnRPCRequest docstring. Initial value stays ``None``;
+        # ServicesClient.get_l2vpn_services(enrich_admin_state=True) stamps
+        # the canonical "enabled"/"disabled" later via a huawei-ifm RPC.
+        local.admin_status = None
         # Huawei doesn't always carry encap/vlan on the AC — leave None if absent.
         local.encapsulation = ac.get("encapsulation") or ac.get("access-mode")
         local.vlan = _to_int(ac.get("ce-vlan-id") or ac.get("vlan-id"))
@@ -669,6 +673,70 @@ def parse_l3_interface_response(response: dict) -> List[HuaweiL3Interface]:
         l3 = HuaweiL3Interface(entry)
         if l3.has_ip():
             out.append(l3)
+    return out
+
+
+# ---- Interface status enrichment (huawei-ifm) -------------------------- #
+def parse_interface_status_response(response: dict) -> dict:
+    """Parse a HuaweiInterfaceAdminOperStateRPCRequest reply into a status map.
+
+    Walks ``/ifm/interfaces/interface`` and returns
+    ``{interface_name: {"admin_status": "enabled"|"disabled",
+    "oper_status": "up"|"down"}}``. Designed to be O(1)-joined against L2VPN
+    AC endpoints whose ``LocalEndpoint.subinterface`` carries the same
+    ``interface-name`` string (e.g. ``"GigabitEthernet0/3/4.100"`` or
+    ``"Eth-Trunk0.2300"``).
+
+    Canonicalisation
+    ----------------
+    Huawei reports BOTH ``admin-status`` and ``oper-status`` as lexical
+    ``"up"`` / ``"down"`` strings. The operator-facing semantics differ:
+
+      * ``admin-status`` carries the configured intent. We map
+        ``"up"`` → ``"enabled"`` and ``"down"`` → ``"disabled"`` so the
+        :attr:`LocalEndpoint.admin_status` field matches Nokia's
+        ``"enabled"``/``"disabled"`` and OpenConfig conventions.
+      * ``oper-status`` is the runtime state. Already in the OpenConfig
+        canonical form (``"up"``/``"down"``), so we keep it as-is.
+
+    Entries with no ``name`` are skipped (defensive against malformed
+    responses).
+    """
+    if not isinstance(response, dict):
+        return {}
+    cleaned = _cleaned(response)
+    root = (
+        (cleaned.get("ifm") or {})
+        .get("interfaces", {})
+        .get("interface")
+    )
+
+    admin_canon = {"up": "enabled", "down": "disabled"}
+
+    out: dict = {}
+    for entry in _as_list(root):
+        if not isinstance(entry, dict):
+            continue
+        name = entry.get("name")
+        if not name:
+            continue
+        admin_raw = entry.get("admin-status")
+        # ``dynamic`` is an inner container that holds the live runtime
+        # leaves on huawei-ifm (oper-status, last-up-time, etc.). Some VRP
+        # releases also surface ``oper-status`` directly on the interface
+        # entry — accept both for robustness.
+        dyn = entry.get("dynamic") if isinstance(entry.get("dynamic"), dict) else {}
+        oper_raw = dyn.get("oper-status") or entry.get("oper-status")
+
+        admin_status = None
+        if admin_raw is not None:
+            s = str(admin_raw).strip().lower()
+            admin_status = admin_canon.get(s, s)
+        oper_status = None
+        if oper_raw is not None:
+            oper_status = str(oper_raw).strip().lower()
+
+        out[name] = {"admin_status": admin_status, "oper_status": oper_status}
     return out
 
 

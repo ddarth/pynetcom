@@ -50,7 +50,12 @@ class NetconfClient:
         )
         
 
-    def get_config(self, source: str = "running", filter_subtree: Optional[str] = None) -> dict:
+    def get_config(
+        self,
+        source: str = "running",
+        filter_subtree: Optional[str] = None,
+        with_defaults: Optional[str] = None,
+    ) -> dict:
         """Low-level ``<get-config>`` wrapper that returns parsed XML as dict.
 
         :param source: NETCONF datastore — ``"running"`` (default),
@@ -62,6 +67,13 @@ class NetconfClient:
             applied and the entire datastore is fetched (use with care on
             big devices).
         :type filter_subtree: Optional[str]
+        :param with_defaults: Optional NETCONF :rfc:`6243` ``with-defaults``
+            retrieval mode. One of ``"report-all"``, ``"explicit"``,
+            ``"trim"`` or ``None`` (server default). Required on Nokia SR OS
+            to surface leaves whose value matches the YANG default — for
+            example ``<admin-state>enable</admin-state>`` on a SAP, which
+            is otherwise omitted from the running datastore.
+        :type with_defaults: Optional[str]
         :return: ``xmltodict.parse(...)``-shaped dict, root key normally
             ``"data"`` (or ``"rpc-reply"`` if the device returned the
             full envelope).
@@ -71,14 +83,21 @@ class NetconfClient:
         I/O for the package is funnelled through one class — keeps the
         higher-level facade free of ncclient imports.
         """
-        self.logger.debug(f'Get config (source={source}, filter={"yes" if filter_subtree else "no"})')
+        self.logger.debug(
+            f'Get config (source={source}, filter={"yes" if filter_subtree else "no"}, '
+            f'with_defaults={with_defaults})'
+        )
+        kwargs = {}
+        if with_defaults:
+            kwargs["with_defaults"] = with_defaults
         if filter_subtree:
             config = self.session.get_config(
                 source=source,
                 filter=("subtree", to_ele(filter_subtree)),
+                **kwargs,
             )
         else:
-            config = self.session.get_config(source=source)
+            config = self.session.get_config(source=source, **kwargs)
         # ncclient возвращает GetReply без атрибута .xml — используем str(),
         # парсер ниже по стеку уже под полный rpc-reply envelope (исторически
         # services_client делал str(raw)).

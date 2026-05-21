@@ -367,6 +367,61 @@ def parse_base_router_interface_vpls_response(response: dict) -> dict:
     return out
 
 
+def parse_sap_admin_state_response(response: dict) -> dict:
+    """Parse a NokiaServiceSapAdminStateRPCRequest reply into an admin-state map.
+
+    Returns ``{(service_name, sap_id): admin_state}`` where ``admin_state``
+    is canonicalised to ``"enabled"`` / ``"disabled"`` to match OpenConfig
+    semantics (Nokia ships ``"enable"`` / ``"disable"`` on the wire; we map
+    them here). Covers both VPLS and EPIPE sibling containers in one pass.
+
+    The map is keyed by ``(service_name, sap_id)`` rather than ``sap_id``
+    alone because a SAP identifier (e.g. ``"1/1/11:100"``) is not globally
+    unique — it can appear in two different services on the same router.
+    Callers downstream join the L2 service object's
+    ``(service.name, endpoint.local.subinterface)`` against this map.
+
+    The response shape (configure namespace)::
+
+        configure/service/{vpls,epipe}[service-name]/sap[sap-id]/admin-state
+
+    Defaulted values (``<admin-state>enable</admin-state>``) only appear
+    when the caller passed ``with_defaults="report-all"`` to
+    :meth:`NetconfClient.get_config`. Without it, enabled SAPs would
+    silently drop out of the map.
+    """
+    if not isinstance(response, dict):
+        return {}
+    container = NetworkInstance()
+    cleaned = container.remove_namespaces(container._unwrap_data_node(response))
+    configure_root = cleaned.get("configure") or cleaned
+    service_root = configure_root.get("service") or {}
+
+    canon = {"enable": "enabled", "disable": "disabled"}
+
+    out: dict = {}
+    for container_key in ("vpls", "epipe"):
+        for svc in _as_list(service_root.get(container_key)):
+            if not isinstance(svc, dict):
+                continue
+            svc_name = svc.get("service-name")
+            if not svc_name:
+                continue
+            for sap in _as_list(svc.get("sap")):
+                if not isinstance(sap, dict):
+                    continue
+                sap_id = sap.get("sap-id")
+                raw = sap.get("admin-state")
+                if not sap_id or raw is None:
+                    continue
+                # Canonicalise — fall through to the raw value if unexpected
+                # (e.g. operator-extended enums) so the operator still sees
+                # the original string rather than ``None``.
+                normalised = canon.get(str(raw).strip().lower(), str(raw).strip().lower())
+                out[(svc_name, sap_id)] = normalised
+    return out
+
+
 def _attach_sdp_far_end(service: NetworkInstance, sdp_far_end: dict) -> None:
     """Populate ``remote.remote_system`` on a service's REMOTE endpoints.
 

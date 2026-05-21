@@ -297,6 +297,18 @@ class NokiaServiceRPCRequest:
     no SAP / SDP lists at all). ``include_fdb=True`` adds the FDB subtree
     under the named service so a single round-trip can fetch service state +
     MACs together.
+
+    Note: ``admin-state`` leaf is absent on the Nokia VPLS / EPIPE state-tree
+    (same as VPRN). A probe RPC requesting ``<admin-state/>`` either at the
+    VPLS level or inside ``<sap>`` returns ``MGMT_CORE #2201: Unknown element``
+    (``error-path /a:state/a:service/a:vpls[...]/a:admin-state``,
+    ``bad-element=admin-state``). Admin intent lives only under
+    ``/configure/service/...`` (configure namespace, configure datastore),
+    and only with ``with-defaults="report-all"`` (otherwise default-valued
+    ``enable`` leaves are omitted from the response). Use
+    :class:`NokiaServiceSapAdminStateRPCRequest` together with
+    ``ServicesClient.get_l2vpn_services(enrich_admin_state=True)`` to populate
+    :attr:`LocalEndpoint.admin_status` on Nokia SAPs.
     """
 
     def __init__(
@@ -357,6 +369,65 @@ class NokiaServiceRPCRequest:
         return self.request_filter
 
 
+class NokiaServiceSapAdminStateRPCRequest:
+    """Filter for Nokia SR OS SAP ``admin-state`` in the configure datastore.
+
+    The state-tree (``urn:nokia.com:sros:ns:yang:sr:state``) does NOT expose
+    a SAP ``admin-state`` leaf — see :class:`NokiaServiceRPCRequest` docstring.
+    The admin intent is only published in the *configure* namespace
+    (``urn:nokia.com:sros:ns:yang:sr:conf``), and only via
+    ``<get-config source="running">`` with ``with-defaults="report-all"``
+    (otherwise default-valued ``<admin-state>enable</admin-state>`` leaves
+    are omitted and the operator can't distinguish "implicit enable" from
+    "leaf absent because misconfigured").
+
+    The filter covers both VPLS (multipoint) and EPIPE (point-to-point)
+    services in a single round-trip. When ``service_name`` is given, the
+    list-key narrows server-side; an EPIPE-only or VPLS-only service simply
+    returns an empty list for the other container, which the parser tolerates.
+
+    Usage::
+
+        req = NokiaServiceSapAdminStateRPCRequest(service_name="VPLS_X")
+        resp = nc.get_config(
+            source="running",
+            filter_subtree=req.get_request_filter(),
+            with_defaults="report-all",
+        )
+        admin_map = parse_sap_admin_state_response(resp)
+        # -> {("VPLS_X", "1/1/11:100"): "enabled", ...}
+    """
+
+    def __init__(self, service_name: str | None = None):
+        self.service_name = service_name
+        name_xml = (
+            f"<service-name>{service_name}</service-name>" if service_name else ""
+        )
+        self.request_filter = (
+            f'<configure xmlns="urn:nokia.com:sros:ns:yang:sr:conf">'
+            f'  <service>'
+            f'    <vpls>'
+            f'      {name_xml}'
+            f'      <sap>'
+            f'        <sap-id/>'
+            f'        <admin-state/>'
+            f'      </sap>'
+            f'    </vpls>'
+            f'    <epipe>'
+            f'      {name_xml}'
+            f'      <sap>'
+            f'        <sap-id/>'
+            f'        <admin-state/>'
+            f'      </sap>'
+            f'    </epipe>'
+            f'  </service>'
+            f'</configure>'
+        )
+
+    def get_request_filter(self) -> str:
+        return self.request_filter
+
+
 class NokiaSdpRPCRequest:
     """Filter for Nokia SDP overlay tunnels (``/state/service/sdp``).
 
@@ -411,6 +482,9 @@ class NokiaEpipeRPCRequest:
     Note: EPIPE is the Ethernet pipe service; other pipe types
     (ipipe / cpipe / fpipe / apipe) live in sibling containers and would
     need their own request classes if needed.
+
+    Note: same ``admin-state`` limitation as :class:`NokiaServiceRPCRequest`
+    — that leaf is not exposed on Nokia state-tree for L2 services.
     """
 
     def __init__(self, service_name: str | None = None, brief: bool = False):
@@ -572,6 +646,14 @@ class HuaweiL2vpnRPCRequest:
     NOT advertise a ``huawei-vsi`` module — VPLS and VPWS live together
     under ``huawei-l2vpn``, discriminated by an explicit ``type`` leaf on
     each instance. The OpenConfig adapter handles both shapes.
+
+    Note: the AC list under ``huawei-l2vpn`` does NOT carry an
+    ``admin-state`` (or ``admin-status``) leaf — the L2VPN module only
+    references the interface by ``interface-name``. To learn an AC's
+    admin / oper status, query ``huawei-ifm`` separately via
+    :class:`HuaweiInterfaceAdminOperStateRPCRequest` and join by interface
+    name. The high-level :meth:`ServicesClient.get_l2vpn_services` does this
+    when called with ``enrich_admin_state=True``.
     """
 
     def __init__(self, name: str | None = None):
@@ -931,6 +1013,49 @@ class HuaweiL3InterfaceRPCRequest:
             f'    </interface>'
             f'  </interfaces>'
             f'</ifm>'
+        )
+
+    def get_request_filter(self) -> str:
+        return self.request_filter
+
+
+class HuaweiInterfaceAdminOperStateRPCRequest:
+    """Filter for Huawei interface admin / oper state via ``huawei-ifm``.
+
+    YANG: ``/ifm/interfaces/interface`` in ``urn:huawei:yang:huawei-ifm``.
+    Used to enrich Huawei L2VPN AC endpoints with authoritative
+    admin / oper status — the ``huawei-l2vpn`` AC subtree does NOT carry
+    those leaves (a previous heuristic that read ``ac.get("admin-state")``
+    always returned None, see ``huawei_services._add_local_endpoint``).
+
+    The filter is bulk (no ``<name>`` list-key narrowing). Empirically the
+    full ``ifm`` dump returns in ~140 ms on BSC-class NE40E / NE8000 /
+    ATN-910C platforms, which is faster than issuing N per-interface RPCs
+    when an L2 service has more than a couple of ACs. Caller-side parsing
+    yields a ``{interface_name: {"admin_status": ..., "oper_status": ...}}``
+    map; SAP-keyed lookups against that map are O(1).
+
+    Note on Huawei admin canonicalisation: the device exposes ``admin-status``
+    as ``"up"`` / ``"down"`` strings (same lexical form as ``oper-status``,
+    despite the semantic difference between admin intent and runtime state).
+    The parser canonicalises to ``"enabled"`` / ``"disabled"`` for admin to
+    match Nokia and OpenConfig conventions, while keeping ``oper`` in its
+    native ``"up"`` / ``"down"`` form (already the OpenConfig standard).
+    """
+
+    def __init__(self):
+        self.request_filter = (
+            '<ifm xmlns="urn:huawei:yang:huawei-ifm">'
+            '  <interfaces>'
+            '    <interface>'
+            '      <name/>'
+            '      <admin-status/>'
+            '      <dynamic>'
+            '        <oper-status/>'
+            '      </dynamic>'
+            '    </interface>'
+            '  </interfaces>'
+            '</ifm>'
         )
 
     def get_request_filter(self) -> str:
