@@ -364,6 +364,68 @@ class L3Interface(RPCDataContainer):
             self.populate_from_data(data)
 
 
+# ---- BGP RIB (VPN routes) ----------------------------------------------- #
+@dataclass
+class BgpRoute(RPCDataContainer):
+    """Minimal OpenConfig-aligned BGP RIB route entry.
+
+    Corresponds to ``openconfig-rib-bgp:loc-rib/routes/route`` augmented with
+    the L3VPN extension (``openconfig-bgp-l3vpn-ext``). Intentionally narrow —
+    only the four leaves an operator needs for a "what PE serves this prefix?"
+    lookup. Extension to a full RIB shape is a follow-up task.
+
+    Field semantics
+    ---------------
+    * :attr:`prefix` — CIDR notation, OpenConfig ``inet:ip-prefix`` shape
+      (e.g. ``"11.152.200.0/24"``). On Huawei this is synthesised from the
+      pair ``prefix`` + ``mask-length`` returned by
+      ``huawei-bgp-routing-table``.
+    * :attr:`next_hop` — OpenConfig ``attr-sets/next-hop``. For VPN routes
+      this is the remote PE's system-IP (IBGP next-hop-self by convention),
+      not the IGP next-hop.
+    * :attr:`is_best` — OpenConfig ``state/best-path``. ``True`` for the
+      preferred active route, ``False`` for valid alternatives that lost
+      the bestpath election, ``None`` if the device did not report the
+      attribute. Derived on Huawei from the ``flag-string`` leaf
+      (``"*>"`` ⇒ best, anything else ⇒ alternative).
+    * :attr:`route_distinguisher` — ``openconfig-bgp-l3vpn-ext`` field.
+      RD in ``"asn:nn"`` / ``"ip:nn"`` form; identifies the originating VPN
+      on the remote PE.
+
+    Note: this dataclass intentionally does NOT define the base-class
+    ``field_mapping`` / XML-prefix machinery — the Huawei parser populates
+    fields directly (the vendor leaves don't line up 1:1 with the OpenConfig
+    names — ``prefix`` is synthesised from ``prefix`` + ``mask-length``,
+    ``is_best`` is derived from ``flag-string``). Falling back to base-class
+    ``populate_from_data`` would be misleading; instances are constructed
+    field-by-field. The base ``serialization_exclude`` set is overridden to
+    drop the ``'prefix'`` entry — here ``prefix`` is the OpenConfig route
+    CIDR, NOT the XML-namespace prefix list, and must show up in
+    :meth:`to_dict` / :meth:`get_json` output.
+    """
+    # Override base-class exclusion: ``prefix`` is a real data field on
+    # BgpRoute (the CIDR prefix), not the XML-namespace list used by
+    # populate_from_data on other containers.
+    serialization_exclude = {'field_mapping'}
+
+    prefix: Optional[str] = None
+    next_hop: Optional[str] = None
+    is_best: Optional[bool] = None
+    route_distinguisher: Optional[str] = None
+
+    def __init__(
+        self,
+        prefix: Optional[str] = None,
+        next_hop: Optional[str] = None,
+        is_best: Optional[bool] = None,
+        route_distinguisher: Optional[str] = None,
+    ):
+        self.prefix = prefix
+        self.next_hop = next_hop
+        self.is_best = is_best
+        self.route_distinguisher = route_distinguisher
+
+
 # ---- NetworkInstance ----------------------------------------------------- #
 @dataclass
 class NetworkInstance(RPCDataContainer):

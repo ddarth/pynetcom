@@ -68,6 +68,7 @@ import re
 from typing import List, Optional
 
 from pynetcom.utils.helpers.netconf.rpc_data_containers.services import (
+    BgpRoute,
     ConnectionPoint,
     Endpoint,
     EndpointType,
@@ -786,4 +787,59 @@ def parse_ve_group_response(response: dict) -> List[dict]:
             "l2_parent": _strip_ve_suffix(entry.get("l2-ve-ifname") or ""),
             "l3_parent": _strip_ve_suffix(entry.get("l3-ve-ifname") or ""),
         })
+    return out
+
+
+# ---- BGP VPN routes parser --------------------------------------------- #
+def parse_bgp_vpn_routes_response(response: dict) -> List[BgpRoute]:
+    """Parse a HuaweiBgpVpnRoutesRPCRequest reply into a flat list of BgpRoute.
+
+    Маппинг полей Huawei → OpenConfig (см. :class:`BgpRoute`):
+
+      * ``prefix`` + ``mask-length`` → CIDR-строка ``"a.b.c.d/N"``.
+      * ``nexthop``                  → ``next_hop`` (PE system-IP по
+        конвенции IBGP next-hop-self).
+      * ``flag-string``              → ``is_best`` — старшие 2 символа
+        ``"*>"`` означают активный bestpath; иное значение — валидная
+        неактивная альтернатива.
+      * ``route-distinguisher``      → ``route_distinguisher`` (as-is,
+        обычно ``"<ip>:<nn>"`` / ``"<asn>:<nn>"``).
+
+    Возвращает ВСЕ matching entries (best + non-best); LPM / выбор лучшего
+    маршрута / dedupe по next_hop — забота вызывающего слоя.
+    """
+    if not isinstance(response, dict):
+        return []
+    cleaned = _cleaned(response)
+    root = (
+        ((((cleaned.get("bgp") or {})
+            .get("base-process") or {})
+            .get("bgp-route") or {})
+            .get("ipv4-vpn") or {})
+            .get("routes") or {}
+        ).get("route")
+
+    out: List[BgpRoute] = []
+    for entry in _as_list(root):
+        if not isinstance(entry, dict):
+            continue
+        prefix_str = entry.get("prefix")
+        mask = entry.get("mask-length")
+        cidr: Optional[str] = None
+        if prefix_str and mask is not None:
+            cidr = f"{prefix_str}/{mask}"
+        elif prefix_str:
+            cidr = str(prefix_str)
+
+        flag = entry.get("flag-string")
+        is_best: Optional[bool] = None
+        if flag is not None:
+            is_best = str(flag).startswith("*>")
+
+        out.append(BgpRoute(
+            prefix=cidr,
+            next_hop=entry.get("nexthop"),
+            is_best=is_best,
+            route_distinguisher=entry.get("route-distinguisher"),
+        ))
     return out

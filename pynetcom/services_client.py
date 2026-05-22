@@ -44,6 +44,7 @@ from typing import List, Literal, Optional
 from pynetcom.netconf_client import NetconfClient
 from pynetcom.utils.helpers.netconf.rpc_requests import (
     HuaweiArpRPCRequest,
+    HuaweiBgpVpnRoutesRPCRequest,
     HuaweiInterfaceAdminOperStateRPCRequest,
     HuaweiL2vpnRPCRequest,
     HuaweiL3InterfaceRPCRequest,
@@ -63,6 +64,7 @@ from pynetcom.utils.helpers.netconf.rpc_requests import (
     normalize_mac,
 )
 from pynetcom.utils.helpers.netconf.rpc_data_containers.services import (
+    BgpRoute,
     Endpoint,
     L3Interface,
     MacEntry,
@@ -1060,3 +1062,27 @@ class ServicesClient:
                     iface.l2_service = l2_service_name
                     gateways.append(iface)
         return gateways
+
+    # ---- BGP RIB (VPN routes) ------------------------------------------ #
+    def get_bgp_routes(self, prefixes: List[str]) -> List[BgpRoute]:
+        """Resolve BGP IPv4-VPN RIB entries by exact-prefix list.
+
+        :param prefixes: непустой список IPv4-префиксов (host-IP допускается,
+            фильтр Huawei проверяет лишь exact match по NLRI prefix-leaf).
+        :type prefixes: list[str]
+        :return: все matching ``BgpRoute`` (best + non-best); LPM / выбор
+            лучшего / dedupe по next_hop делает caller.
+        :rtype: list[BgpRoute]
+        :raises NotImplementedError: для вендоров, отличных от Huawei.
+
+        Поддерживается только на Huawei (``vendor='huawei'``). Один RPC
+        агрегирует все ``prefixes`` через multi-entry subtree filter —
+        ходить по списку поштучно не нужно.
+        """
+        if self.vendor == "huawei":
+            req = HuaweiBgpVpnRoutesRPCRequest(prefixes)
+            resp = self.nc.get(req.get_request_filter())
+            return list(huawei.parse_bgp_vpn_routes_response(resp))
+        raise NotImplementedError(
+            f"get_bgp_routes is not implemented for vendor={self.vendor!r}"
+        )

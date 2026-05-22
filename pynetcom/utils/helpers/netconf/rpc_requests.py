@@ -1062,6 +1062,42 @@ class HuaweiInterfaceAdminOperStateRPCRequest:
         return self.request_filter
 
 
+class HuaweiBgpVpnRoutesRPCRequest:
+    """Subtree filter for Huawei BGP IPv4 VPN RIB routes (multi-prefix batch).
+
+    YANG path: ``/bgp:bgp/bgp:base-process/bgp-rt:bgp-route/bgp-rt:ipv4-vpn/
+    bgp-rt:routes/bgp-rt:route`` — namespaces ``urn:huawei:yang:huawei-bgp``
+    plus the routing-table augment ``urn:huawei:yang:huawei-bgp-routing-table``.
+
+    Multiple ``<route>`` entries can be packed into a single filter; the
+    device returns the union (server-side ``prefix`` filtering is exact
+    match per entry, so LPM is the caller's responsibility). Field-select
+    keeps the response small: only ``nexthop`` and ``flag-string`` leaves
+    are pulled in addition to the composite list keys returned by default.
+    """
+
+    def __init__(self, prefixes: list):
+        if not prefixes:
+            raise ValueError("prefixes must be a non-empty list")
+        self.prefixes = list(prefixes)
+        routes_xml = "".join(
+            f"<route><prefix>{p}</prefix><nexthop/><flag-string/></route>"
+            for p in self.prefixes
+        )
+        self.request_filter = (
+            '<bgp xmlns="urn:huawei:yang:huawei-bgp">'
+            '<base-process>'
+            '<bgp-route xmlns="urn:huawei:yang:huawei-bgp-routing-table">'
+            f'<ipv4-vpn><routes>{routes_xml}</routes></ipv4-vpn>'
+            '</bgp-route>'
+            '</base-process>'
+            '</bgp>'
+        )
+
+    def get_request_filter(self) -> str:
+        return self.request_filter
+
+
 class HuaweiVeGroupRPCRequest:
     """Filter for Huawei VE-group L2-L3 bindings.
 
