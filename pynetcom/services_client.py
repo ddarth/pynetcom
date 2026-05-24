@@ -52,6 +52,7 @@ from pynetcom.utils.helpers.netconf.rpc_requests import (
     HuaweiMacRPCRequest,
     HuaweiVeGroupRPCRequest,
     NokiaArpRPCRequest,
+    NokiaBaseRouterInterfaceConfigRPCRequest,
     NokiaBaseRouterInterfaceVplsRPCRequest,
     NokiaEpipeRPCRequest,
     NokiaFdbRPCRequest,
@@ -59,6 +60,8 @@ from pynetcom.utils.helpers.netconf.rpc_requests import (
     NokiaSdpRPCRequest,
     NokiaServiceRPCRequest,
     NokiaServiceSapAdminStateRPCRequest,
+    NokiaServiceVplsSpokeSdpConfigRPCRequest,
+    NokiaVprnInterfaceConfigRPCRequest,
     NokiaVprnInterfaceVplsRPCRequest,
     NokiaVprnRPCRequest,
     normalize_mac,
@@ -110,6 +113,7 @@ class ServicesClient:
         include_fdb: bool = False,
         enrich_remote_system: bool = True,
         enrich_admin_state: bool = False,
+        enrich_config: bool = False,
     ) -> List[NetworkInstance]:
         """Return all L2 services (VPLS multipoint + VPWS point-to-point).
 
@@ -126,12 +130,22 @@ class ServicesClient:
         enrich_remote_system:
             Nokia-only. When True (default), after parsing the services the
             client issues one extra brief query against ``/state/service/sdp``
-            to learn each SDP's far-end IP and populates
-            :attr:`RemoteEndpoint.remote_system` on every PW. Set False to
+            to learn each SDP's far-end IP **and active LSP type** and
+            populates :attr:`RemoteEndpoint.remote_system` +
+            :attr:`RemoteEndpoint.signaling_type` on every PW. Set False to
             skip the extra round-trip when only local endpoints / counters
             matter. Has no effect when ``name`` is None (brief enumeration
             has no remote endpoints to enrich) or on Huawei (the L2VPN
-            response there already carries far-end IPs).
+            response there already carries peer-IP and signal-type inline).
+        enrich_config:
+            Nokia-only. When True, one extra ``<get-config>`` round-trip
+            against ``/configure/service/vpls/spoke-sdp`` populates
+            :attr:`RemoteEndpoint.encapsulation_type` (from
+            ``spoke-sdp/vc-type``) and :attr:`RemoteEndpoint.redundancy_role`
+            (from ``spoke-sdp/endpoint/precedence``) on every PW. Default
+            False — these leaves are in the configure namespace, not the
+            state namespace. No-op on Huawei (both fields ship free in the
+            single L2VPN response).
         enrich_admin_state:
             Opt-in. When True, populate :attr:`LocalEndpoint.admin_status`
             on every LOCAL endpoint (SAP / AC) with the canonical
@@ -158,9 +172,12 @@ class ServicesClient:
                 include_fdb=include_fdb,
                 enrich_remote_system=enrich_remote_system,
                 enrich_admin_state=enrich_admin_state,
+                enrich_config=enrich_config,
             )
 
-        # huawei
+        # huawei — enrich_config is a Nokia-only refinement (both
+        # encapsulation_type and redundancy_role are free on Huawei via the
+        # single L2VPN response); silently accepted for API symmetry.
         req = HuaweiL2vpnRPCRequest(name=name)
         resp = self.nc.get(req.get_request_filter())
         services = list(huawei.parse_l2vpn_response(resp))
@@ -175,6 +192,7 @@ class ServicesClient:
         include_fdb: bool,
         enrich_remote_system: bool,
         enrich_admin_state: bool = False,
+        enrich_config: bool = False,
     ) -> List[NetworkInstance]:
         """Nokia branch of :meth:`get_l2vpn_services`.
 
@@ -211,6 +229,9 @@ class ServicesClient:
         services.extend(nokia.parse_epipe_response(self.nc.get(epipe_req.get_request_filter())))
 
         # Optional PW enrichment — only when we have remote endpoints to fill.
+        # Pass the FULL sdp_map (not a far-end-only projection) so the
+        # adapter also stamps :attr:`RemoteEndpoint.signaling_type` from
+        # the SDP's ``active-lsp-type`` (free: same RPC, same parse).
         if (
             enrich_remote_system
             and not brief
@@ -218,9 +239,19 @@ class ServicesClient:
         ):
             sdp_req = NokiaSdpRPCRequest(brief=True)
             sdp_map = nokia.parse_sdp_response(self.nc.get(sdp_req.get_request_filter()))
-            far_end = {sid: info.get("far_end_ip") for sid, info in sdp_map.items()}
             for svc in services:
-                nokia._attach_sdp_far_end(svc, far_end)
+                nokia._attach_sdp_far_end(svc, sdp_map)
+
+        # Optional configure-NS enrichment — populate encapsulation_type +
+        # redundancy_role on REMOTE endpoints via one extra <get-config>.
+        # Same predicate as remote_system enrichment: skip when nothing to
+        # stamp (brief-mode, or no PWs in scope).
+        if (
+            enrich_config
+            and not brief
+            and any(svc.pseudowires() for svc in services)
+        ):
+            self._enrich_nokia_spoke_sdp_config(services, name=name)
 
         # Optional admin-state enrichment — extra get-config to populate
         # LocalEndpoint.admin_status. Skip when there are no LOCAL endpoints
@@ -229,6 +260,34 @@ class ServicesClient:
             self._enrich_nokia_sap_admin_state(services, name=name)
 
         return services
+
+    def _enrich_nokia_spoke_sdp_config(
+        self,
+        services: List[NetworkInstance],
+        name: Optional[str] = None,
+    ) -> None:
+        """Stamp ``RemoteEndpoint.encapsulation_type`` + ``redundancy_role``
+        on Nokia PWs in-place.
+
+        One ``<get-config source="running" with-defaults="report-all">``
+        round-trip against ``/configure/service/vpls/spoke-sdp``. The parsed
+        map is keyed by ``(service_name, sdp_bind_id)`` and matched against
+        each PW's ``(svc.name, "<sdp_id>:<vc_id>")`` composite.
+
+        ``name`` is passed through so the get-config narrows to a single
+        VPLS when the caller asked for one service.
+        """
+        req = NokiaServiceVplsSpokeSdpConfigRPCRequest(service_name=name)
+        resp = self.nc.get_config(
+            source="running",
+            filter_subtree=req.get_request_filter(),
+            with_defaults="report-all",
+        )
+        cfg_map = nokia.parse_spoke_sdp_config_response(resp)
+        if not cfg_map:
+            return
+        for svc in services:
+            nokia._attach_spoke_sdp_config(svc, cfg_map)
 
     def _enrich_nokia_sap_admin_state(
         self,
@@ -364,26 +423,35 @@ class ServicesClient:
         service_name: str,
         include_standby: bool = False,
         enrich_remote_system: bool = True,
+        enrich_config: bool = False,
     ) -> List[Endpoint]:
         """Return only the REMOTE endpoints (PWs / SDP-bindings) of one L2 service.
 
         :param service_name: VPLS / VSI / VPWS service name.
         :type service_name: str
         :param include_standby: Huawei-only — when ``False`` (default), drop
-            PW endpoints whose H-VPLS role is ``slave`` / ``secondary``
-            (operationally blocked, no traffic). Set ``True`` to keep them
-            (debugging a failover). No effect on Nokia (SR OS does not
-            expose a per-spoke-sdp role at this layer; both members of a
-            PW-redundancy pair surface uniformly).
+            PW endpoints whose H-VPLS redundancy state is ``standby``
+            (operationally up but not carrying traffic). Set ``True`` to
+            keep them (debugging a failover). No effect on Nokia (Nokia
+            does not surface a per-spoke-sdp redundancy state at this layer;
+            both members of a PW-redundancy pair surface uniformly).
         :type include_standby: bool
         :param enrich_remote_system: Nokia-only — when ``True`` (default),
             issue one extra brief query against ``/state/service/sdp`` to
             populate :attr:`RemoteEndpoint.remote_system` (the originating
-            PE's loopback IP) on every PW. Set ``False`` to skip the round
-            trip; ``remote_system`` will then stay ``None`` on Nokia PWs.
-            Huawei publishes peer-IP inline on every PW record, so the
-            flag is a no-op on that vendor.
+            PE's loopback IP) and :attr:`RemoteEndpoint.signaling_type`
+            (``rsvp`` / ``ldp`` / ``bgp``) on every PW. Set ``False`` to
+            skip the round trip; both fields will then stay ``None`` on
+            Nokia PWs. Huawei publishes both inline, so the flag is a no-op
+            on that vendor.
         :type enrich_remote_system: bool
+        :param enrich_config: Nokia-only — when ``True``, one extra
+            ``<get-config>`` RPC populates
+            :attr:`RemoteEndpoint.encapsulation_type` and
+            :attr:`RemoteEndpoint.redundancy_role` from the configure
+            namespace. Default ``False``. No-op on Huawei (those fields
+            ship free in the single L2VPN response).
+        :type enrich_config: bool
         :return: Flat list of :class:`Endpoint` objects with
             ``type == EndpointType.REMOTE``.
         :rtype: List[Endpoint]
@@ -391,17 +459,21 @@ class ServicesClient:
         services = self.get_l2vpn_services(
             name=service_name,
             enrich_remote_system=enrich_remote_system,
+            enrich_config=enrich_config,
         )
         result: List[Endpoint] = []
         for svc in services:
             for pw in svc.pseudowires():
                 if not include_standby and self.vendor == "huawei":
-                    # PW-redundancy "slave" / "secondary" half is blocked
-                    # in hardware — operator usually wants only the active
-                    # side. The role is normalised on RemoteEndpoint.role
-                    # by the Huawei parser. None = unknown role → keep.
-                    role = (pw.remote.role if pw.remote else None) or ""
-                    if role in ("slave", "secondary"):
+                    # PW-redundancy "standby" half is operationally up but
+                    # carries no traffic — operator usually wants only the
+                    # active side. ``redundancy_state`` is the vendor-agnostic
+                    # discriminator (Huawei parser derives it from raw
+                    # ``pw-state=backup``). None = unknown → keep.
+                    state = (
+                        pw.remote.redundancy_state if pw.remote else None
+                    ) or ""
+                    if state == "standby":
                         continue
                 result.append(pw)
         return result
@@ -447,6 +519,7 @@ class ServicesClient:
         self,
         vprn_name: Optional[str] = None,
         enrich_l2_service: bool = False,
+        enrich_config: bool = False,
     ) -> List[L3Interface]:
         """Return the L3 (IP-bearing) interfaces, optionally scoped to a VRF.
 
@@ -479,6 +552,30 @@ class ServicesClient:
             Pure-L3 interfaces (no L2 binding) leave ``l2_service`` at
             ``None``.
 
+        enrich_config:
+            Nokia-only refinement (no-op on Huawei — its binding is fully
+            derivable from the interface name for free). When True, one
+            extra ``<get-config>`` round-trip pulls
+            ``/configure/service/vprn[...]/interface`` (or the Base-router
+            equivalent) and refines :attr:`L3Interface.binding_type`:
+
+              * ``<spoke-sdp>`` object present → ``sdp_spoke`` (with
+                ``sdp_bind_id`` populated).
+              * ``<sap>`` object present → ``sap_physical`` (with
+                ``parent_port`` + ``vlan`` split from ``sap-id``).
+              * ``<loopback>true</loopback>`` → ``loopback``.
+
+            Additionally fills :attr:`L3Interface.admin_status` as a fallback
+            when the state-NS did not surface it (known case: Nokia VPRN-bound
+            interfaces — the state subtree for ``/state/service/vprn/.../interface``
+            omits ``<admin-state>``). The configure-NS ``<admin-state>`` leaf
+            is mapped ``enable→up`` / ``disable→down``; if state-NS already
+            provided a value it is NOT overwritten.
+
+            Without ``enrich_config`` Nokia ``sdp_spoke`` / ``sap_physical``
+            interfaces fall back to ``binding_type='unknown'`` (the
+            operator-chosen name carries no signal — e.g. ``test_sap``).
+
         Only interfaces that actually carry an IPv4 address are returned —
         L1/L2-only ports are excluded.
         """
@@ -496,6 +593,13 @@ class ServicesClient:
             # based on the VRF name.
             if enrich_l2_service and scoped_vprn_name is not None:
                 self._enrich_nokia_l2_service(ifaces, scoped_vprn_name)
+            # Configure-NS enrichment (one extra <get-config> RPC). Refines
+            # ``binding_type`` for ``sdp_spoke`` / ``sap_physical`` / ``loopback``
+            # cases that the name pattern cannot detect, AND fills
+            # ``admin_status`` as a fallback for Nokia VPRN-bound interfaces
+            # where state-NS omits the leaf.
+            if enrich_config and scoped_vprn_name is not None:
+                self._enrich_nokia_config(ifaces, scoped_vprn_name)
             return ifaces
 
         # huawei — one query for all interfaces, filter by vrf-name client-side
@@ -506,6 +610,11 @@ class ServicesClient:
             ifaces = [i for i in ifaces if i.vprn_name == vprn_name]
         if enrich_l2_service:
             self._enrich_huawei_l2_service(ifaces, vprn_name=vprn_name)
+        # ``enrich_config`` is a Nokia-only refinement — Huawei populates
+        # binding_type/parent_port/vlan free at parse time via the
+        # interface-name parser, and admin_status arrives from state-NS
+        # directly. Quietly accept it on Huawei for API symmetry with the
+        # cross-vendor callers.
         return ifaces
 
     # Class-level flag so we log the "huawei L2VPN dump is unfiltered" warning
@@ -618,6 +727,53 @@ class ServicesClient:
         binding_map = nokia.parse_vprn_interface_vpls_response(resp)
         for iface in l3_interfaces:
             iface.l2_service = binding_map.get((vprn_name, iface.name))
+
+    def _enrich_nokia_config(
+        self,
+        l3_interfaces: List[L3Interface],
+        vprn_name: str,
+    ) -> None:
+        """Refine ``binding_type`` (and fill admin_status) on Nokia L3-IFs.
+
+        One ``<get-config>`` round-trip with ``with_defaults="report-all"``
+        (so that default-valued ``<loopback>false</loopback>`` does not
+        silently drop), narrowed either to the Base router or to a single
+        VPRN. The parsed map is keyed by ``(vprn_name, iface_name)``;
+        each interface's ``apply_binding_from_config`` upgrades
+        ``binding_type`` from the name-pattern fallback to the precise
+        discriminator (``sdp_spoke`` / ``sap_physical`` / ``loopback``)
+        whenever the configure payload carries it, AND fills
+        ``admin_status`` as a fallback when state-NS omitted it (Nokia VPRN
+        interfaces — confirmed: ``/state/service/vprn/.../interface`` does
+        not carry ``<admin-state>``).
+
+        Pure-L3 interfaces with no ``<sap>``/``<spoke-sdp>``/loopback leaf
+        keep whatever the name-pattern produced (typically ``unknown``).
+        """
+        if not l3_interfaces:
+            return
+        if vprn_name and vprn_name.lower() == "base":
+            req = NokiaBaseRouterInterfaceConfigRPCRequest()
+            keyed_name = "Base"
+        else:
+            req = NokiaVprnInterfaceConfigRPCRequest(vprn_service_name=vprn_name)
+            keyed_name = vprn_name
+        resp = self.nc.get_config(
+            source="running",
+            filter_subtree=req.get_request_filter(),
+            with_defaults="report-all",
+        )
+        binding_map = nokia.parse_vprn_interface_config_response(resp)
+        for iface in l3_interfaces:
+            cfg = binding_map.get((keyed_name, iface.name))
+            if cfg is None:
+                continue
+            # Only NokiaL3Interface instances have apply_binding_from_config —
+            # defensive guard in case a future caller passes a plain
+            # L3Interface object (parser always returns NokiaL3Interface).
+            apply = getattr(iface, "apply_binding_from_config", None)
+            if callable(apply):
+                apply(cfg)
 
     # -------------------- FDB / MAC table -------------------- #
     def get_mac_table(

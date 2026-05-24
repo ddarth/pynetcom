@@ -1,7 +1,7 @@
 from string import Template
 from pynetcom.utils.huawei_router_tools import split_if_to_type_id_tag
 import re
-from typing import Tuple
+from typing import Optional, Tuple
 
 
 def normalize_mac(mac: str, vendor: str) -> str:
@@ -265,6 +265,129 @@ class OpenconfigInterfacesBriefListRPCRequest:
         return self.request_filter
 
 
+class NokiaPortConfigRPCRequest:
+    """Filter for Nokia SR OS port-level configure data (``encap-type``).
+
+    YANG: ``/configure/port[port-id]/ethernet/encap-type``
+    (``urn:nokia.com:sros:ns:yang:sr:conf`` — *configure* namespace, not state).
+
+    Purpose
+    -------
+    The vendor-agnostic
+    :attr:`~pynetcom.utils.helpers.netconf.rpc_data_containers.openconfig.OpenconfigInterface.encap_type`
+    indicator (``"null"`` / ``"dot1q"`` / ``"qinq"``) needs a Nokia source.
+    The state-tree (``urn:nokia.com:sros:ns:yang:sr:state``) does NOT
+    expose a port encap-type leaf — there is no equivalent under
+    ``/state/port/<port-id>/ethernet/``. The intent lives only in the
+    configure datastore.
+
+    Usage
+    -----
+    Always pair with :meth:`NetconfClient.get_config` and
+    ``with_defaults="report-all"`` — otherwise default-valued
+    ``<encap-type>null</encap-type>`` leaves are omitted from the response
+    and untagged ports drop out silently (verified on SR OS 23: probe of
+    32 ports returns 7 ``dot1q`` entries and 0 ``null`` entries without
+    ``report-all``; with ``report-all`` returns all 32). Pair with
+    :func:`~pynetcom.utils.helpers.netconf.rpc_data_containers.nokia_sros.parse_port_encap_type_map`
+    to materialise the response into a ``{port_id: encap_type}`` dict, then
+    :func:`~pynetcom.utils.helpers.netconf.rpc_data_containers.nokia_sros.apply_port_encap_type_map`
+    to merge into per-port :class:`NokiaInterface` objects::
+
+        req = NokiaPortConfigRPCRequest()              # all ports (bulk)
+        resp = nc.get_config(
+            source="running",
+            filter_subtree=req.get_request_filter(),
+            with_defaults="report-all",
+        )
+        encap_map = parse_port_encap_type_map(resp)    # {port_id: encap_type}
+        apply_port_encap_type_map(interfaces, encap_map)
+
+    Cost
+    ----
+    Bulk get-config over all ports on a 32-port 7250 IXR returns ~2 KB
+    and completes in <0.5 s (verified). Per-port narrowing
+    (``port_id="1/1/15"``) is available but unnecessary at this size —
+    network_entries calls this once per router, not per port.
+
+    Parameters
+    ----------
+    port_id:
+        Optional list-key narrowing. When provided, filters server-side
+        to one port; when omitted, returns all ports on the router.
+    """
+
+    def __init__(self, port_id: Optional[str] = None):
+        self.port_id = port_id
+        key_xml = f"<port-id>{port_id}</port-id>" if port_id else "<port-id/>"
+        self.request_filter = (
+            f'<configure xmlns="urn:nokia.com:sros:ns:yang:sr:conf">'
+            f'  <port>'
+            f'    {key_xml}'
+            f'    <ethernet>'
+            f'      <encap-type/>'
+            f'    </ethernet>'
+            f'  </port>'
+            f'</configure>'
+        )
+
+    def get_request_filter(self) -> str:
+        return self.request_filter
+
+
+class HuaweiSubInterfaceListRPCRequest:
+    """Filter for Huawei ``ifm`` interface list with class + parent-name only.
+
+    YANG: ``/ifm/interfaces/interface`` (``urn:huawei:yang:huawei-ifm``).
+    Field-selected to three leaves (``name``, ``class``, ``parent-name``)
+    so the response is cheap even on big devices (one ~5 KB payload for
+    ~115 interfaces verified on an ATN-910C).
+
+    Purpose
+    -------
+    The vendor-agnostic
+    :attr:`~pynetcom.utils.helpers.netconf.rpc_data_containers.openconfig.OpenconfigInterface.encap_type`
+    indicator for Huawei is derived from the *presence of sub-interfaces*
+    under a parent port — Huawei does not expose an explicit per-port
+    encap-type leaf (probed live: no such leaf on
+    ``/ifm/interfaces/interface`` or on ``/devm/ports/port/ethernet``).
+    A parent port with at least one ``class=sub-interface`` child whose
+    ``parent-name`` matches the port name is operating in dot1q mode;
+    otherwise it is untagged (``null``).
+
+    The ``parent-name`` leaf is NOT a valid Huawei list filter key
+    (probed live: ``<parent-name>$value</parent-name>`` returns
+    ``RPCError: This operation is not supported``). The list key is
+    ``name``. Therefore we cannot narrow server-side by parent and must
+    fetch the whole interface list — but the field-selection keeps it
+    cheap.
+
+    Pair with
+    :func:`~pynetcom.utils.helpers.netconf.rpc_data_containers.huawei.parse_sub_interface_parents`
+    to materialise into a ``{parent_name: [child_names]}`` index, then
+    :func:`~pynetcom.utils.helpers.netconf.rpc_data_containers.huawei.apply_sub_interface_index`
+    (or :meth:`HuaweiInterface.derive_encap_type`) to stamp ``encap_type``.
+    """
+
+    template: str = (
+        '<ifm xmlns="urn:huawei:yang:huawei-ifm">'
+        '  <interfaces>'
+        '    <interface>'
+        '      <name/>'
+        '      <class/>'
+        '      <parent-name/>'
+        '    </interface>'
+        '  </interfaces>'
+        '</ifm>'
+    )
+
+    def __init__(self):
+        self.request_filter = self.template
+
+    def get_request_filter(self) -> str:
+        return self.request_filter
+
+
 # =====================================================================
 # Service-layer RPC request builders: VPLS/VSI, FDB/MAC, ARP/Neighbor.
 # =====================================================================
@@ -325,11 +448,19 @@ class NokiaServiceRPCRequest:
     def _build(self) -> str:
         name_xml = f"<service-name>{self.service_name}</service-name>" if self.service_name else ""
         if self.brief:
-            # Just keys + oper-state for cheap enumeration.
+            # Just keys + oper-state + per-service counters for cheap enumeration.
+            # ``sap-count`` and ``sdp-bind-count`` are state-tree leaves that
+            # Nokia surfaces directly on the <vpls> container (verified live on
+            # SR OS 23). Including them in brief lets list-mode answer
+            # "how many SAPs/PWs does this service have" without walking the
+            # per-SAP / per-PW lists — counts are still authoritative via
+            # ``len(svc.saps())`` / ``len(svc.pseudowires())`` whenever the
+            # full payload was fetched. See :attr:`NetworkInstance.sap_count_hint`
+            # / :attr:`NetworkInstance.pw_count_hint`.
             return (
                 f'<state xmlns="urn:nokia.com:sros:ns:yang:sr:state">'
                 f'  <service>'
-                f'    <vpls>{name_xml or "<service-name/>"}<oper-state/></vpls>'
+                f'    <vpls>{name_xml or "<service-name/>"}<oper-state/><sap-count/><sdp-bind-count/></vpls>'
                 f'  </service>'
                 f'</state>'
             )
@@ -441,9 +572,10 @@ class NokiaSdpRPCRequest:
         Restrict to one SDP (list key). When omitted, fetches the full list.
     brief:
         Use a compact field-selector filter (``<sdp-id/>`` plus
-        ``<oper-tunnel-far-end-inet-address/>``) that returns ~50 bytes per
-        SDP rather than the full subtree (~1 KB per SDP). Brief is enough
-        for far-end-IP enrichment of remote endpoints; verified to work on
+        ``<oper-tunnel-far-end-inet-address/>`` plus ``<active-lsp-type/>``)
+        that returns ~80 bytes per SDP rather than the full subtree
+        (~1 KB per SDP). Brief is enough for both far-end-IP enrichment AND
+        signaling-type derivation on remote endpoints; verified to work on
         SR OS 23 (Nokia accepts field-selectors on this list).
     """
 
@@ -456,6 +588,7 @@ class NokiaSdpRPCRequest:
                 key_xml
                 + ("<sdp-id/>" if not key_xml else "")
                 + "<oper-tunnel-far-end-inet-address/>"
+                + "<active-lsp-type/>"
             )
         else:
             inner = key_xml
@@ -465,6 +598,53 @@ class NokiaSdpRPCRequest:
             f'    <sdp>{inner}</sdp>'
             f'  </service>'
             f'</state>'
+        )
+
+    def get_request_filter(self) -> str:
+        return self.request_filter
+
+
+class NokiaServiceVplsSpokeSdpConfigRPCRequest:
+    """Filter for Nokia VPLS spoke-sdp config leaves (configure-NS).
+
+    YANG path: ``/configure/service/vpls[service-name]/spoke-sdp[sdp-bind-id]``
+    in ``urn:nokia.com:sros:ns:yang:sr:conf``. Field-selected to the leaves
+    needed to populate :attr:`RemoteEndpoint.encapsulation_type` and
+    :attr:`RemoteEndpoint.redundancy_role`:
+
+      * ``<vc-type/>`` → ``encapsulation_type`` (``ether`` / ``vlan``).
+      * ``<endpoint><precedence/></endpoint>`` → ``redundancy_role``
+        (``primary`` / ``secondary``).
+
+    Issue with ``<get-config source="running">`` and
+    ``with_defaults="report-all"`` so default-valued leaves
+    (``<vc-type>ether</vc-type>`` is the default on most platforms) come
+    back instead of being silently dropped.
+
+    ``service_name`` narrows server-side to one VPLS; omit to scan every
+    VPLS in one shot.
+    """
+
+    def __init__(self, service_name: str | None = None):
+        self.service_name = service_name
+        name_xml = (
+            f"<service-name>{service_name}</service-name>" if service_name else ""
+        )
+        self.request_filter = (
+            f'<configure xmlns="urn:nokia.com:sros:ns:yang:sr:conf">'
+            f'  <service>'
+            f'    <vpls>'
+            f'      {name_xml}'
+            f'      <spoke-sdp>'
+            f'        <sdp-bind-id/>'
+            f'        <vc-type/>'
+            f'        <endpoint>'
+            f'          <precedence/>'
+            f'        </endpoint>'
+            f'      </spoke-sdp>'
+            f'    </vpls>'
+            f'  </service>'
+            f'</configure>'
         )
 
     def get_request_filter(self) -> str:
@@ -499,10 +679,13 @@ class NokiaEpipeRPCRequest:
             else ""
         )
         if self.brief:
+            # Same rationale as VPLS brief — include the device-side
+            # ``sap-count`` / ``sdp-bind-count`` counters so list-mode answers
+            # endpoint cardinality questions without walking the lists.
             return (
                 f'<state xmlns="urn:nokia.com:sros:ns:yang:sr:state">'
                 f'  <service>'
-                f'    <epipe>{name_xml or "<service-name/>"}<oper-state/></epipe>'
+                f'    <epipe>{name_xml or "<service-name/>"}<oper-state/><sap-count/><sdp-bind-count/></epipe>'
                 f'  </service>'
                 f'</state>'
             )
@@ -816,14 +999,50 @@ class HuaweiL3vpnRPCRequest:
 
     YANG: ``/network-instance/instances/instance[name]`` in
     ``urn:huawei:yang:huawei-network-instance`` — NOT ``huawei-l3vpn``
-    (verified May 2026: the ``huawei-l3vpn`` module's top container returns
-    only a ``<statistics>`` block, no instance list).
+    (the ``huawei-l3vpn`` module's top container only returns a
+    ``<statistics>`` block, no instance list).
 
-    The brief filter selects only the ``name`` list key — cheap (~300 bytes
-    for ~6 instances). The response includes synthetic / system instances
-    (``_public_``, ``__LOCAL_OAM_VPN__``, ``__dcn_vpn__``) which the
-    ``parse_l3vpn_response`` adapter filters out.
+    Cross-namespace augment (verified May 2026, NE40E / NE8000 / ATN-910C /
+    OC-NE-X8X16, VRP V8): the ``huawei-l3vpn`` module **augments** the
+    ``instance`` list with an ``afs/af`` sub-container that carries
+    ``route-distinguisher`` and ``state/status`` (operational up/down).
+    Earlier attempts to pull RD via a cross-namespace filter "proved
+    unreliable" because of two issues we now know how to side-step:
+
+      * The list-key on the augmented ``af`` list is ``type`` (values like
+        ``"ipv4-unicast"``), NOT ``af-type``. Specifying the wrong key name
+        triggers ``RPCError: Unexpected element: af-type``.
+      * The single field-selector for RD must be wrapped inside a properly
+        namespaced ``<afs xmlns="urn:huawei:yang:huawei-l3vpn">`` element
+        nested under ``<instance>``, so the device understands the augment.
+
+    With both issues addressed, a single bulk RPC returns ``name`` + ``RD``
+    + ``status`` for every VRF in ~140 ms (17 instances, ~3 KB response on
+    BSC-class NE40E). This is the canonical query.
+
+    The brief filter selects only list keys and one leaf per augment, so the
+    response stays small. ``parse_l3vpn_response`` filters out the synthetic
+    / system instances (``_public_``, ``__LOCAL_OAM_VPN__``, ``__dcn_vpn__``).
+
+    :param name: optional VRF name (``instance/name`` list key) for
+        server-side narrowing. ``None`` returns every configured VRF.
     """
+
+    # The cross-namespace augment is constant; field-select RD + oper-status.
+    # We intentionally pull ipv4-unicast only — IPv6-unicast augment shape is
+    # identical and its presence here would double the row count without any
+    # operator value (RD is configured per-VRF, not per AF, on Huawei). Other
+    # AFs (vpn-target-list, tunnel-policy, ...) live in the same subtree but
+    # we do not surface them in v1 — they belong in a follow-up enrichment.
+    _AF_AUGMENT = (
+        '<afs xmlns="urn:huawei:yang:huawei-l3vpn">'
+        '  <af>'
+        '    <type>ipv4-unicast</type>'
+        '    <route-distinguisher/>'
+        '    <state><status/></state>'
+        '  </af>'
+        '</afs>'
+    )
 
     def __init__(self, name: str | None = None):
         self.name = name
@@ -831,7 +1050,7 @@ class HuaweiL3vpnRPCRequest:
         self.request_filter = (
             f'<network-instance xmlns="urn:huawei:yang:huawei-network-instance">'
             f'  <instances>'
-            f'    <instance>{name_xml}</instance>'
+            f'    <instance>{name_xml}{self._AF_AUGMENT}</instance>'
             f'  </instances>'
             f'</network-instance>'
         )
@@ -983,6 +1202,118 @@ class NokiaBaseRouterInterfaceVplsRPCRequest:
         return self.request_filter
 
 
+class NokiaVprnInterfaceConfigRPCRequest:
+    """Filter for Nokia VPRN-interface config leaves (configure-NS).
+
+    YANG path: ``/configure/service/vprn[service-name]/interface[interface-name]``
+    in the **configure** namespace (``urn:nokia.com:sros:ns:yang:sr:conf``).
+    Field-selected to the leaves that decide *what kind of binding* an
+    L3 interface uses, plus ``<admin-state>`` as the admin-status fallback
+    for the VPRN state-NS gap (see :class:`NokiaL3Interface` docstring):
+
+      * ``<sap>``         — presence ⇒ SAP-based L3 (``sap_physical``);
+                             we also pull ``sap-id`` inside for ``port:vlan``.
+      * ``<spoke-sdp>``   — presence ⇒ SDP-spoke L3 (``sdp_spoke``); pull
+                             ``sdp-bind-id`` for the ``"<sdp_id>:<vc_id>"`` tag.
+      * ``<loopback>``    — boolean leaf (``"true"`` ⇒ ``loopback``).
+      * ``<vpls>``        — for completeness (R-VPLS naming convention is
+                             already detected by the interface-name parser;
+                             keeping the leaf here lets the same RPC double
+                             as the binding-config source for R-VPLS too).
+      * ``<admin-state>`` — admin intent (``enable`` / ``disable``). Fallback
+                             only — see ``NokiaL3Interface.apply_binding_from_config``.
+
+    No state-data is requested — strictly configure-NS leaves. Issue with
+    ``<get-config source="running">`` and ``with_defaults="report-all"`` so
+    default-valued leaves (``<loopback>false</loopback>``,
+    ``<admin-state>enable</admin-state>`` etc.) come back instead of being
+    silently dropped.
+
+    ``vprn_service_name`` narrows server-side to one VRF; omit it to fetch
+    every VPRN's interfaces in one shot. The cost stays small because we
+    field-select aggressively.
+    """
+
+    _IF_FIELDS = (
+        "<sap>"
+        "  <sap-id/>"
+        "</sap>"
+        "<spoke-sdp>"
+        "  <sdp-bind-id/>"
+        "</spoke-sdp>"
+        "<loopback/>"
+        "<vpls>"
+        "  <vpls-name/>"
+        "</vpls>"
+        "<admin-state/>"
+    )
+
+    def __init__(self, vprn_service_name: str | None = None):
+        self.vprn_service_name = vprn_service_name
+        svc_key = (
+            f"<service-name>{vprn_service_name}</service-name>"
+            if vprn_service_name
+            else "<service-name/>"
+        )
+        self.request_filter = (
+            f'<configure xmlns="urn:nokia.com:sros:ns:yang:sr:conf">'
+            f'  <service>'
+            f'    <vprn>'
+            f'      {svc_key}'
+            f'      <interface>'
+            f'        <interface-name/>'
+            f'        {self._IF_FIELDS}'
+            f'      </interface>'
+            f'    </vprn>'
+            f'  </service>'
+            f'</configure>'
+        )
+
+    def get_request_filter(self) -> str:
+        return self.request_filter
+
+
+class NokiaBaseRouterInterfaceConfigRPCRequest:
+    """Filter for Nokia Base-router interface config leaves (configure-NS).
+
+    Counterpart of :class:`NokiaVprnInterfaceConfigRPCRequest` for the
+    global Base router — ``/configure/router[router-name='Base']/interface``.
+    Same leaves (``<sap>``, ``<spoke-sdp>``, ``<loopback>``, ``<vpls>``,
+    ``<admin-state>``) so callers can run one RPC per scope and merge the
+    results into a single ``{(vprn_name, iface): config_entry}`` map.
+    """
+
+    _IF_FIELDS = (
+        "<sap>"
+        "  <sap-id/>"
+        "</sap>"
+        "<spoke-sdp>"
+        "  <sdp-bind-id/>"
+        "</spoke-sdp>"
+        "<loopback/>"
+        "<vpls>"
+        "  <vpls-name/>"
+        "</vpls>"
+        "<admin-state/>"
+    )
+
+    def __init__(self):
+        self.request_filter = (
+            f'<configure xmlns="urn:nokia.com:sros:ns:yang:sr:conf">'
+            f'  <router>'
+            f'    <router-name>Base</router-name>'
+            f'    <interface>'
+            f'      <interface-name/>'
+            f'      {self._IF_FIELDS}'
+            f'    </interface>'
+            f'  </router>'
+            f'</configure>'
+        )
+
+    def get_request_filter(self) -> str:
+        return self.request_filter
+
+
 class HuaweiL3InterfaceRPCRequest:
     """Filter for Huawei L3 (IP) interfaces.
 
@@ -991,6 +1322,23 @@ class HuaweiL3InterfaceRPCRequest:
     the global instance) and, when it has an IP, an ``ipv4`` subtree in the
     ``urn:huawei:yang:huawei-ip`` namespace with ``addresses/address``
     (``ip`` + ``mask`` + ``type``).
+
+    Field-selected leaves:
+
+      * ``name`` — list key (interface name).
+      * ``vrf-name`` — VRF binding (``_public_`` → global).
+      * ``admin-status`` — admin intent.
+      * ``mtu`` — configured interface MTU (top-level leaf; verified May 2026
+        on NE40E / NE8000 / ATN-910C, see ``examples/xml/Huawei/get_intergace
+        (response).xml``). Loopback interfaces do not surface this leaf —
+        ``None`` is the correct value there.
+      * ``dynamic/oper-status`` — runtime oper-state, same shape as on
+        :class:`HuaweiInterfaceAdminOperStateRPCRequest`. The huawei-ifm
+        model places live runtime leaves inside a ``<dynamic>`` container;
+        without this field-selector the subtree filter would not return
+        ``oper-status`` and the parsed :attr:`L3Interface.oper_status`
+        would stay ``None``.
+      * ``ipv4/addresses/address`` — IP/mask/type triple (huawei-ip ns).
 
     ``interface_name`` is the YANG list key and narrows server-side. There
     is no server-side filter on ``vrf-name`` (not a list key) — the
@@ -1006,7 +1354,8 @@ class HuaweiL3InterfaceRPCRequest:
             f'<ifm xmlns="urn:huawei:yang:huawei-ifm">'
             f'  <interfaces>'
             f'    <interface>'
-            f'      {name_xml}<vrf-name/><admin-status/>'
+            f'      {name_xml}<vrf-name/><admin-status/><mtu/>'
+            f'      <dynamic><oper-status/></dynamic>'
             f'      <ipv4 xmlns="urn:huawei:yang:huawei-ip">'
             f'        <addresses><address><ip/><mask/><type/></address></addresses>'
             f'      </ipv4>'

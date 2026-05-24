@@ -553,6 +553,32 @@ class OpenconfigInterface(RPCDataContainer):
     admin_status = None
     oper_status = None
     last_state_change = None
+    # Vendor-agnostic indicator of VLAN-encapsulation on this physical port.
+    #
+    # Domain: ``"null"`` | ``"dot1q"`` | ``"qinq"`` | ``None`` (unknown — no
+    # source data on this vendor / port). Aligned with the Nokia configure-
+    # tree terminology (``configure/port/<port-id>/ethernet/encap-type``),
+    # which is the cleanest existing leaf in either vendor model. Conceptually
+    # close to OpenConfig ``openconfig-vlan/ethernet/switched-vlan/
+    # interface-mode`` but NOT a 1:1 mapping — interface-mode encodes both
+    # access/trunk role AND tagged/untagged, while ``encap_type`` strictly
+    # answers "is this port carrying tagged or untagged frames?".
+    #
+    # Population strategy is vendor-specific and lives in subclasses /
+    # client code (NOT populated by the base OpenConfig field_mapping —
+    # there is no OpenConfig leaf for it):
+    #   * Nokia: native leaf ``configure/port/.../ethernet/encap-type``,
+    #     fetched via ``NokiaPortConfigRPCRequest`` (configure-namespace,
+    #     ``with-defaults="report-all"`` required — see that class docstring).
+    #     Merged in by the orchestration layer; ``NokiaInterface.__init__``
+    #     leaves it ``None`` because the per-port ``<get>`` filter only sees
+    #     the state-tree.
+    #   * Huawei: derived client-side from the presence of sub-interfaces
+    #     (``class=sub-interface`` with matching ``parent-name``). No leaf on
+    #     the parent port itself. ``HuaweiInterface.derive_encap_type``
+    #     classmethod implements the rule (``"dot1q"`` if >=1 sub-IF exists,
+    #     ``"null"`` otherwise).
+    encap_type: Optional[str] = None
     counters : OpenconfigInterfaceCounters = None
     ethernet : OpenconfigInterfaceEthernet = None
     transeiver : OpenconfigTranseiver = None

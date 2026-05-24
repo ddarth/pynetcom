@@ -106,13 +106,24 @@ class LocalEndpoint(RPCDataContainer):
     device — the SAP (Nokia) / AC (Huawei). The ``subinterface`` field names
     the underlying port and encapsulation, formatted vendor-specifically
     (e.g. Nokia "1/1/1:100", Huawei "GE0/2/0.100"). ``vlan`` exposes the
-    outer VLAN tag separately when the device reports it as a distinct field.
+    outer VLAN tag separately, and ``port`` exposes the physical port name
+    without the VLAN suffix — both derived client-side from ``subinterface``
+    because neither vendor exposes them as distinct YANG leaves on the SAP /
+    AC subtree (verified by live YANG probe — see Phase 0 of the SAP-fields
+    refactor; vendor candidate leaves all return
+    ``MGMT_CORE #2201 Unknown element``).
     """
     prefix: list = None
     field_mapping: dict = None
     serialization_exclude = RPCDataContainer.serialization_exclude
 
     subinterface: Optional[str] = None
+    # Physical port name without the VLAN suffix — derived client-side from
+    # ``subinterface`` via
+    # :func:`pynetcom.utils.nokia_router_tools.split_sap_id` (Nokia) or
+    # :func:`pynetcom.utils.huawei_router_tools.split_if_to_type_id_tag`
+    # (Huawei). Vendor YANG models do not expose this as a separate leaf.
+    port: Optional[str] = None
     vlan: Optional[int] = None
     oper_status: Optional[str] = None
     admin_status: Optional[str] = None
@@ -134,6 +145,74 @@ class RemoteEndpoint(RPCDataContainer):
 
     Fields follow the OpenConfig naming convention so that operators can write
     code that does not care which vendor produced the entry.
+
+    Vendor-agnostic semantics
+    -------------------------
+
+    * ``virtual_circuit_identifier`` — VC-id (int). Universal.
+    * ``sdp_id`` — Nokia SDP identifier (left of the ``"sdp_id:vc_id"`` Nokia
+      composite). Always ``None`` for Huawei (Huawei has no SDP concept).
+    * ``remote_system`` — IP/loopback of the remote PE. Huawei: free
+      (``peer-ip`` on every PW). Nokia: enrich-only (lives on the SDP object,
+      not on spoke-sdp/mesh-sdp); populated when
+      ``enrich_remote_system=True`` is passed to
+      :meth:`pynetcom.ServicesClient.get_l2vpn_services` /
+      :meth:`pynetcom.ServicesClient.get_pseudowires`.
+    * ``oper_status`` — OpenConfig-canonical ``"up"`` / ``"down"`` only.
+      Huawei nuance: the device may emit ``"backup"`` on PW-redundancy slaves
+      (PW is operationally up but in standby) — the parser **normalises** that
+      to ``oper_status="up"`` and lifts the redundancy semantics to
+      :attr:`redundancy_state`. AI/operator code should never see ``"backup"``.
+    * ``signaling_type`` — protocol used to signal the PW. One of
+      ``ldp`` / ``rsvp`` / ``bgp`` / ``static``. Huawei: free (``signal-type``
+      on every PW). Nokia: enrich-only via SDP join (``active-lsp-type`` on
+      the SDP; populated alongside ``remote_system`` by
+      ``enrich_remote_system=True``).
+    * ``encapsulation_type`` — VC encapsulation. ``ether`` / ``vlan``. Huawei:
+      free (service-level ``vpls/encapsulation-type``, ONE value for every
+      PW in a service). Nokia: enrich-only via the configure-NS RPC
+      (``spoke-sdp/vc-type``); populated when ``enrich_config=True`` is passed
+      to :meth:`pynetcom.ServicesClient.get_l2vpn_services` /
+      :meth:`pynetcom.ServicesClient.get_pseudowires`.
+    * ``redundancy_role`` — which leg the PW occupies in the redundancy
+      group. ``primary`` / ``secondary`` / ``None``. Huawei: free
+      (``pw/role``). Nokia: enrich-only via the configure-NS RPC
+      (``spoke-sdp/endpoint/precedence``); populated when
+      ``enrich_config=True``.
+    * ``redundancy_state`` — current operational role in a paired
+      active/standby PW pair. ``active`` / ``standby`` / ``None``. Huawei:
+      free, derived from the raw ``pw-info/pw-state``
+      (``backup``→``standby``, ``up``→``active``, anything else → ``None``).
+      Nokia: not surfaced in the current iteration — Nokia exposes
+      redundancy state only via MIBs / counters not accessed by this client.
+
+    Free vs enrich matrix
+    ---------------------
+
+    +-------------------+---------------+----------------------------+---------------------+
+    | Field             | Huawei free   | Nokia free (state-NS only) | Nokia enrich        |
+    +===================+===============+============================+=====================+
+    | virtual_circuit_  |               |                            |                     |
+    | identifier        | yes           | yes                        | yes                 |
+    +-------------------+---------------+----------------------------+---------------------+
+    | sdp_id            | n/a (None)    | yes                        | yes                 |
+    +-------------------+---------------+----------------------------+---------------------+
+    | oper_status       | yes           | yes                        | yes                 |
+    +-------------------+---------------+----------------------------+---------------------+
+    | remote_system     | yes           | None                       | enrich_remote_system|
+    +-------------------+---------------+----------------------------+---------------------+
+    | signaling_type    | yes           | None                       | enrich_remote_system|
+    +-------------------+---------------+----------------------------+---------------------+
+    | encapsulation_    |               |                            |                     |
+    | type              | yes (service- | None                       | enrich_config       |
+    |                   | level)        |                            |                     |
+    +-------------------+---------------+----------------------------+---------------------+
+    | redundancy_role   | yes           | None                       | enrich_config       |
+    +-------------------+---------------+----------------------------+---------------------+
+    | redundancy_state  | yes (derived  | None                       | None (not surfaced) |
+    |                   | from raw      |                            |                     |
+    |                   | pw-state)     |                            |                     |
+    +-------------------+---------------+----------------------------+---------------------+
     """
     prefix: list = None
     field_mapping: dict = None
@@ -142,16 +221,25 @@ class RemoteEndpoint(RPCDataContainer):
     virtual_circuit_identifier: Optional[int] = None   # pw-id / vc-id
     remote_system: Optional[str] = None                # IP / loopback of the remote PE
     sdp_id: Optional[int] = None                       # Nokia SDP identifier (None for Huawei)
-    pw_type: Optional[str] = None                      # ethernet | vlan | ...
-    oper_status: Optional[str] = None
-    # H-VPLS PW-redundancy role. Set from the vendor's native leaf:
-    #   * Huawei — ``role`` ("primary" / "secondary") on each <pw> entry,
-    #     plus ``pw-role`` ("master" / "slave") on FDB records.
-    #   * Nokia — there is no per-spoke-sdp role surfaced at this layer
-    #     (failover is handled by SDP-side mechanisms); stays ``None``.
-    # Normalised to lower-case strings: ``"primary"`` / ``"secondary"`` /
-    # ``"master"`` / ``"slave"`` / ``None``.
-    role: Optional[str] = None
+    oper_status: Optional[str] = None                  # OpenConfig: "up" | "down"
+    # PW signaling protocol — ldp | rsvp | bgp | static. Free on Huawei
+    # (``signal-type`` on each PW); enrich-only on Nokia (read from the SDP
+    # join, ``active-lsp-type``, alongside ``remote_system``).
+    signaling_type: Optional[str] = None
+    # VC encapsulation — ether | vlan. Free on Huawei (service-level
+    # ``vpls/encapsulation-type`` — single value applies to every PW in the
+    # service); enrich-only on Nokia (configure-NS ``spoke-sdp/vc-type``).
+    encapsulation_type: Optional[str] = None
+    # Per-PW redundancy role within a redundancy group — primary | secondary.
+    # Free on Huawei (``pw/role``); enrich-only on Nokia (configure-NS
+    # ``spoke-sdp/endpoint/precedence``).
+    redundancy_role: Optional[str] = None
+    # Current operational role in a paired active/standby PW pair —
+    # active | standby. Free on Huawei (derived from raw ``pw-info/pw-state``:
+    # ``backup``→``standby``, ``up``→``active``). Nokia: ``None`` —
+    # Nokia exposes redundancy state only via MIBs / counters not accessed
+    # here.
+    redundancy_state: Optional[str] = None
 
     def __init__(self, data: Optional[dict] = None):
         if data is not None and self.field_mapping:
@@ -231,6 +319,18 @@ class MacEntry(RPCDataContainer):
     mac_address: Optional[str] = None
     vlan: Optional[int] = None
     interface: Optional[str] = None
+    # Physical port name without the VLAN suffix. Derived client-side from
+    # ``interface`` because neither vendor exposes ``port`` as a dedicated
+    # YANG leaf on the FDB record (Phase 0 probe of the FDB subtree):
+    #   * Nokia SAP-learned (source_type=SAP) — split via
+    #     :func:`pynetcom.utils.nokia_router_tools.split_sap_id`, e.g.
+    #     ``'1/1/10:1319'`` → ``'1/1/10'`` (port-based ``'1/1/12'`` →
+    #     ``'1/1/12'`` with ``vlan=None``).
+    #   * Huawei AC-learned (source_type=SAP) — split via
+    #     :func:`pynetcom.utils.huawei_router_tools.split_if_to_type_id_tag`,
+    #     e.g. ``'GigabitEthernet0/2/31.2414'`` → ``'GigabitEthernet0/2/31'``.
+    #   * PW-learned (source_type=PW) — stays ``None`` (no physical port).
+    port: Optional[str] = None
     entry_type: Optional[MacEntryType] = None
     source_type: Optional[MacSourceType] = None    # SAP | PW (where learned)
     # Seconds since the entry's age timer started (or seconds-to-expiry on
@@ -298,6 +398,39 @@ class Neighbor(RPCDataContainer):
     ``"Base"`` for the global routing table on both vendors (Nokia: native;
     Huawei: ``_public_`` is normalised to ``"Base"`` by the adapter). Any
     other value is a configured L3VPN / VPRN service name.
+
+    ``interface`` — name of the L3 interface owning the ARP entry, exactly
+    as the device reports it. This is the **only** vendor-symmetric
+    identifier of where the ARP entry lives, and it intentionally carries
+    the full L3-IF name (which already encodes the VLAN tag on Huawei
+    sub-IFs):
+
+      - Huawei: full sub-IF name like ``Virtual-Ethernet0/2/3.66`` — the
+        ``.66`` suffix is the VLAN. Bare physical names like
+        ``GigabitEthernet0/0/1`` are also possible for port-based L3
+        interfaces.
+      - Nokia: bare L3-IF name as configured, possibly an R-VPLS interface
+        like ``VPLS_LTE_eNodeB_Oc.JArk2.AC_01``.
+
+    No separate ``port`` / ``vlan`` projection is exposed: OpenConfig models
+    neighbors under ``/interfaces/interface/subinterfaces/subinterface/
+    ipv4/neighbors/neighbor``, where physical port and VLAN are derived
+    from the parent interface hierarchy, not stored on the neighbor itself.
+    Surfacing them here would invent a non-OpenConfig contract — callers
+    who need the physical port should resolve it from ``interface`` via
+    the L3-interface / SAP layer.
+
+    ``oper_state`` — vendor-symmetric health marker of the ARP entry.
+
+      - Nokia: native ``<oper-state>`` leaf under ``<neighbor>``
+        (typically ``"up"`` for a healthy resolved entry).
+      - Huawei: derived from ``<expire-time>`` — ``"up"`` when the TTL is
+        positive (entry is alive in the ARP cache), ``"down"`` when it
+        has expired. Strictly speaking this is liveness, not oper-state,
+        but we surface it under the same field for cross-vendor symmetry.
+
+    ``age`` — TTL / age-since-learned, vendor-specific semantics. See the
+    vendor adapter docstrings.
     """
     prefix: list = None
     field_mapping: dict = None
@@ -309,6 +442,7 @@ class Neighbor(RPCDataContainer):
     origin: Optional[NeighborOrigin] = None
     vprn_name: Optional[str] = None
     age: Optional[int] = None
+    oper_state: Optional[str] = None
 
     def __init__(self, data: Optional[dict] = None):
         if data is not None and self.field_mapping:
@@ -341,6 +475,59 @@ class L3Interface(RPCDataContainer):
         interfaces that don't terminate any L2 service. See
         :meth:`ServicesClient.get_l3_interfaces` and
         :meth:`ServicesClient.find_l2_service_by_ip`.
+
+    Binding (vendor-agnostic discriminator)
+    ----------------------------------------
+    ``binding_type`` + ``parent_port`` + ``vlan`` + ``sdp_bind_id`` describe
+    *what* the L3 interface is bound to. The discriminator string is
+    consistent across vendors so AI/operator code can answer questions like
+    "give me every L3-IF that lives on a physical port" without parsing
+    vendor name conventions.
+
+    ``binding_type`` values:
+
+        physical_port  — bare port-based L3 (Huawei ``GigabitEthernet0/2/14``)
+        subinterface   — physical/LAG port + dot1q tag
+                         (Huawei ``GigabitEthernet0/2/14.3060``, ``Eth-Trunk0.2300``)
+        ve_group       — Huawei Virtual-Ethernet / Global-VE (IRB binding)
+        l2vpn_routed   — Nokia R-VPLS L3 interface (name = VPLS name)
+        sdp_spoke      — Nokia L3 over SDP (spoke-sdp binding)
+        sap_physical   — Nokia L3 on a SAP (sap-id ``port:vlan``)
+        loopback       — software loopback (both vendors)
+        system         — Nokia System interface
+        unknown        — name pattern not recognised
+
+    Free vs enrich (filling matrix)
+    --------------------------------
+    +-----------------------+--------------------+-------------------------+
+    | Field                 | Huawei (state-NS)  | Nokia                   |
+    +=======================+====================+=========================+
+    | name, vprn_name,      | free               | free (state-NS)         |
+    | ipv4_*, oper_status,  |                    |                         |
+    | admin_status, mtu     |                    |                         |
+    +-----------------------+--------------------+-------------------------+
+    | binding_type          | free               | name-pattern free:      |
+    | (loopback/system/     |                    |   loopback/system/      |
+    |  l2vpn_routed/        |                    |   l2vpn_routed/unknown  |
+    |  physical_port/       |                    |                         |
+    |  subinterface/        |                    |                         |
+    |  ve_group)            |                    |                         |
+    +-----------------------+--------------------+-------------------------+
+    | binding_type          | n/a                | enrich-only (extra      |
+    | (sdp_spoke /          |                    | configure-NS RPC):      |
+    |  sap_physical),       |                    | ``enrich_config=True``  |
+    | parent_port + vlan    |                    | switches them on        |
+    | (Nokia SAP),          |                    |                         |
+    | sdp_bind_id           |                    |                         |
+    +-----------------------+--------------------+-------------------------+
+    | parent_port + vlan    | free (via          | n/a (Nokia name does    |
+    | (Huawei sub-IF)       | split_if_to_type_  |  not encode VLAN)       |
+    |                       |  id_tag)           |                         |
+    +-----------------------+--------------------+-------------------------+
+
+    Without ``enrich_config=True`` Nokia ``sdp_spoke`` / ``sap_physical``
+    L3 interfaces fall back to ``binding_type='unknown'`` (the name carries
+    no signal — operators choose arbitrary names like ``test_sap``).
     """
     prefix: list = None
     field_mapping: dict = None
@@ -358,6 +545,23 @@ class L3Interface(RPCDataContainer):
     # /configure/service/vprn[...]/interface[...]/vpls/vpls-name. Stays
     # None for "pure L3" interfaces with no L2 binding.
     l2_service: Optional[str] = None
+    # Vendor-agnostic discriminator of *what* the L3 interface is bound to.
+    # See class docstring for the value set and the free/enrich matrix.
+    binding_type: Optional[str] = None
+    # Physical port name without the VLAN suffix — populated for bindings
+    # where the parent port is meaningful (Huawei physical_port /
+    # subinterface; Nokia sap_physical when ``enrich_config=True``).
+    # Stays None for software-only bindings (ve_group / l2vpn_routed /
+    # sdp_spoke / loopback / system).
+    parent_port: Optional[str] = None
+    # Outer VLAN tag for tagged sub-interfaces (Huawei sub-IF / ve_group;
+    # Nokia sap_physical when ``enrich_config=True``). None for untagged
+    # / software bindings.
+    vlan: Optional[int] = None
+    # Nokia SDP binding identifier ``"<sdp_id>:<vc_id>"`` (e.g. ``"41:666"``).
+    # Populated only for ``binding_type='sdp_spoke'`` when
+    # ``enrich_config=True``; stays None for every other binding.
+    sdp_bind_id: Optional[str] = None
 
     def __init__(self, data: Optional[dict] = None):
         if data is not None and self.field_mapping:
@@ -452,6 +656,23 @@ class NetworkInstance(RPCDataContainer):
     connection_points: Optional[List[ConnectionPoint]] = None
     fdb: Optional[Fdb] = None
     neighbors: Optional[List[Neighbor]] = None
+
+    # Device-reported endpoint counters (vendor-agnostic, optional). Populated
+    # only when the vendor exposes them as cheap leaves on the service
+    # container itself — used to answer "how many SAPs/PWs" without walking
+    # the per-endpoint lists. Currently filled by Nokia VPLS/EPIPE adapters
+    # (from native ``<sap-count>`` / ``<sdp-bind-count>`` state leaves) in
+    # brief enumeration mode where ``connection_points`` is intentionally
+    # empty to keep the RPC cheap. Stays ``None`` on Huawei (which always
+    # returns full SAP/PW lists, so ``len(saps())`` is authoritative).
+    #
+    # Authoritative source order:
+    #   1. ``len(self.saps())`` / ``len(self.pseudowires())`` when
+    #      ``connection_points`` is populated (full payload was fetched).
+    #   2. ``sap_count_hint`` / ``pw_count_hint`` when the list is empty
+    #      (brief / list mode) — fall back to the device hint.
+    sap_count_hint: Optional[int] = None
+    pw_count_hint: Optional[int] = None
 
     def __init__(self, data: Optional[dict] = None):
         self.route_targets = []

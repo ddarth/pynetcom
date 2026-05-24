@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import List
+from typing import Dict, List, Optional
 from .openconfig import (
     RPCDataContainer,
     OpenconfigTranseiver,
@@ -159,6 +159,35 @@ class HuaweiTransceiver(OpenconfigTranseiver):
 
 @dataclass
 class HuaweiInterface(OpenconfigInterface):
+    """Huawei VRP port interface (state-tree subset).
+
+    The ``encap_type`` attribute (vendor-agnostic indicator of
+    tagged/untagged port encapsulation — see
+    :class:`OpenconfigInterface.encap_type` docstring) has no single
+    source leaf on Huawei: probed live on an ATN-910C, neither
+    ``/ifm/interfaces/interface`` nor
+    ``/devm/ports/port/ethernet`` (the huawei-pic Ethernet container)
+    expose a port-level encap-type field. Instead the value is derived
+    client-side from the presence of sub-interfaces:
+
+      * one or more sibling ``/ifm/interfaces/interface`` entries with
+        ``class=sub-interface`` and ``parent-name`` equal to this port
+        name  → ``encap_type="dot1q"``
+      * zero such siblings → ``encap_type="null"``
+
+    The single-port :class:`HuaweiInterfaceRPCRequest` filter does not
+    return sibling sub-interfaces (the YANG list key is ``name``, which
+    is exact-match, and ``parent-name`` is not a valid filter key
+    either — probed live). The recommended orchestration is therefore
+    to issue ONE cheap bulk
+    :class:`~pynetcom.utils.helpers.netconf.rpc_requests.HuaweiSubInterfaceListRPCRequest`
+    fetching ``{name, class, parent-name}`` for every interface, build a
+    parent-index with :func:`parse_sub_interface_parents`, and stamp
+    ``encap_type`` on each interface via :func:`apply_sub_interface_index`.
+
+    For single-interface callers, :meth:`derive_encap_type` is a one-shot
+    helper.
+    """
     prefix = []
     field_mapping = OpenconfigInterface.field_mapping.copy()
     field_mapping.update({
@@ -198,4 +227,108 @@ class HuaweiInterface(OpenconfigInterface):
                 Shaping: {self.shaping}
                 """
                 )
+
+    @staticmethod
+    def derive_encap_type(
+        port_name: str,
+        sub_if_index: Dict[str, List[str]],
+    ) -> str:
+        """Compute ``encap_type`` for one Huawei port from a sub-IF index.
+
+        :param port_name: parent port name (``"GigabitEthernet0/2/28"``,
+            ``"Eth-Trunk2"``, …).
+        :type port_name: str
+        :param sub_if_index: ``{parent_name: [child_name, ...]}`` from
+            :func:`parse_sub_interface_parents`. Missing parent → port has
+            zero children → ``"null"``.
+        :type sub_if_index: Dict[str, List[str]]
+        :return: ``"dot1q"`` if the port has >=1 sub-interface, otherwise
+            ``"null"``. Never returns ``None`` for a known port — the
+            absence of children is itself the answer.
+        :rtype: str
+        """
+        if not port_name:
+            return "null"
+        children = sub_if_index.get(port_name) or []
+        return "dot1q" if children else "null"
+
+
+def parse_sub_interface_parents(response: dict) -> Dict[str, List[str]]:
+    """Parse a HuaweiSubInterfaceListRPCRequest reply into a parent index.
+
+    Returns ``{parent_name: [child_names]}`` where ``parent_name`` is the
+    physical / aggregated parent (e.g. ``"GigabitEthernet0/2/28"``,
+    ``"Eth-Trunk2"``) and ``child_names`` are the
+    ``class=sub-interface`` siblings whose ``parent-name`` matches.
+
+    Notes
+    -----
+    * Main interfaces (``class=main-interface``) and other non-
+      ``sub-interface`` rows are skipped — they're not children.
+    * Rows with empty / missing ``parent-name`` are also skipped — defensive
+      against malformed responses (a valid sub-interface always carries
+      ``parent-name``).
+    * The order of children inside each list mirrors the response order,
+      which on Huawei is typically the operator's creation order; no
+      sorting is applied here.
+    """
+    if not isinstance(response, dict):
+        return {}
+    container = OpenconfigInterface({})
+    cleaned = container.remove_namespaces(container._unwrap_data_node(response))
+    ifm = cleaned.get("ifm") or {}
+    interfaces_node = ifm.get("interfaces") or {}
+    rows = interfaces_node.get("interface")
+    if rows is None:
+        return {}
+    if isinstance(rows, dict):
+        rows = [rows]
+
+    index: Dict[str, List[str]] = {}
+    for entry in rows:
+        if not isinstance(entry, dict):
+            continue
+        if entry.get("class") != "sub-interface":
+            continue
+        parent = entry.get("parent-name")
+        if not parent:
+            continue
+        name = entry.get("name")
+        if not name:
+            continue
+        index.setdefault(parent, []).append(name)
+    return index
+
+
+def apply_sub_interface_index(
+    interfaces: List["HuaweiInterface"],
+    sub_if_index: Dict[str, List[str]],
+) -> None:
+    """Stamp ``encap_type`` on each HuaweiInterface from a sub-IF index.
+
+    In-place mutation: iterates over ``interfaces`` and sets
+    ``iface.encap_type`` to either ``"dot1q"`` (sub-IF children present)
+    or ``"null"`` (no children) using
+    :meth:`HuaweiInterface.derive_encap_type`. Interfaces that ARE
+    themselves sub-interfaces (name containing ``"."``) are NOT updated —
+    the concept "this sub-IF is tagged" is redundant (sub-IFs carry their
+    own VLAN encoding in the name and don't have child sub-IFs).
+    """
+    if sub_if_index is None:
+        sub_if_index = {}
+    for iface in interfaces:
+        if iface is None:
+            continue
+        port_name = getattr(iface, "name", None)
+        if not port_name:
+            continue
+        # Sub-interfaces themselves don't have a port-level encap-type
+        # (they ARE the encapsulated logical interfaces). Leave their
+        # encap_type as None — callers that want to display sub-IF VLAN
+        # info should use the SAP / sub-interface dataclasses.
+        if "." in port_name:
+            continue
+        iface.encap_type = HuaweiInterface.derive_encap_type(
+            port_name, sub_if_index
+        )
 

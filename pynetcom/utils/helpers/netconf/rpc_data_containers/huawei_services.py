@@ -67,6 +67,7 @@ from __future__ import annotations
 import re
 from typing import List, Optional
 
+from pynetcom.utils.huawei_router_tools import split_if_to_type_id_tag
 from pynetcom.utils.helpers.netconf.rpc_data_containers.services import (
     BgpRoute,
     ConnectionPoint,
@@ -188,6 +189,16 @@ class HuaweiL2vpnInstance(NetworkInstance):
         "vpws-bgp": NetworkInstanceType.L2P2P,
     }
 
+    # Implicit signaling for VPWS subtypes — VPWS YANG doesn't carry a
+    # ``<signal-type>`` leaf (unlike VPLS LDP-signaling), because the
+    # signaling is fully implied by the parent subtree name. Map the
+    # ``type`` leaf directly onto OpenConfig signaling_type strings.
+    _VPWS_SIGNALING = {
+        "vpws-ldp": "ldp",
+        "vpws-static": "static",
+        "vpws-bgp": "bgp",
+    }
+
     def __init__(self, entry: dict):
         super().__init__(data=None)
         if not isinstance(entry, dict):
@@ -206,20 +217,59 @@ class HuaweiL2vpnInstance(NetworkInstance):
         if not isinstance(subtree, dict):
             return
 
+        # Service-level encapsulation — Huawei keeps a single
+        # ``encapsulation-type`` leaf under the parent subtree (one value
+        # applies to every PW in the service). VPLS uses ``<vpls><encapsulation-type>``;
+        # VPWS-LDP/STATIC/BGP uses ``<vpws-*><encapsulation-type>`` — same
+        # leaf name, different parent. We capture it here and prop down into
+        # _add_remote_endpoint so each :class:`RemoteEndpoint` carries it.
+        parent_encap = subtree.get("encapsulation-type")
+        if isinstance(parent_encap, str):
+            parent_encap = parent_encap.strip().lower() or None
+
         # ACs → LOCAL endpoints.
         acs_root = (subtree.get("acs") or {}).get("ac") if isinstance(subtree.get("acs"), dict) else None
         for ac in _as_list(acs_root):
             self._add_local_endpoint(ac)
 
-        # PWs are nested under a signaling-mode container (ldp-signaling,
-        # bgp-signaling, static-signaling). We accept any of them.
-        for sig_key in ("ldp-signaling", "bgp-signaling", "static-signaling"):
-            sig_block = subtree.get(sig_key)
-            if not isinstance(sig_block, dict):
-                continue
-            pws_root = (sig_block.get("pws") or {}).get("pw") if isinstance(sig_block.get("pws"), dict) else None
+        # PWs — different layout depending on service kind:
+        #
+        #   VPLS:    <vpls><ldp-signaling><pws><pw>...</pw></pws></ldp-signaling></vpls>
+        #            (or <bgp-signaling> / <static-signaling> for the other
+        #             VPLS signaling modes — same nested layout)
+        #   VPWS-*:  <vpws-ldp><pws><pw>...</pw></pws></vpws-ldp>
+        #            (NO <ldp-signaling> wrapper — signaling is implicit in
+        #             the parent subtree name). Same applies for vpws-static
+        #             and vpws-bgp.
+        #
+        # We handle both shapes here. For VPWS-* the ``<signal-type>`` leaf
+        # is also absent — derive signaling_type from ``_VPWS_SIGNALING``
+        # and stamp it directly on the RemoteEndpoint.
+        implicit_signaling = self._VPWS_SIGNALING.get(huawei_type)
+        if implicit_signaling is not None:
+            # VPWS-LDP / VPWS-STATIC / VPWS-BGP — <pws> sits DIRECTLY under
+            # the type-specific subtree, no signaling-mode wrapper.
+            pws_root = (subtree.get("pws") or {}).get("pw") if isinstance(subtree.get("pws"), dict) else None
             for pw in _as_list(pws_root):
-                self._add_remote_endpoint(pw, signaling=sig_key)
+                self._add_remote_endpoint(
+                    pw,
+                    signaling=huawei_type,
+                    parent_encap_type=parent_encap,
+                    implicit_signaling_type=implicit_signaling,
+                )
+        else:
+            # VPLS — PWs are nested under a signaling-mode container
+            # (ldp-signaling, bgp-signaling, static-signaling). We accept
+            # any of them.
+            for sig_key in ("ldp-signaling", "bgp-signaling", "static-signaling"):
+                sig_block = subtree.get(sig_key)
+                if not isinstance(sig_block, dict):
+                    continue
+                pws_root = (sig_block.get("pws") or {}).get("pw") if isinstance(sig_block.get("pws"), dict) else None
+                for pw in _as_list(pws_root):
+                    self._add_remote_endpoint(
+                        pw, signaling=sig_key, parent_encap_type=parent_encap
+                    )
 
     def _add_local_endpoint(self, ac: dict) -> None:
         iface = ac.get("interface-name") or ac.get("if-name") or ac.get("access-port")
@@ -233,7 +283,26 @@ class HuaweiL2vpnInstance(NetworkInstance):
         local.admin_status = None
         # Huawei doesn't always carry encap/vlan on the AC — leave None if absent.
         local.encapsulation = ac.get("encapsulation") or ac.get("access-mode")
-        local.vlan = _to_int(ac.get("ce-vlan-id") or ac.get("vlan-id"))
+        # Phase 0 of the SAP-fields refactor confirmed: the AC subtree on
+        # huawei-l2vpn does NOT carry separate ``port`` / ``vlan`` /
+        # ``ce-vlan-id`` leaves on any tested platform (NE40E / NE8000 /
+        # ATN-910C). The composite ``interface-name`` is the only source.
+        # We split it client-side via the existing huawei interface parser to
+        # surface :attr:`LocalEndpoint.port` and :attr:`LocalEndpoint.vlan`.
+        if iface:
+            try:
+                parsed = split_if_to_type_id_tag(iface)
+            except ValueError:
+                # Non-standard iface name (NULL / Vlanif / something exotic).
+                # Leave port/vlan at None rather than guess.
+                parsed = None
+            if parsed is not None:
+                local.port = parsed["if_port_name"]
+                enc = parsed["enc"]  # e.g. ".3060" or "" (port-based)
+                if enc and enc.startswith("."):
+                    tag = enc[1:]
+                    if tag.isdigit():
+                        local.vlan = int(tag)
 
         ep = Endpoint()
         ep.endpoint_id = iface
@@ -245,7 +314,49 @@ class HuaweiL2vpnInstance(NetworkInstance):
         cp.endpoints = [ep]
         self.connection_points.append(cp)
 
-    def _add_remote_endpoint(self, pw: dict, signaling: str) -> None:
+    def _add_remote_endpoint(
+        self,
+        pw: dict,
+        signaling: str,
+        parent_encap_type: Optional[str] = None,
+        implicit_signaling_type: Optional[str] = None,
+    ) -> None:
+        """Build one REMOTE :class:`Endpoint` from a Huawei <pw> entry.
+
+        All four vendor-agnostic PW leaves are filled FREE here (Huawei
+        carries everything inline; no extra RPC needed):
+
+          * ``signaling_type`` ← ``pw/signal-type`` (``ldp`` / ``rsvp`` /
+            ``bgp`` / ``static``). On VPWS-LDP / VPWS-STATIC / VPWS-BGP
+            services Huawei does NOT publish ``<signal-type>`` at all —
+            the signaling is fully implied by the parent subtree name
+            (``vpws-ldp`` → ``ldp``, ``vpws-static`` → ``static``,
+            ``vpws-bgp`` → ``bgp``). The caller passes the derived value
+            via ``implicit_signaling_type`` and we use it as the
+            authoritative source for VPWS-*.
+          * ``encapsulation_type`` ← service-level ``<vpls>/encapsulation-type``
+            or ``<vpws-*>/encapsulation-type`` (same leaf name, different
+            parent — passed in as ``parent_encap_type``, ``ether`` /
+            ``vlan``).
+          * ``redundancy_role`` ← ``pw/role`` (``primary`` / ``secondary``).
+          * ``redundancy_state`` — derived from RAW ``pw-info/pw-state``
+            BEFORE normalisation:
+
+              - ``backup`` → ``standby`` (PW is operationally up, just in
+                the standby leg).
+              - ``up``     → ``active``.
+              - everything else → ``None``.
+
+          * ``oper_status`` — normalised view of ``pw-info/pw-state``:
+
+              - ``backup`` → ``up`` (the PW IS up; standby leg is alive).
+              - ``up``     → ``up``.
+              - ``down``   → ``down``.
+
+            This is the key OpenConfig-alignment fix: AI/operator code never
+            sees ``"backup"`` in ``oper_status``; standby PWs are marked
+            ``oper_status='up'`` + ``redundancy_state='standby'``.
+        """
         peer = pw.get("peer-ip") or pw.get("remote-ip")
         vc_id = _to_int(pw.get("negotiation-vc-id") or pw.get("pw-id") or pw.get("vc-id"))
         info = pw.get("pw-info") if isinstance(pw.get("pw-info"), dict) else {}
@@ -253,19 +364,72 @@ class HuaweiL2vpnInstance(NetworkInstance):
         remote = RemoteEndpoint()
         remote.remote_system = peer
         remote.virtual_circuit_identifier = vc_id
-        remote.pw_type = info.get("pw-type") or pw.get("encapsulation-type")
-        remote.oper_status = info.get("pw-state") or info.get("session-state") or pw.get("state")
-        # H-VPLS / PW-redundancy role. Huawei publishes it under several
-        # leaf names depending on signaling mode (``role`` is the canonical
-        # one on ldp-signaled PWs; some platforms use ``pw-role`` on the
-        # endpoint as well). Normalise to lower-case string.
+
+        # ---- oper_status (normalised) + redundancy_state (derived) ---- #
+        # Read the RAW pw-state ONCE so we can both normalise it (oper_status)
+        # AND derive redundancy_state from the SAME source-of-truth value
+        # before any rewrite. Fallbacks (session-state / pw.state) cover
+        # rare platforms that omit pw-info.
+        raw_pw_state = (
+            info.get("pw-state") or info.get("session-state") or pw.get("state")
+        )
+        raw_norm = (
+            str(raw_pw_state).strip().lower() if raw_pw_state is not None else None
+        )
+        if raw_norm == "backup":
+            remote.oper_status = "up"
+            remote.redundancy_state = "standby"
+        elif raw_norm == "up":
+            remote.oper_status = "up"
+            remote.redundancy_state = "active"
+        elif raw_norm == "down":
+            remote.oper_status = "down"
+            remote.redundancy_state = None
+        else:
+            # Unknown / missing pw-state — surface raw value as-is on
+            # oper_status so the operator can spot the edge case; leave
+            # redundancy_state at None.
+            remote.oper_status = raw_norm
+            remote.redundancy_state = None
+
+        # ---- signaling_type (free) ---- #
+        # Priority: explicit <signal-type> leaf (VPLS LDP-signaling carries
+        # it) > implicit value derived from the parent subtree name (VPWS-*
+        # has no <signal-type> leaf — signaling is implied by <vpws-ldp> /
+        # <vpws-static> / <vpws-bgp>).
+        signal = pw.get("signal-type") or info.get("signal-type")
+        if isinstance(signal, str) and signal.strip():
+            remote.signaling_type = signal.strip().lower()
+        elif implicit_signaling_type:
+            remote.signaling_type = implicit_signaling_type
+
+        # ---- encapsulation_type (free, service-level) ---- #
+        # Huawei stores the encapsulation as ONE leaf on the parent VPLS,
+        # not per-PW. The constructor of HuaweiL2vpnInstance passes it
+        # down via ``parent_encap_type``. A few platforms / signaling-modes
+        # also carry it on the PW itself (``pw/encapsulation-type``); use
+        # that as a per-PW fallback only when the parent did not provide
+        # a value (defensive — should never trigger on the platforms in
+        # scope).
+        if parent_encap_type:
+            remote.encapsulation_type = parent_encap_type
+        else:
+            per_pw_enc = pw.get("encapsulation-type")
+            if isinstance(per_pw_enc, str) and per_pw_enc.strip():
+                remote.encapsulation_type = per_pw_enc.strip().lower()
+
+        # ---- redundancy_role (free) ---- #
+        # H-VPLS / PW-redundancy role. Canonical leaf on ldp-signaled PWs
+        # is ``role`` directly on the <pw> entry; some platforms surface
+        # it as ``pw-role`` either on the endpoint or under pw-info.
         role = (
             pw.get("role")
             or pw.get("pw-role")
             or info.get("role")
             or info.get("pw-role")
         )
-        remote.role = role.strip().lower() if isinstance(role, str) and role.strip() else None
+        if isinstance(role, str) and role.strip():
+            remote.redundancy_role = role.strip().lower()
 
         ep = Endpoint()
         ep.endpoint_id = f"{peer}:{vc_id}" if peer and vc_id else (peer or (str(vc_id) if vc_id else None))
@@ -294,8 +458,42 @@ class HuaweiMacEntry(MacEntry):
             return
         self.mac_address = _normalise_mac(entry.get("address") or entry.get("mac-address"))
         self.network_instance = entry.get("vsi-name") or entry.get("bd-name")
-        self.interface = entry.get("out-interface-name") or entry.get("learnt-from")
-        self.vlan = _to_int(entry.get("vlan-id"))
+        iface = entry.get("out-interface-name") or entry.get("learnt-from") or ""
+        self.interface = iface or None
+        # Customer VLAN derivation. The ``<vlan-id>`` leaf on Huawei VSI MAC
+        # records is the VSI *internal* VLAN — it is effectively always 0 in
+        # the steady-state release we run (no service-internal trunking
+        # configured). The real customer VLAN that operators recognise is
+        # ``<pe-vid>``, present only on tagged sub-IF ACs (omitted entirely
+        # for port-based ACs). Phase 0 of the MAC-fields refactor confirmed
+        # ``vlan-id`` carries no useful value — populating ``self.vlan``
+        # from it gave the dead "vlan=0" attribute on every entry.
+        # Priority: pe-vid → enc-suffix on out-interface-name → None.
+        pe_vid = _to_int(entry.get("pe-vid"))
+        if pe_vid is not None and pe_vid > 0:
+            self.vlan = pe_vid
+        # Port extraction — split client-side via the existing Huawei
+        # interface parser (no dedicated YANG leaf — verified Phase 0).
+        # Same helper is used by the SAP / AC parser; behaviour identical.
+        if iface:
+            try:
+                parts = split_if_to_type_id_tag(iface)
+            except ValueError:
+                # PW-learned records on some platforms surface a non-
+                # interface formatted ``out-interface-name`` (e.g. raw PW
+                # tag); leave port/vlan at None rather than guess.
+                parts = None
+            if parts is not None:
+                self.port = parts.get("if_port_name") or None
+                # Fallback for vlan: derive from enc-suffix when pe-vid was
+                # absent / zero (mainly for port-based ACs that still carry
+                # a ``.<tag>`` in the iface name on some platforms).
+                if self.vlan is None:
+                    enc = parts.get("enc") or ""
+                    if enc.startswith("."):
+                        tag = enc[1:]
+                        if tag.isdigit() and int(tag) > 0:
+                            self.vlan = int(tag)
         self.entry_type = entry_type
         # source_type — distinguishes locally-learned (SAP/AC) from
         # PW-learned (remote) MAC entries. Huawei has no explicit ``locale``
@@ -313,14 +511,25 @@ class HuaweiMacEntry(MacEntry):
         out_iface_type = (entry.get("out-interface-type") or "").strip().lower()
         if out_iface_type == "pw":
             self.source_type = MacSourceType.PW
+            # PW-learned: out-interface-name is a Tunnel-name (e.g. 'Tunnel0/0/1'),
+            # not a physical port. Per MacEntry contract — port/vlan must be None
+            # for PW-learned (analogous to Nokia sdp-bind case). split_if_to_type_id_tag
+            # accepts Tunnel-names but their port-extraction is meaningless here.
+            self.port = None
+            self.vlan = None
         elif out_iface_type == "ac":
             self.source_type = MacSourceType.SAP
         else:
             self.source_type = None
         self.age = _to_int(entry.get("age"))
-        # Huawei's standard MAC subtree does not surface a learn timestamp;
-        # leave ``last_update`` at its default ``None``. Field is reserved
-        # for forward compatibility with platform-specific YANG augments.
+        # Huawei DOES surface a learn timestamp via ``<last-change-time>``
+        # on every FDB record on the platforms in scope (VRP V8 NE40E /
+        # NE8000 / ATN-910C / OC-NE-X8X16) — Phase 0 of the MAC-fields
+        # refactor confirmed the leaf is part of the standard ``huawei-mac``
+        # subtree, contradicting the previous "Huawei has no timestamp"
+        # claim. Surface it as a free-form string (vendor-native format) —
+        # callers parse if they need a datetime.
+        self.last_update = entry.get("last-change-time") or None
         # PW-learned enrichment — both fields ship as native YANG leaves
         # on every vsi-dynamic-mac entry with out-interface-type=pw, so no
         # extra RPC is needed. ``peer-ip`` is the remote PE's system /
@@ -380,6 +589,22 @@ class HuaweiArpEntry(Neighbor):
         huawei_type = (entry.get("style-type") or entry.get("type") or "").strip().lower()
         self.origin = self._ORIGIN_MAP.get(huawei_type, NeighborOrigin.OTHER)
         self.age = _to_int(entry.get("age") or entry.get("expire-time"))
+
+        # NOTE: no port / vlan fields are surfaced on Neighbor — see the
+        # Neighbor docstring. The full sub-IF name in ``self.interface``
+        # (e.g. ``Virtual-Ethernet0/2/3.66``) already encodes both the
+        # physical port and the VLAN tag, matching OpenConfig's "neighbor
+        # lives under the subinterface" model.
+
+        # ---- oper_state --------------------------------------------------
+        # Huawei has no dedicated <oper-state> on ARP entries. Use the TTL
+        # (<expire-time>, seconds-to-eviction) as a vendor-symmetric liveness
+        # marker: positive TTL → "up" (entry is alive in the cache), zero/
+        # negative → "down" (expired). Documented in the Neighbor.oper_state
+        # docstring so callers know it is liveness, not strict admin/oper.
+        expire = _to_int(entry.get("expire-time"))
+        if expire is not None:
+            self.oper_state = "up" if expire > 0 else "down"
 
 
 # ---- Top-level result parsers ------------------------------------------- #
@@ -544,10 +769,25 @@ class HuaweiL3vpnInstance(NetworkInstance):
     """Adapter for one ``<instance>`` entry under
     ``/network-instance/instances`` (``urn:huawei:yang:huawei-network-instance``).
 
-    This is the VRF / L3VPN list. The brief query selects only ``name``;
-    RD / route-targets / oper-status live under the ``afs/af`` subtree in
-    the ``huawei-l3vpn`` namespace and are NOT pulled in v1 (cross-namespace
-    field-selectors proved unreliable). Type is fixed to L3VPN.
+    This is the VRF / L3VPN list. The bulk query field-selects:
+
+      * ``name`` — VRF name (list key in huawei-network-instance).
+      * ``afs/af`` (augment from ``huawei-l3vpn``) — pulled with list-key
+        ``type=ipv4-unicast``. Inside we surface:
+
+          - ``route-distinguisher`` → :attr:`NetworkInstance.route_distinguisher`
+            (operational RD, ``"asn:nn"`` / ``"ip:nn"`` form).
+          - ``state/status`` → :attr:`NetworkInstance.oper_status`
+            (``"up"`` / ``"down"``).
+
+    ``enabled`` (admin intent) intentionally stays ``None``: the huawei-l3vpn
+    augment exposes only operational status. This is vendor-asymmetric with
+    :class:`HuaweiL2vpnInstance` (which coerces ``state`` into ``enabled``
+    via ``_to_bool``), and symmetric with Nokia's :class:`NokiaVprnService`
+    where ``enabled`` is also ``None`` for VPRN. Operators rely on
+    ``oper_status`` as the authoritative runtime signal.
+
+    Type is fixed to L3VPN.
     """
 
     def __init__(self, entry: dict):
@@ -556,7 +796,40 @@ class HuaweiL3vpnInstance(NetworkInstance):
             return
         self.name = entry.get("name")
         self.type = NetworkInstanceType.L3VPN
-        # oper_status / route_distinguisher intentionally left None in v1.
+
+        # huawei-l3vpn augment — read RD + oper-status from afs/af.
+        # On the wire xmltodict surfaces ``afs`` as a sibling of ``name`` on
+        # the ``instance`` dict (after _cleaned() strips the namespace
+        # attributes). The ``af`` list may be a single dict (one AF) or a
+        # list of dicts (several AFs configured); we pick the ipv4-unicast
+        # entry, since RD is per-VRF and the same value would repeat for
+        # ipv6-unicast anyway. Synthetic / system instances (_public_,
+        # __dcn_vpn__) often have an ``af`` block without RD — leave None.
+        afs = entry.get("afs")
+        af_entries = []
+        if isinstance(afs, dict):
+            af_entries = _as_list(afs.get("af"))
+
+        chosen_af = None
+        for af in af_entries:
+            if not isinstance(af, dict):
+                continue
+            if (af.get("type") or "").strip().lower() == "ipv4-unicast":
+                chosen_af = af
+                break
+        # Fallback to first entry if no ipv4-unicast (shouldn't happen on
+        # operator VRFs, but defensive).
+        if chosen_af is None and af_entries:
+            chosen_af = af_entries[0] if isinstance(af_entries[0], dict) else None
+
+        if isinstance(chosen_af, dict):
+            self.route_distinguisher = chosen_af.get("route-distinguisher")
+            state = chosen_af.get("state")
+            if isinstance(state, dict):
+                status_raw = state.get("status")
+                if status_raw is not None:
+                    self.oper_status = str(status_raw).strip().lower()
+        # ``enabled`` left ``None`` — see class docstring.
 
 
 def parse_l3vpn_response(response: dict) -> List[HuaweiL3vpnInstance]:
@@ -612,9 +885,14 @@ class HuaweiL3Interface(L3Interface):
 
     Fields consumed (field-selected by :class:`HuaweiL3InterfaceRPCRequest`):
 
-        name          -> name
-        vrf-name      -> vprn_name ("_public_" normalised to "Base")
-        admin-status  -> admin_status
+        name                 -> name
+        vrf-name             -> vprn_name ("_public_" normalised to "Base")
+        admin-status         -> admin_status
+        mtu                  -> mtu  (top-level configured MTU; absent on
+                                      LoopBack interfaces — None is correct)
+        dynamic/oper-status  -> oper_status  (runtime state; live leaves on
+                                      huawei-ifm sit inside ``<dynamic>``,
+                                      mirrors :func:`parse_interface_status_response`)
         ipv4/addresses/address (huawei-ip ns) -> ipv4_address + ipv4_prefix_length
 
     The ``ipv4`` subtree carries one or more ``address`` entries
@@ -632,6 +910,21 @@ class HuaweiL3Interface(L3Interface):
         # synthetic management VPNs ("__...__") → None.
         self.vprn_name = _normalise_vprn_name(entry.get("vrf-name"))
         self.admin_status = entry.get("admin-status")
+        # Runtime oper-state — same pattern used by parse_interface_status_response.
+        # ``dynamic`` is the huawei-ifm runtime container; some VRP releases also
+        # surface ``oper-status`` directly on the interface entry, accept both.
+        dyn = entry.get("dynamic") if isinstance(entry.get("dynamic"), dict) else {}
+        oper_raw = dyn.get("oper-status") or entry.get("oper-status")
+        if oper_raw is not None:
+            self.oper_status = str(oper_raw).strip().lower()
+        # MTU — top-level configured leaf. LoopBack interfaces do not expose
+        # this leaf, so leaving ``mtu`` at ``None`` for them is correct.
+        # Accept ``<dynamic><mtu>`` as a fallback (the runtime MTU container
+        # carries the same value on standard ifm releases).
+        mtu_raw = entry.get("mtu")
+        if mtu_raw is None:
+            mtu_raw = dyn.get("mtu")
+        self.mtu = _to_int(mtu_raw)
         ipv4 = entry.get("ipv4")
         if isinstance(ipv4, dict):
             addrs = (ipv4.get("addresses") or {}).get("address")
@@ -646,6 +939,65 @@ class HuaweiL3Interface(L3Interface):
             if isinstance(chosen, dict):
                 self.ipv4_address = chosen.get("ip")
                 self.ipv4_prefix_length = _mask_to_prefix_len(chosen.get("mask"))
+        # ---- Vendor-agnostic binding (free on Huawei) -------------------- #
+        # All Huawei L3-IF binding-discriminators (LoopBack / Virtual-Ethernet
+        # / Global-VE / Eth-Trunk + sub-IF vs port-based) are derivable from
+        # the interface name without an extra RPC. We reuse the existing
+        # interface-name parser instead of regex/startswith chains — it
+        # already knows every type prefix on Huawei VRP.
+        self._apply_binding_from_name()
+
+    def _apply_binding_from_name(self) -> None:
+        """Populate ``binding_type`` + ``parent_port`` + ``vlan`` from ``self.name``.
+
+        Rules (per the Phase 2 plan — single source of truth for Huawei):
+          * ``if_type == 'LoopBack'``         → ``loopback``
+          * ``if_type in {'Virtual-Ethernet',
+                          'Global-VE'}``      → ``ve_group`` (IRB binding,
+                                                no physical parent)
+          * ``enc != ''`` (i.e. ``.NNN``)     → ``subinterface``
+                                                + ``parent_port=if_port_name``
+          * otherwise (bare port)              → ``physical_port``
+                                                + ``parent_port=if_port_name``
+
+        Any name that ``split_if_to_type_id_tag`` can't parse leaves the
+        fields at ``unknown``/``None`` rather than guess. The Huawei
+        helper raises :class:`ValueError` for unrecognisable names.
+        """
+        if not self.name:
+            self.binding_type = "unknown"
+            return
+        try:
+            parts = split_if_to_type_id_tag(self.name)
+        except ValueError:
+            self.binding_type = "unknown"
+            return
+
+        if_type = parts.get("if_type")
+        enc = parts.get("enc") or ""
+        if_port_name = parts.get("if_port_name")
+
+        # VLAN from the .NNN suffix when present.
+        if enc.startswith(".") and enc[1:].isdigit():
+            self.vlan = int(enc[1:])
+
+        if if_type == "LoopBack":
+            self.binding_type = "loopback"
+            self.parent_port = None
+        elif if_type in ("Virtual-Ethernet", "Global-VE"):
+            # IRB / VE-group: parent is virtual (paired with an L2-VE via
+            # huawei-fim-ifm), so there is no physical parent port to
+            # surface. ``vlan`` from .NNN stays — operators key on it.
+            self.binding_type = "ve_group"
+            self.parent_port = None
+        elif enc:
+            # Any "<type><pos>.<vlan>" → sub-interface. Covers
+            # GigabitEthernet, Eth-Trunk, 100GE, XGigabitEthernet, etc.
+            self.binding_type = "subinterface"
+            self.parent_port = if_port_name
+        else:
+            self.binding_type = "physical_port"
+            self.parent_port = if_port_name
 
     def has_ip(self) -> bool:
         return self.ipv4_address is not None

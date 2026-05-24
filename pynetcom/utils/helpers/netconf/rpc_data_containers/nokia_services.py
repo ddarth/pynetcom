@@ -33,6 +33,7 @@ from __future__ import annotations
 import re
 from typing import List, Optional
 
+from pynetcom.utils.nokia_router_tools import split_sap_id
 from pynetcom.utils.helpers.netconf.rpc_data_containers.services import (
     ConnectionPoint,
     Endpoint,
@@ -100,13 +101,36 @@ def _normalise_mac(value) -> Optional[str]:
 # here keeps NokiaVplsService and NokiaEpipeService thin and prevents drift.
 
 def _connection_point_from_sap(sap: dict) -> ConnectionPoint:
-    """Convert one Nokia ``<sap>`` entry into a LOCAL-endpoint ConnectionPoint."""
+    """Convert one Nokia ``<sap>`` entry into a LOCAL-endpoint ConnectionPoint.
+
+    Nokia SR OS bakes both the physical port and the encapsulation tag into
+    a single ``sap-id`` leaf (e.g. ``"1/1/4:1342"`` / ``"lag-15:333"`` /
+    ``"1/1/11"``). There are NO separate ``port`` / ``vlan`` leaves on the
+    SAP — verified by live YANG probe. We split the composite client-side
+    via :func:`pynetcom.utils.nokia_router_tools.split_sap_id` and surface
+    ``LocalEndpoint.port`` + ``LocalEndpoint.vlan`` for caller convenience.
+    """
     sap_id = sap.get("sap-id")
     local = LocalEndpoint()
     local.subinterface = sap_id
     local.oper_status = sap.get("oper-state")
     local.admin_status = sap.get("admin-state")
     local.encapsulation = sap.get("encap-value")
+    if sap_id:
+        try:
+            parts = split_sap_id(sap_id)
+        except ValueError:
+            # Malformed sap-id — leave port/vlan at None rather than guess.
+            parts = None
+        if parts is not None:
+            local.port = parts["port"]
+            vlan_str = parts["vlan"]
+            # Coerce to int only for the common dot1q case (digits). The
+            # default-encap catch-all "*" and QinQ "<outer>.<inner>" are NOT
+            # numbers — leave .vlan as None for those; the original string
+            # is still available via ``encapsulation`` / ``subinterface``.
+            if vlan_str and vlan_str.isdigit():
+                local.vlan = int(vlan_str)
 
     ep = Endpoint()
     ep.endpoint_id = sap_id
@@ -123,11 +147,27 @@ def _connection_point_from_sdp_bind(sdp_bind: dict, binding_key: str) -> Connect
     """Convert one Nokia ``<spoke-sdp>`` / ``<mesh-sdp>`` entry into a
     REMOTE-endpoint ConnectionPoint.
 
-    Note: ``remote.remote_system`` is intentionally left **None** here. The
-    far-end IP lives on the separate ``/state/service/sdp[sdp-id]`` object,
-    not on the spoke-sdp/mesh-sdp entry. Callers wanting it populated should
-    run :func:`_attach_sdp_far_end` after parsing, using a map built from
-    :func:`parse_sdp_response`.
+    Free-tier population (state-NS only). At this stage only ``sdp_id``,
+    ``virtual_circuit_identifier`` and ``oper_status`` are filled — every
+    other vendor-agnostic leaf on :class:`RemoteEndpoint` is None:
+
+      * ``remote_system`` / ``signaling_type`` — populated later by
+        :func:`_attach_sdp_far_end` when ``enrich_remote_system=True``.
+        Both values live on the SDP object
+        (``/state/service/sdp/<sdp_id>``), not on the spoke-sdp/mesh-sdp
+        binding here.
+      * ``encapsulation_type`` / ``redundancy_role`` — populated later by
+        :func:`_attach_spoke_sdp_config` when ``enrich_config=True``. These
+        leaves only exist in the configure-NS
+        (``/configure/service/vpls/spoke-sdp/{vc-type,endpoint/precedence}``).
+      * ``redundancy_state`` — stays None (no reliable state-tree source
+        without MIBs).
+
+    The ``binding_key`` argument is kept for caller context (``"spoke-sdp"``
+    vs ``"mesh-sdp"``) but is no longer surfaced on the dataclass —
+    the legacy ``pw_type`` field has been removed; topology kind is implicit
+    in ``ConnectionPoint.connection_point_id`` shape and the parent
+    container in the raw XML.
     """
     bind_id = sdp_bind.get("sdp-bind-id")
     remote = RemoteEndpoint()
@@ -142,9 +182,8 @@ def _connection_point_from_sdp_bind(sdp_bind: dict, binding_key: str) -> Connect
             remote.virtual_circuit_identifier = int(vc_str)
         except ValueError:
             pass
-    remote.pw_type = sdp_bind.get("type") or binding_key
     remote.oper_status = sdp_bind.get("oper-state")
-    # remote.remote_system stays None — see docstring.
+    # All other vendor-agnostic leaves stay None — see docstring.
 
     ep = Endpoint()
     ep.endpoint_id = bind_id
@@ -178,6 +217,23 @@ class NokiaVplsService(NetworkInstance):
         self.oper_status = vpls_entry.get("oper-state")
         self.enabled = _to_bool(vpls_entry.get("admin-state"))
         self.description = vpls_entry.get("description")
+
+        # Device-side endpoint counters (state-NS leaves on <vpls>): always
+        # consume when present, even in full mode — they cost nothing extra
+        # in the parsed dict, and they let downstream code (e.g. bts_api
+        # /routers/{name}/services aggregator) answer cardinality questions
+        # uniformly across brief and full payloads. ``connection_points``
+        # still take precedence — see :class:`NetworkInstance` docstring.
+        for leaf, attr in (
+            ("sap-count", "sap_count_hint"),
+            ("sdp-bind-count", "pw_count_hint"),
+        ):
+            raw = vpls_entry.get(leaf)
+            if raw is not None:
+                try:
+                    setattr(self, attr, int(raw))
+                except (TypeError, ValueError):
+                    pass
 
         # SAPs → LOCAL endpoints
         for sap in _as_list(vpls_entry.get("sap")):
@@ -229,6 +285,21 @@ class NokiaEpipeService(NetworkInstance):
         self.enabled = _to_bool(epipe_entry.get("admin-state"))
         self.description = epipe_entry.get("description")
 
+        # Device-side endpoint counters — see NokiaVplsService for rationale.
+        # EPIPE is point-to-point so typical values are ``sap-count=1`` /
+        # ``sdp-bind-count=1`` (remote-attached) or ``sap-count=2`` /
+        # ``sdp-bind-count=0`` (local cross-connect).
+        for leaf, attr in (
+            ("sap-count", "sap_count_hint"),
+            ("sdp-bind-count", "pw_count_hint"),
+        ):
+            raw = epipe_entry.get(leaf)
+            if raw is not None:
+                try:
+                    setattr(self, attr, int(raw))
+                except (TypeError, ValueError):
+                    pass
+
         for sap in _as_list(epipe_entry.get("sap")):
             self.connection_points.append(_connection_point_from_sap(sap))
 
@@ -242,14 +313,22 @@ class NokiaEpipeService(NetworkInstance):
 def parse_sdp_response(response: dict) -> dict:
     """Parse a Nokia ``/state/service/sdp`` reply into a {sdp_id: info} map.
 
-    The brief flavour of :class:`NokiaSdpRPCRequest` returns just
-    ``sdp-id`` + ``oper-tunnel-far-end-inet-address`` per entry. The full
-    flavour adds ``oper-state``, ``active-lsp-type`` (delivery type), and
-    other fields. This parser returns a dict keyed by the integer sdp-id::
+    The brief flavour of :class:`NokiaSdpRPCRequest` returns
+    ``sdp-id`` + ``oper-tunnel-far-end-inet-address`` + ``active-lsp-type``
+    per entry. The full flavour adds ``oper-state`` and other fields. This
+    parser returns a dict keyed by the integer sdp-id::
 
         {10179: {"far_end_ip": "10.255.7.179",
                  "oper_state": "up",
-                 "delivery_type": "bgp"}}
+                 "delivery_type": "bgp",
+                 "active_lsp_type": "bgp"}}
+
+    Both ``delivery_type`` and ``active_lsp_type`` carry the same Nokia
+    leaf (``<active-lsp-type>``) — the former kept as the historical key
+    name, the latter as the alias used by remote-endpoint enrichment
+    (``RemoteEndpoint.signaling_type``). Values are the canonical SR OS
+    strings ``rsvp`` / ``ldp`` / ``bgp`` (already lower-case, no mapping
+    needed downstream).
 
     Unknown / missing fields appear as ``None`` so callers can read any
     leaf uniformly without branching on whether the input was brief or full.
@@ -267,10 +346,14 @@ def parse_sdp_response(response: dict) -> dict:
             sid = int(entry.get("sdp-id"))
         except (TypeError, ValueError):
             continue
+        active_lsp_type = entry.get("active-lsp-type")
         out[sid] = {
             "far_end_ip": entry.get("oper-tunnel-far-end-inet-address"),
             "oper_state": entry.get("sdp-oper-state") or entry.get("oper-state"),
-            "delivery_type": entry.get("active-lsp-type"),
+            # ``delivery_type`` kept for any legacy caller; ``active_lsp_type``
+            # is the canonical alias used by :func:`_attach_sdp_far_end`.
+            "delivery_type": active_lsp_type,
+            "active_lsp_type": active_lsp_type,
         }
     return out
 
@@ -422,15 +505,27 @@ def parse_sap_admin_state_response(response: dict) -> dict:
     return out
 
 
-def _attach_sdp_far_end(service: NetworkInstance, sdp_far_end: dict) -> None:
-    """Populate ``remote.remote_system`` on a service's REMOTE endpoints.
+def _attach_sdp_far_end(service: NetworkInstance, sdp_map: dict) -> None:
+    """Stamp SDP-derived fields on a service's REMOTE endpoints (in-place).
 
-    ``sdp_far_end`` is the ``{sdp_id: far_end_ip}`` slice of
-    :func:`parse_sdp_response`. Endpoints whose ``remote.sdp_id`` is not in
-    the map are left untouched (so missing SDP data degrades gracefully —
-    operator still gets sdp_id and vc_id, just without the far-end IP).
+    Populates two leaves on every :class:`RemoteEndpoint`:
+
+      * ``remote_system`` — from SDP ``oper-tunnel-far-end-inet-address``.
+      * ``signaling_type`` — from SDP ``active-lsp-type``
+        (``rsvp`` / ``ldp`` / ``bgp``); already in canonical lower-case form.
+
+    ``sdp_map`` is the full dict returned by :func:`parse_sdp_response`
+    (``{sdp_id: {"far_end_ip": ..., "active_lsp_type": ..., ...}}``). For
+    backward compatibility callers that historically pre-projected the map
+    to ``{sdp_id: far_end_ip}`` still work — when the per-sdp value is a
+    string (not a dict) we treat it as the far-end IP and leave
+    ``signaling_type`` untouched.
+
+    Endpoints whose ``remote.sdp_id`` is not in the map are left untouched
+    (so missing SDP data degrades gracefully — operator still gets sdp_id
+    and vc_id, just without the enrichment).
     """
-    if not service or not isinstance(sdp_far_end, dict):
+    if not service or not isinstance(sdp_map, dict):
         return
     for cp in service.connection_points or []:
         for ep in cp.endpoints or []:
@@ -439,9 +534,129 @@ def _attach_sdp_far_end(service: NetworkInstance, sdp_far_end: dict) -> None:
             sid = ep.remote.sdp_id
             if sid is None:
                 continue
-            ip = sdp_far_end.get(sid)
+            info = sdp_map.get(sid)
+            if info is None:
+                continue
+            if isinstance(info, dict):
+                ip = info.get("far_end_ip")
+                lsp = info.get("active_lsp_type") or info.get("delivery_type")
+            else:
+                # Back-compat: caller pre-projected to {sdp_id: far_end_ip}.
+                ip = info
+                lsp = None
             if ip:
                 ep.remote.remote_system = ip
+            if lsp:
+                ep.remote.signaling_type = lsp
+
+
+def _attach_spoke_sdp_config(service: NetworkInstance, cfg_map: dict) -> None:
+    """Stamp configure-NS spoke-sdp fields on REMOTE endpoints (in-place).
+
+    Populates two leaves on every matching :class:`RemoteEndpoint`:
+
+      * ``encapsulation_type`` — from ``spoke-sdp/vc-type``
+        (``ether`` / ``vlan``).
+      * ``redundancy_role`` — from ``spoke-sdp/endpoint/precedence``.
+
+    Nokia precedence semantics
+    ---------------------------
+    Nokia's ``endpoint/precedence`` is a UNION leaf: the special string
+    ``"primary"`` (highest priority leg) or a uint16 number (lower = higher
+    priority, e.g. ``"4"``). The vendor-agnostic vocabulary on
+    :class:`RemoteEndpoint.redundancy_role` is ``primary`` / ``secondary``,
+    so we normalise here:
+
+      * ``"primary"`` (string)            → ``"primary"``.
+      * any other / numeric value         → ``"secondary"``.
+
+    The numeric ordering information is lost on this mapping — operators
+    investigating priorities should look at the raw running-config. For
+    AI / operator dashboards the binary primary-vs-secondary view matches
+    what Huawei exposes natively (``pw/role`` is ``primary`` or
+    ``secondary`` only).
+
+    ``cfg_map`` is keyed by ``(service_name, sdp_bind_id)`` and built by
+    :func:`parse_spoke_sdp_config_response`. Endpoints whose composite
+    ``(svc.name, ep.remote.sdp_id + ":" + ep.remote.virtual_circuit_identifier)``
+    is not in the map are left untouched — defensive against partial
+    configure-NS responses.
+    """
+    if not service or not isinstance(cfg_map, dict):
+        return
+    svc_name = service.name
+    if not svc_name:
+        return
+    for cp in service.connection_points or []:
+        for ep in cp.endpoints or []:
+            if ep.type != EndpointType.REMOTE or ep.remote is None:
+                continue
+            sdp_id = ep.remote.sdp_id
+            vc_id = ep.remote.virtual_circuit_identifier
+            if sdp_id is None or vc_id is None:
+                continue
+            bind_id = f"{sdp_id}:{vc_id}"
+            entry = cfg_map.get((svc_name, bind_id))
+            if not isinstance(entry, dict):
+                continue
+            vc_type = entry.get("vc-type")
+            if isinstance(vc_type, str) and vc_type.strip():
+                ep.remote.encapsulation_type = vc_type.strip().lower()
+            endpoint_cfg = entry.get("endpoint")
+            if isinstance(endpoint_cfg, dict):
+                precedence = endpoint_cfg.get("precedence")
+                if isinstance(precedence, str) and precedence.strip():
+                    norm = precedence.strip().lower()
+                    # Nokia union: "primary" or a numeric value (lower =
+                    # higher priority). Map anything not "primary" to the
+                    # vendor-agnostic "secondary" so RemoteEndpoint.
+                    # redundancy_role has a stable vocabulary across vendors.
+                    ep.remote.redundancy_role = (
+                        "primary" if norm == "primary" else "secondary"
+                    )
+
+
+def parse_spoke_sdp_config_response(response: dict) -> dict:
+    """Parse a Nokia configure-NS spoke-sdp dump into a per-PW binding map.
+
+    Consumes the response of :class:`NokiaServiceVplsSpokeSdpConfigRPCRequest`
+    and returns::
+
+        {(service_name, sdp_bind_id): {
+            "vc-type": "ether" | "vlan" | ...,
+            "endpoint": {"precedence": "primary" | "secondary"}}}
+
+    Only entries that actually carry one of the leaves are included
+    (a pure-defaults absence is still keyed-in by the device when
+    ``with-defaults="report-all"`` is set on the get-config). Missing
+    sub-leaves stay absent from the value dict — :func:`_attach_spoke_sdp_config`
+    tolerates the gap.
+
+    Each value is the raw configure-NS spoke-sdp dict (after namespace
+    stripping). The key ``(service_name, sdp_bind_id)`` mirrors the
+    composite used by :class:`RemoteEndpoint` (``sdp_id:vc_id``).
+    """
+    if not isinstance(response, dict):
+        return {}
+    container = NetworkInstance()
+    cleaned = container.remove_namespaces(container._unwrap_data_node(response))
+    configure_root = cleaned.get("configure") or cleaned
+    service_root = configure_root.get("service") or {}
+    out: dict = {}
+    for svc in _as_list(service_root.get("vpls")):
+        if not isinstance(svc, dict):
+            continue
+        svc_name = svc.get("service-name")
+        if not svc_name:
+            continue
+        for spoke in _as_list(svc.get("spoke-sdp")):
+            if not isinstance(spoke, dict):
+                continue
+            bind_id = spoke.get("sdp-bind-id")
+            if not bind_id:
+                continue
+            out[(svc_name, str(bind_id))] = spoke
+    return out
 
 
 # ---- FDB / MAC entries --------------------------------------------------- #
@@ -510,6 +725,26 @@ class NokiaMacEntry(MacEntry):
         # as None so the operator can recognise the edge case.
         locale = (mac_entry.get("locale") or "").strip().lower()
         self.source_type = self._LOCALE_MAP.get(locale)
+        # Port / VLAN derivation. Nokia FDB carries the learning point as a
+        # composite identifier (sap-id for SAP-learned, ``<sdp_id>:<vc_id>``
+        # for PW-learned). There is no separate port / vlan leaf on the FDB
+        # record — verified by live YANG probe (Phase 0). We split the SAP
+        # composite via :func:`split_sap_id` for symmetry with SAP parser.
+        # PW-learned records leave port/vlan at None — sdp-bind is not a
+        # physical port, it is a tunnel binding.
+        if self.source_type == MacSourceType.SAP and isinstance(self.interface, str):
+            try:
+                parts = split_sap_id(self.interface)
+            except ValueError:
+                parts = None
+            if parts is not None:
+                self.port = parts.get("port") or None
+                vlan_str = parts.get("vlan")
+                # Coerce to int only for the common dot1q case (digits). The
+                # default-encap catch-all "*" and QinQ "<outer>.<inner>" stay
+                # as ``None`` here; the raw composite remains in ``interface``.
+                if vlan_str and vlan_str.isdigit():
+                    self.vlan = int(vlan_str)
         nokia_type = (mac_entry.get("type") or mac_entry.get("mac-type") or "").strip().lower()
         self.entry_type = self._MAC_TYPE_MAP.get(nokia_type)
         # ``age`` is strictly Optional[int]: int-coerce the leaf when present,
@@ -599,6 +834,18 @@ class NokiaArpEntry(Neighbor):
         except (TypeError, ValueError):
             self.age = None
         self.vprn_name = vprn_name
+        # ---- oper_state --------------------------------------------------
+        # Nokia surfaces a native <oper-state> leaf under <neighbor> (Phase 0
+        # discovery): typically "up" for a healthy resolved entry. Pass it
+        # through verbatim so callers get the same vocabulary the device
+        # uses.
+        self.oper_state = arp_entry.get("oper-state")
+        # NOTE: no port / vlan are surfaced on Neighbor — see the Neighbor
+        # docstring. SR OS does not expose them under <neighbor> anyway:
+        # the parent <interface> leaf is the L3-IF name (possibly an R-VPLS
+        # interface like ``VPLS_LTE_eNodeB_…``), and that is exactly what
+        # ``self.interface`` carries. Callers needing the physical port
+        # resolve it from the L3-interface / SAP layer.
 
 
 # ---- Top-level result parsers ------------------------------------------- #
@@ -793,7 +1040,58 @@ class NokiaL3Interface(L3Interface):
 
     ``vprn_name`` and ``ipv4_prefix_length`` are set by the parser / left
     None — the SR OS state model exposes no netmask at this level.
+
+    Binding (free vs enrich)
+    ------------------------
+    The state-tree does NOT expose binding-discriminator leaves
+    (``<sap>`` / ``<spoke-sdp>`` / ``<loopback>`` live in the configure
+    namespace). Without enrichment we derive ``binding_type`` from the
+    interface name alone:
+
+        ``LoopBack*``            → ``loopback``
+        ``System``               → ``system``
+        ``VPLS_*`` (R-VPLS conv) → ``l2vpn_routed`` (+ ``l2_service=name``)
+        anything else            → ``unknown``
+
+    When ``apply_binding_from_config()`` is called (by ServicesClient when
+    ``enrich_config=True``) we get the precise discriminator from the
+    configure-NS payload: ``<spoke-sdp>`` object → ``sdp_spoke``,
+    ``<sap>`` object → ``sap_physical`` (with ``parent_port`` + ``vlan``
+    derived from ``sap-id`` via :func:`split_sap_id`),
+    ``<loopback>true</loopback>`` → ``loopback``. The discriminator only
+    moves the ``unknown`` ones — name-recognised types are reaffirmed but
+    not overridden.
+
+    ``admin_status`` is normally a state-NS leaf on the interface object,
+    but Nokia VPRN-bound interfaces (under ``/state/service/vprn/.../interface``)
+    do NOT carry ``<admin-state>``. As a fallback, ``apply_binding_from_config``
+    reads ``<admin-state>`` from the configure payload (mapped
+    ``enable→up`` / ``disable→down``) and fills it ONLY if state-NS left it
+    None — never overwrites a valid state-NS value.
     """
+
+    # Name-pattern binding rules — applied at construction. Order matters:
+    # checked top-to-bottom, first match wins. None means "fall through".
+    @staticmethod
+    def _derive_binding_from_name(name: Optional[str]) -> tuple:
+        """Return ``(binding_type, l2_service)`` derived from the interface name.
+
+        Used as the free-tier fallback when no configure-NS payload is
+        available. Returns ``('unknown', None)`` for anything that doesn't
+        look like a Nokia-convention IRB / loopback / system interface.
+        """
+        if not isinstance(name, str) or not name:
+            return ("unknown", None)
+        if name.startswith("LoopBack"):
+            return ("loopback", None)
+        if name == "System":
+            return ("system", None)
+        if name.startswith("VPLS_"):
+            # Nokia R-VPLS naming convention — the L3 interface name is
+            # exactly the VPLS service name. Surface ``l2_service`` for
+            # free here too: no extra RPC required.
+            return ("l2vpn_routed", name)
+        return ("unknown", None)
 
     def __init__(self, iface_entry: dict, vprn_name: Optional[str] = None):
         super().__init__(data=None)
@@ -812,6 +1110,163 @@ class NokiaL3Interface(L3Interface):
             if isinstance(primary, dict):
                 self.ipv4_address = primary.get("oper-address")
         self.vprn_name = vprn_name
+        # Name-pattern binding (free tier). The configure-NS enrichment
+        # path (see apply_binding_from_config) may upgrade ``unknown``
+        # entries to ``sdp_spoke`` / ``sap_physical`` later.
+        binding, l2 = self._derive_binding_from_name(self.name)
+        self.binding_type = binding
+        if l2 is not None and not self.l2_service:
+            self.l2_service = l2
+
+    def apply_binding_from_config(self, config_entry: Optional[dict]) -> None:
+        """Refine ``binding_type`` (and friends) using configure-NS payload.
+
+        ``config_entry`` is the dict for this interface as returned under
+        ``/configure/service/vprn[...]/interface[interface-name=...]`` (or
+        the Base-router equivalent). Pass ``None`` to leave the
+        name-pattern binding from ``__init__`` intact.
+
+        Priority (per the Phase 2 plan):
+          1. ``<spoke-sdp>`` object present → ``sdp_spoke``,
+             ``sdp_bind_id = config_entry['spoke-sdp']['sdp-bind-id']``.
+          2. ``<sap>`` object present → ``sap_physical``;
+             split ``sap-id`` via :func:`split_sap_id` to fill
+             ``parent_port`` + ``vlan``.
+          3. ``<loopback>true</loopback>`` (boolean leaf — only the literal
+             string ``"true"`` counts; ``"false"`` is *not* a loopback marker)
+             → ``loopback``.
+
+        Additionally, ``<admin-state>`` is consumed as an ``admin_status``
+        fallback: if state-NS left ``self.admin_status`` at None (known case:
+        Nokia VPRN-bound interfaces don't surface ``<admin-state>`` under
+        ``/state/service/vprn/.../interface``), the configure leaf is
+        mapped ``enable→up`` / ``disable→down`` and written. A valid
+        state-NS value is NEVER overwritten — state reflects intent
+        correctly for Base-router interfaces.
+        """
+        if not isinstance(config_entry, dict):
+            return
+
+        # admin_status fallback — done before the binding switch so it
+        # always runs regardless of whether the discriminator branches
+        # return early. Only fills None; never overrides state-NS.
+        if self.admin_status is None:
+            admin_cfg = config_entry.get("admin-state")
+            if isinstance(admin_cfg, str):
+                normalised = admin_cfg.strip().lower()
+                if normalised == "enable":
+                    self.admin_status = "up"
+                elif normalised == "disable":
+                    self.admin_status = "down"
+                # any other value (or absence) → leave None
+
+        # 1. spoke-sdp object presence wins.
+        # ``<spoke-sdp>`` is a YANG list — xmltodict may surface it as a
+        # single dict (the common 1-spoke case) or a list of dicts. Either
+        # way the presence of the element is the discriminator; we read
+        # ``sdp-bind-id`` from the first entry only (an L3-IF binding is
+        # 1-to-1 in practice).
+        spoke_raw = config_entry.get("spoke-sdp")
+        spoke = (
+            spoke_raw
+            if isinstance(spoke_raw, dict)
+            else (spoke_raw[0] if isinstance(spoke_raw, list) and spoke_raw else None)
+        )
+        if isinstance(spoke, dict):
+            self.binding_type = "sdp_spoke"
+            bind_id = spoke.get("sdp-bind-id")
+            if bind_id is not None:
+                self.sdp_bind_id = str(bind_id)
+            return
+
+        # 2. sap object presence next. Same list-vs-dict normalisation.
+        sap_raw = config_entry.get("sap")
+        sap = (
+            sap_raw
+            if isinstance(sap_raw, dict)
+            else (sap_raw[0] if isinstance(sap_raw, list) and sap_raw else None)
+        )
+        if isinstance(sap, dict):
+            self.binding_type = "sap_physical"
+            sap_id = sap.get("sap-id")
+            if isinstance(sap_id, str):
+                try:
+                    parts = split_sap_id(sap_id)
+                except ValueError:
+                    parts = None
+                if parts is not None:
+                    self.parent_port = parts.get("port") or None
+                    vlan_str = parts.get("vlan")
+                    if vlan_str and vlan_str.isdigit():
+                        self.vlan = int(vlan_str)
+            return
+
+        # 3. loopback boolean leaf.
+        loopback_leaf = config_entry.get("loopback")
+        if isinstance(loopback_leaf, str) and loopback_leaf.strip().lower() == "true":
+            self.binding_type = "loopback"
+            return
+        # No discriminator in configure either — keep whatever
+        # _derive_binding_from_name() produced.
+
+
+def parse_vprn_interface_config_response(response: dict) -> dict:
+    """Parse a Nokia configure-NS interface dump into a binding-discriminator map.
+
+    Consumes the response of :class:`NokiaVprnInterfaceConfigRPCRequest`
+    (or :class:`NokiaBaseRouterInterfaceConfigRPCRequest`) and returns::
+
+        {(vprn_name, interface_name): config_iface_dict}
+
+    Each value is the raw configure-NS interface dict, ready to be fed to
+    :meth:`NokiaL3Interface.apply_binding_from_config`. Pure-L3 interfaces
+    with no ``<sap>``/``<spoke-sdp>``/``<loopback>`` discriminator are still
+    included — the receiver decides what to do with them (typically leaves
+    the name-pattern binding intact).
+
+    ``vprn_name`` is the configure-NS list-key (``<service-name>`` under
+    ``vprn``, or ``"Base"`` under ``router``). Keying by ``(vprn, iface)``
+    rather than ``iface`` alone keeps it safe to merge multiple maps from
+    different VRFs.
+    """
+    if not isinstance(response, dict):
+        return {}
+    container = NetworkInstance()
+    cleaned = container.remove_namespaces(container._unwrap_data_node(response))
+    configure_root = cleaned.get("configure") or cleaned
+    out: dict = {}
+
+    # /configure/service/vprn[...]/interface[...]
+    vprn_root = (configure_root.get("service") or {}).get("vprn")
+    for vp in _as_list(vprn_root):
+        if not isinstance(vp, dict):
+            continue
+        vprn_name = vp.get("service-name")
+        if not vprn_name:
+            continue
+        for iface in _as_list(vp.get("interface")):
+            if not isinstance(iface, dict):
+                continue
+            iface_name = iface.get("interface-name")
+            if not iface_name:
+                continue
+            out[(vprn_name, iface_name)] = iface
+
+    # /configure/router[router-name=Base]/interface[...]
+    router_root = configure_root.get("router")
+    for router in _as_list(router_root):
+        if not isinstance(router, dict):
+            continue
+        router_name = router.get("router-name") or "Base"
+        for iface in _as_list(router.get("interface")):
+            if not isinstance(iface, dict):
+                continue
+            iface_name = iface.get("interface-name")
+            if not iface_name:
+                continue
+            out[(router_name, iface_name)] = iface
+
+    return out
 
 
 def parse_l3_interface_response(

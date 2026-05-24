@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from .openconfig import OpenconfigLLDPNeighborState, OpenconfigInterfaceLLDP, OpenconfigInterface, OpenconfigTranseiver
-from typing import List
+from typing import Dict, List, Optional
 from .openconfig import OpenconfigTransceiverThresholdsList, OpenconfigTransceiverThreshold, PhysicalChannel, PhysicalChannels, Severity
 from .openconfig import RPCDataContainer
 
@@ -241,6 +241,26 @@ class NokiaTransceiver(OpenconfigTranseiver):
 
 
 class NokiaInterface(OpenconfigInterface):
+    """Nokia SR OS port interface (state-tree subset).
+
+    The ``encap_type`` attribute (vendor-agnostic indicator of
+    tagged/untagged port encapsulation — see
+    :class:`OpenconfigInterface.encap_type` docstring) is NOT populated by
+    this parser. The source leaf
+    (``configure/port/<port-id>/ethernet/encap-type``) lives in the
+    configure datastore (``urn:nokia.com:sros:ns:yang:sr:conf``) and only
+    surfaces when fetched via ``<get-config source="running"
+    with-defaults="report-all">`` — the per-port subtree filter
+    :class:`NokiaInterfaceRPCRequest` uses operates on the state-tree
+    (``<get>``).
+
+    The recommended orchestration is to perform ONE bulk
+    :class:`~pynetcom.utils.helpers.netconf.rpc_requests.NokiaPortConfigRPCRequest`
+    round-trip and merge the resulting ``{port-id: encap-type}`` map into
+    the per-port :class:`NokiaInterface` objects with
+    :func:`apply_port_encap_type_map`. See that function's docstring for
+    the rationale (one cheap RPC vs N-per-port).
+    """
     prefix = []
     field_mapping = OpenconfigInterface.field_mapping.copy()
     field_mapping.update({
@@ -262,3 +282,83 @@ class NokiaInterface(OpenconfigInterface):
         # Build sub-containers from merged view to ensure LLDP and thresholds are present
         self.lldp = NokiaLLDP(merged)
         self.transeiver = NokiaTransceiver(merged)
+
+
+def parse_port_encap_type_map(response: dict) -> Dict[str, str]:
+    """Parse a NokiaPortConfigRPCRequest reply into a ``{port_id: encap_type}`` map.
+
+    The response shape (configure namespace,
+    ``urn:nokia.com:sros:ns:yang:sr:conf``)::
+
+        configure/port[port-id]/ethernet/encap-type
+
+    Returns a flat dict, e.g. ``{"1/1/11": "null", "1/1/15": "dot1q"}``.
+
+    Notes
+    -----
+    * The default-valued ``encap-type=null`` only appears in the response
+      when the caller passed ``with_defaults="report-all"`` to
+      :meth:`NetconfClient.get_config`. Without it, untagged ports drop
+      out of the map silently, and the caller cannot distinguish
+      "explicitly default" from "leaf absent because misconfigured" —
+      ALWAYS pair this parser with ``with_defaults="report-all"``.
+    * Ports lacking an ``ethernet`` container entirely (e.g. management
+      ``A/1`` on certain MDA combinations) are skipped — there is no
+      Ethernet encapsulation to report.
+    """
+    if not isinstance(response, dict):
+        return {}
+    container = OpenconfigInterface({})
+    cleaned = container.remove_namespaces(container._unwrap_data_node(response))
+    configure_root = cleaned.get("configure") or cleaned
+    ports = configure_root.get("port")
+    if ports is None:
+        return {}
+    if isinstance(ports, dict):
+        ports = [ports]
+
+    out: Dict[str, str] = {}
+    for entry in ports:
+        if not isinstance(entry, dict):
+            continue
+        port_id = entry.get("port-id")
+        if not port_id:
+            continue
+        eth = entry.get("ethernet")
+        if not isinstance(eth, dict):
+            # No <ethernet> container — no encap-type leaf to report.
+            continue
+        encap = eth.get("encap-type")
+        if encap is None:
+            continue
+        out[port_id] = str(encap).strip().lower()
+    return out
+
+
+def apply_port_encap_type_map(
+    interfaces: List["NokiaInterface"],
+    encap_map: Dict[str, str],
+) -> None:
+    """Stamp ``encap_type`` on each NokiaInterface from a port-config map.
+
+    In-place mutation: iterates over ``interfaces`` and sets
+    ``iface.encap_type`` to ``encap_map[iface.name]`` when present.
+    Interfaces not present in the map (e.g. LAGs like ``lag-1`` —
+    LAG-level encap is on the underlying physical ports, not the LAG
+    itself) are left untouched.
+
+    Use after a bulk
+    :class:`~pynetcom.utils.helpers.netconf.rpc_requests.NokiaPortConfigRPCRequest`
+    round-trip so the operator avoids N+1 get-config calls.
+    """
+    if not encap_map:
+        return
+    for iface in interfaces:
+        if iface is None:
+            continue
+        port_id = getattr(iface, "name", None)
+        if not port_id:
+            continue
+        value = encap_map.get(port_id)
+        if value is not None:
+            iface.encap_type = value

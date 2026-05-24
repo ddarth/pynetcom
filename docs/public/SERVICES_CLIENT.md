@@ -105,10 +105,13 @@ provided by a single YANG list discriminated by a `type` leaf.
         "local": null,
         "remote": {
           "virtual_circuit_identifier": 100,
-          "remote_system": "192.0.2.x",     // far-end PE IP
-          "sdp_id": 10,                    // Nokia only; null on Huawei
-          "pw_type": "spoke-sdp",
-          "oper_status": "up"
+          "remote_system": "192.0.2.x",       // far-end PE IP
+          "sdp_id": 10,                       // Nokia only; null on Huawei
+          "oper_status": "up",                // OpenConfig: up | down only
+          "signaling_type": "ldp",            // ldp | rsvp | bgp | static
+          "encapsulation_type": "vlan",       // ether | vlan
+          "redundancy_role": "primary",       // primary | secondary | null
+          "redundancy_state": "active"        // active | standby | null
         }
       }]
     }
