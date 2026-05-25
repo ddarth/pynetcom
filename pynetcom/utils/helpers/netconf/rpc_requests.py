@@ -1480,3 +1480,365 @@ class HuaweiVeGroupRPCRequest:
 
     def get_request_filter(self) -> str:
         return self.request_filter
+
+
+# =========================================================================
+# Diagnostic actions: ping / traceroute
+# =========================================================================
+# Wire-форматы зафиксированы live-probe'ом на боевых роутерах 24 мая 2026,
+# артефакты в network_entries/examples/probe_artifacts/. Не переписывать по
+# памяти, не "поправить под удобный" YANG-порядок — устройство отклонит.
+#
+# Все классы возвращают XML-фрагмент через get_request_filter() — точно так
+# же как остальные *RPCRequest. Для action-RPC фрагмент это уже готовый
+# <action> ... </action>, который передаётся в NetconfClient.rpc(...).
+# =========================================================================
+
+
+# ---- Nokia ping / traceroute (sync, structured action) -------------------- #
+class NokiaPingActionRequest:
+    """Builds Nokia ``<action><global-operations><ping>`` RPC body.
+
+    Namespace ``urn:nokia.com:sros:ns:yang:sr:oper-global``. Lifecycle
+    synchronous — один RPC, один rpc-reply со всем результатом, никакого
+    polling. RTT в rpc-reply приходит в **МИКРОСЕКУНДАХ** (см.
+    :mod:`pynetcom.utils.helpers.netconf.rpc_data_containers.nokia_ping`).
+
+    Поля Nokia: ``destination``, ``router-instance``, ``source-address``,
+    ``count``, ``size``, ``timeout`` (в **секундах**!), ``interval`` (в
+    **секундах**), ``tos``, ``ttl``, ``do-not-fragment``. Universal request
+    хранит interval/timeout в миллисекундах — здесь делим на 1000 с
+    минимумом 1с (Nokia не принимает sub-second).
+
+    Negative-case (bad VRF, unreachable) на Nokia **не** даёт rpc-error,
+    провал кодируется в response per-probe ``<status>``. Так что отлов
+    NetconfActionNotAuthorized — единственная отдельная error-ветка.
+    """
+
+    def __init__(self, req):  # PingRequest, без явного type-hint для избежания circular import
+        self.req = req
+        self.request_filter = self._build()
+
+    def _build(self) -> str:
+        r = self.req
+        parts = [f"<destination>{r.destination}</destination>"]
+        if r.vrf:
+            parts.append(f"<router-instance>{r.vrf}</router-instance>")
+        if r.source_address:
+            parts.append(f"<source-address>{r.source_address}</source-address>")
+        parts.append(f"<count>{int(r.count)}</count>")
+        parts.append(f"<size>{int(r.packet_size)}</size>")
+        # Nokia timeout/interval — в секундах (минимум 1)
+        timeout_s = max(1, int(round(r.timeout_ms / 1000)))
+        interval_s = max(1, int(round(r.interval_ms / 1000)))
+        parts.append(f"<timeout>{timeout_s}</timeout>")
+        parts.append(f"<interval>{interval_s}</interval>")
+        if r.tos is not None:
+            parts.append(f"<tos>{int(r.tos)}</tos>")
+        parts.append(f"<ttl>{int(r.ttl)}</ttl>")
+        if r.do_not_fragment:
+            parts.append("<do-not-fragment>true</do-not-fragment>")
+        inner = "".join(parts)
+        return (
+            '<action xmlns="urn:ietf:params:xml:ns:yang:1">'
+            '<global-operations xmlns="urn:nokia.com:sros:ns:yang:sr:oper-global">'
+            f'<ping>{inner}</ping>'
+            '</global-operations>'
+            '</action>'
+        )
+
+    def get_request_filter(self) -> str:
+        return self.request_filter
+
+
+class NokiaTracerouteActionRequest:
+    """Builds Nokia ``<action><global-operations><traceroute>`` RPC body.
+
+    Те же ремарки что у :class:`NokiaPingActionRequest`. Поля:
+    ``destination``, ``router-instance``, ``source-address``, ``ttl`` (max),
+    ``min-ttl``, ``probe-count``, ``wait`` (timeout в **миллисекундах**!),
+    ``size``, ``tos``, ``protocol`` (по умолчанию ``udp``).
+
+    Важно: на Nokia ``wait`` уже в миллисекундах (в отличие от ``timeout`` у
+    ping в секундах). Поэтому здесь конвертация **не** нужна — отдаём как есть.
+    """
+
+    def __init__(self, req):  # TracerouteRequest
+        self.req = req
+        self.request_filter = self._build()
+
+    def _build(self) -> str:
+        r = self.req
+        parts = [f"<destination>{r.destination}</destination>"]
+        if r.vrf:
+            parts.append(f"<router-instance>{r.vrf}</router-instance>")
+        if r.source_address:
+            parts.append(f"<source-address>{r.source_address}</source-address>")
+        parts.append(f"<min-ttl>{int(r.first_ttl)}</min-ttl>")
+        parts.append(f"<ttl>{int(r.max_ttl)}</ttl>")
+        parts.append(f"<probe-count>{int(r.probes_per_hop)}</probe-count>")
+        # Nokia wait в миллисекундах
+        parts.append(f"<wait>{int(r.timeout_ms)}</wait>")
+        if r.packet_size is not None:
+            parts.append(f"<size>{int(r.packet_size)}</size>")
+        if r.tos is not None:
+            parts.append(f"<tos>{int(r.tos)}</tos>")
+        inner = "".join(parts)
+        return (
+            '<action xmlns="urn:ietf:params:xml:ns:yang:1">'
+            '<global-operations xmlns="urn:nokia.com:sros:ns:yang:sr:oper-global">'
+            f'<traceroute>{inner}</traceroute>'
+            '</global-operations>'
+            '</action>'
+        )
+
+    def get_request_filter(self) -> str:
+        return self.request_filter
+
+
+# ---- Huawei ping (async: action + state-poll + delete) ------------------- #
+class HuaweiPingActionRequest:
+    """Builds Huawei ``<action><ipv4-start-ip-ping>`` RPC body.
+
+    Namespace ``urn:huawei:yang:huawei-diagnostic-tools``. Submodule
+    ``huawei-diagnostic-tools-ipv4`` (под augment ``ipv4``).
+
+    **YANG element order СТРОГО соблюдается** — устройство отклонит XML с
+    тэгом ``Invalid element order between X and Y``. Корректный порядок:
+    ``test-name, dest-addr, bypass-source-if-name, source-address, vrf-name,
+    peer-address, packet-size, packet-size-min, packet-size-max,
+    packet-size-step, packet-count, dscp, tos, interval, timeout, ttl,
+    pattern, if-name, next-hop, inbound-reply-fast, inbound-if-name,
+    service-class, te-class, priority-8021p, force-no-fragment, ignore-mtu,
+    record-route, ip-forwarding, debug-option, show-host-name, show-detail,
+    show-incoming-if-name, response-vrf-name, ignore-vrf``.
+
+    Здесь вставляем только не-None поля, **но в правильном порядке**. Поля
+    ``interval`` и ``timeout`` на Huawei в **миллисекундах** (Nokia было в
+    секундах — не путать!). RTT в state-ответе тоже в ms.
+    """
+
+    def __init__(self, req, test_name: str):  # req: PingRequest
+        self.req = req
+        self.test_name = test_name
+        self.request_filter = self._build()
+
+    def _build(self) -> str:
+        r = self.req
+        parts = [f"<test-name>{self.test_name}</test-name>"]
+        parts.append(f"<dest-addr>{r.destination}</dest-addr>")
+        # bypass-source-if-name — нет
+        if r.source_address:
+            parts.append(f"<source-address>{r.source_address}</source-address>")
+        if r.vrf:
+            parts.append(f"<vrf-name>{r.vrf}</vrf-name>")
+        # peer-address — нет
+        parts.append(f"<packet-size>{int(r.packet_size)}</packet-size>")
+        # packet-size-min/max/step — нет
+        parts.append(f"<packet-count>{int(r.count)}</packet-count>")
+        # dscp — нет; tos — опционально
+        if r.tos is not None:
+            parts.append(f"<tos>{int(r.tos)}</tos>")
+        parts.append(f"<interval>{int(r.interval_ms)}</interval>")
+        parts.append(f"<timeout>{int(r.timeout_ms)}</timeout>")
+        parts.append(f"<ttl>{int(r.ttl)}</ttl>")
+        # pattern, if-name, next-hop ... — нет
+        if r.do_not_fragment:
+            parts.append("<force-no-fragment>true</force-no-fragment>")
+        inner = "".join(parts)
+        return (
+            '<action xmlns="urn:ietf:params:xml:ns:yang:1">'
+            '<ipv4-start-ip-ping xmlns="urn:huawei:yang:huawei-diagnostic-tools">'
+            f'{inner}'
+            '</ipv4-start-ip-ping>'
+            '</action>'
+        )
+
+    def get_request_filter(self) -> str:
+        return self.request_filter
+
+
+class HuaweiPingStateFilter:
+    """Subtree filter for ``<get>`` against Huawei ping-result state.
+
+    Путь: ``/diagnostic-tools/ipv4/ping-results/ping-result[test-name=...]``.
+    Внимание — ``<ping-results>`` сидит под augment-ом ``<ipv4>``, не сразу
+    под ``<diagnostic-tools>``. Без ``<ipv4>`` фильтр промахнётся.
+    """
+
+    def __init__(self, test_name: str):
+        self.test_name = test_name
+        self.request_filter = (
+            '<diagnostic-tools xmlns="urn:huawei:yang:huawei-diagnostic-tools">'
+            '<ipv4>'
+            '<ping-results>'
+            f'<ping-result><test-name>{test_name}</test-name></ping-result>'
+            '</ping-results>'
+            '</ipv4>'
+            '</diagnostic-tools>'
+        )
+
+    def get_request_filter(self) -> str:
+        return self.request_filter
+
+
+class HuaweiPingDeleteAction:
+    """Builds Huawei ``<action><ipv4-delete-ip-ping>`` RPC body.
+
+    Обязательный cleanup. Без него state-таблица копится. На отсутствующий
+    test-name приходит ``data-missing 31404`` — глотаем тихо (значит уже
+    удалён). На дубликат при start — ``data-exists 31403``.
+    """
+
+    def __init__(self, test_name: str):
+        self.test_name = test_name
+        self.request_filter = (
+            '<action xmlns="urn:ietf:params:xml:ns:yang:1">'
+            '<ipv4-delete-ip-ping xmlns="urn:huawei:yang:huawei-diagnostic-tools">'
+            f'<test-name>{test_name}</test-name>'
+            '</ipv4-delete-ip-ping>'
+            '</action>'
+        )
+
+    def get_request_filter(self) -> str:
+        return self.request_filter
+
+
+# ---- Huawei traceroute (action + state-poll + delete) -------------------- #
+class HuaweiTracerouteActionRequest:
+    """Builds Huawei ``<action><ipv4-start-ip-trace>`` RPC body.
+
+    YANG element order: ``test-name, dest-ip-addr, source-address, first-ttl,
+    max-ttl, if-name, source-if-name, timeout, vrf-name, peer-address,
+    show-as-num, udp-port, count, packet-size, dscp, tos, service-class,
+    te-class, next-hop, show-host-name, pass-route, ttl-mode, response-vrf-name,
+    ignore-vrf``.
+
+    Внимание — destination называется ``dest-ip-addr`` (ping ``dest-addr``).
+    Timeout в миллисекундах.
+    """
+
+    def __init__(self, req, test_name: str):  # req: TracerouteRequest
+        self.req = req
+        self.test_name = test_name
+        self.request_filter = self._build()
+
+    def _build(self) -> str:
+        r = self.req
+        parts = [f"<test-name>{self.test_name}</test-name>"]
+        parts.append(f"<dest-ip-addr>{r.destination}</dest-ip-addr>")
+        if r.source_address:
+            parts.append(f"<source-address>{r.source_address}</source-address>")
+        parts.append(f"<first-ttl>{int(r.first_ttl)}</first-ttl>")
+        parts.append(f"<max-ttl>{int(r.max_ttl)}</max-ttl>")
+        parts.append(f"<timeout>{int(r.timeout_ms)}</timeout>")
+        if r.vrf:
+            parts.append(f"<vrf-name>{r.vrf}</vrf-name>")
+        parts.append(f"<count>{int(r.probes_per_hop)}</count>")
+        if r.packet_size is not None:
+            parts.append(f"<packet-size>{int(r.packet_size)}</packet-size>")
+        if r.tos is not None:
+            parts.append(f"<tos>{int(r.tos)}</tos>")
+        inner = "".join(parts)
+        return (
+            '<action xmlns="urn:ietf:params:xml:ns:yang:1">'
+            '<ipv4-start-ip-trace xmlns="urn:huawei:yang:huawei-diagnostic-tools">'
+            f'{inner}'
+            '</ipv4-start-ip-trace>'
+            '</action>'
+        )
+
+    def get_request_filter(self) -> str:
+        return self.request_filter
+
+
+class HuaweiTracerouteStateFilter:
+    """Subtree filter for ``<get>`` against Huawei trace-result state."""
+
+    def __init__(self, test_name: str):
+        self.test_name = test_name
+        self.request_filter = (
+            '<diagnostic-tools xmlns="urn:huawei:yang:huawei-diagnostic-tools">'
+            '<ipv4>'
+            '<trace-results>'
+            f'<trace-result><test-name>{test_name}</test-name></trace-result>'
+            '</trace-results>'
+            '</ipv4>'
+            '</diagnostic-tools>'
+        )
+
+    def get_request_filter(self) -> str:
+        return self.request_filter
+
+
+class HuaweiTracerouteDeleteAction:
+    """Builds Huawei ``<action><ipv4-delete-ip-trace>`` RPC body."""
+
+    def __init__(self, test_name: str):
+        self.test_name = test_name
+        self.request_filter = (
+            '<action xmlns="urn:ietf:params:xml:ns:yang:1">'
+            '<ipv4-delete-ip-trace xmlns="urn:huawei:yang:huawei-diagnostic-tools">'
+            f'<test-name>{test_name}</test-name>'
+            '</ipv4-delete-ip-trace>'
+            '</action>'
+        )
+
+    def get_request_filter(self) -> str:
+        return self.request_filter
+
+
+class HuaweiPingResultsListFilter:
+    """Filter to retrieve ping-result entries (housekeeping / preflight).
+
+    Возвращает поля ``test-name`` / ``status`` плюс per-probe
+    ``details/detail/system-time``. Result-level ``system-time`` у Huawei
+    diagnostic-tools **не существует** (probe 24.05.2026), таймстамп есть
+    только у per-probe `<detail>`. Preflight использует timestamp последнего
+    detail как «когда тест завершился» — для возрастного фильтра.
+    Не для штатной диагностики (для этого :class:`HuaweiPingStateFilter`).
+    """
+
+    def __init__(self):
+        self.request_filter = (
+            '<diagnostic-tools xmlns="urn:huawei:yang:huawei-diagnostic-tools">'
+            '<ipv4>'
+            '<ping-results>'
+            '<ping-result>'
+            '<test-name/><status/>'
+            '<details><detail><system-time/></detail></details>'
+            '</ping-result>'
+            '</ping-results>'
+            '</ipv4>'
+            '</diagnostic-tools>'
+        )
+
+    def get_request_filter(self) -> str:
+        return self.request_filter
+
+
+class HuaweiTracerouteResultsListFilter:
+    """Filter to retrieve trace-result entries (housekeeping / preflight).
+
+    Поля ``test-name`` / ``status``. У trace-result в Huawei
+    ``huawei-diagnostic-tools`` **нет** ``system-time`` ни на result-level,
+    ни в ``details/detail`` (probe 24.05.2026 — поля: hop-index, ttl, rtt,
+    ds-ip-addr, is-delete). Поэтому preflight для traceroute работает только
+    по prefix + status=finished, без age-фильтра.
+    """
+
+    def __init__(self):
+        self.request_filter = (
+            '<diagnostic-tools xmlns="urn:huawei:yang:huawei-diagnostic-tools">'
+            '<ipv4>'
+            '<trace-results>'
+            '<trace-result>'
+            '<test-name/><status/>'
+            '</trace-result>'
+            '</trace-results>'
+            '</ipv4>'
+            '</diagnostic-tools>'
+        )
+
+    def get_request_filter(self) -> str:
+        return self.request_filter

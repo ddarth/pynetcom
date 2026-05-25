@@ -1242,3 +1242,877 @@ class ServicesClient:
         raise NotImplementedError(
             f"get_bgp_routes is not implemented for vendor={self.vendor!r}"
         )
+
+    # ====================================================================== #
+    # Diagnostic actions: ping / traceroute                                   #
+    # ====================================================================== #
+    #
+    # Vendor-agnostic публичный API: caller передаёт PingRequest /
+    # TracerouteRequest, получает PingResult / TracerouteResult. Branching по
+    # vendor спрятан в _ping_nokia / _ping_huawei / _traceroute_*.
+    #
+    # Auth-error mapping: на Nokia без `action` в base-op-authorization профиле
+    # rpc-error приходит с tag=operation-not-supported и message содержащим
+    # "base-op-authorization". Конвертим в NetconfActionNotAuthorized с готовым
+    # fix_hint — bts_api дальше отдаст это в HTTP 503 с config-сниппетом.
+
+    def ping(self, request, *, poll_timeout_s: float = 30.0):
+        """Запустить ICMP echo с роутера и вернуть :class:`PingResult`.
+
+        :param request: :class:`PingRequest` с параметрами.
+        :param poll_timeout_s: верхняя граница ожидания результата (Huawei).
+            На Nokia параметр игнорируется (sync-RPC, отдаёт сразу).
+        :raises NetconfActionNotAuthorized: если профиль NETCONF на роутере
+            не разрешает ``<action>`` (Nokia: расширить
+            ``base-op-authorization``).
+        :raises NotImplementedError: для vendor не Nokia/Huawei.
+
+        :return: :class:`PingResult` с агрегатами и per-probe детализацией.
+        """
+        # local imports — иначе circular (PingRequest определяется в rpc_data_containers,
+        # сам файл не зависит от services_client, и наоборот)
+        from pynetcom.utils.helpers.netconf.rpc_data_containers.ping import PingRequest
+
+        # На случай если caller передал dict — поднимем понятную ошибку
+        if not isinstance(request, PingRequest):
+            raise TypeError(
+                f"ping(request=...) ожидает PingRequest, получено {type(request).__name__}"
+            )
+
+        # Поднимаем session.timeout с учётом ожидаемой длительности теста.
+        rpc_timeout_needed = max(
+            60,
+            int(request.count * (request.interval_ms + request.timeout_ms) / 1000 + 10),
+        )
+        orig_timeout = getattr(self.nc.session, "timeout", None)
+        if orig_timeout is not None:
+            try:
+                self.nc.session.timeout = max(int(orig_timeout), rpc_timeout_needed)
+            except Exception:  # noqa: BLE001
+                # некоторые ncclient версии могут не поддерживать установку — просто игнорим
+                pass
+        try:
+            if self.vendor == "nokia":
+                return self._ping_nokia(request)
+            if self.vendor == "huawei":
+                return self._ping_huawei(request, poll_timeout_s=poll_timeout_s)
+            raise NotImplementedError(
+                f"ping is not implemented for vendor={self.vendor!r}"
+            )
+        finally:
+            if orig_timeout is not None:
+                try:
+                    self.nc.session.timeout = orig_timeout
+                except Exception:  # noqa: BLE001
+                    pass
+
+    def traceroute(self, request, *, poll_timeout_s: float = 60.0):
+        """Запустить traceroute с роутера и вернуть :class:`TracerouteResult`.
+
+        :param request: :class:`TracerouteRequest`.
+        :param poll_timeout_s: ожидание Huawei (на Nokia игнорируется).
+        :raises NetconfActionNotAuthorized: см. :meth:`ping`.
+        :raises NotImplementedError: для vendor не Nokia/Huawei.
+        """
+        from pynetcom.utils.helpers.netconf.rpc_data_containers.traceroute import TracerouteRequest
+
+        if not isinstance(request, TracerouteRequest):
+            raise TypeError(
+                f"traceroute(request=...) ожидает TracerouteRequest, "
+                f"получено {type(request).__name__}"
+            )
+
+        # max_ttl × probes × timeout — верхняя граница длительности
+        rpc_timeout_needed = max(
+            60,
+            int(request.max_ttl * request.probes_per_hop * request.timeout_ms / 1000 + 10),
+        )
+        orig_timeout = getattr(self.nc.session, "timeout", None)
+        if orig_timeout is not None:
+            try:
+                self.nc.session.timeout = max(int(orig_timeout), rpc_timeout_needed)
+            except Exception:  # noqa: BLE001
+                pass
+        try:
+            if self.vendor == "nokia":
+                return self._traceroute_nokia(request)
+            if self.vendor == "huawei":
+                return self._traceroute_huawei(request, poll_timeout_s=poll_timeout_s)
+            raise NotImplementedError(
+                f"traceroute is not implemented for vendor={self.vendor!r}"
+            )
+        finally:
+            if orig_timeout is not None:
+                try:
+                    self.nc.session.timeout = orig_timeout
+                except Exception:  # noqa: BLE001
+                    pass
+
+    # ---- Nokia branch -------------------------------------------------- #
+    def _ping_nokia(self, request):
+        from pynetcom.utils.helpers.netconf.rpc_requests import NokiaPingActionRequest
+        from pynetcom.utils.helpers.netconf.rpc_data_containers.nokia_ping import (
+            parse_nokia_ping_response,
+        )
+
+        builder = NokiaPingActionRequest(request)
+        try:
+            raw_xml = self._send_action_raw(builder.get_request_filter())
+        except Exception as exc:  # noqa: BLE001
+            self._maybe_raise_auth(exc)
+            raise
+        return parse_nokia_ping_response(raw_xml, request)
+
+    def _traceroute_nokia(self, request):
+        from pynetcom.utils.helpers.netconf.rpc_requests import NokiaTracerouteActionRequest
+        from pynetcom.utils.helpers.netconf.rpc_data_containers.nokia_ping import (
+            parse_nokia_traceroute_response,
+        )
+
+        builder = NokiaTracerouteActionRequest(request)
+        try:
+            raw_xml = self._send_action_raw(builder.get_request_filter())
+        except Exception as exc:  # noqa: BLE001
+            self._maybe_raise_auth(exc)
+            raise
+        return parse_nokia_traceroute_response(raw_xml, request)
+
+    # ---- Huawei branch ------------------------------------------------- #
+    def _ping_huawei(self, request, *, poll_timeout_s: float):
+        import time
+        import uuid
+        from pynetcom.utils.helpers.netconf.rpc_requests import (
+            HuaweiPingActionRequest,
+            HuaweiPingStateFilter,
+            HuaweiPingDeleteAction,
+        )
+        from pynetcom.utils.helpers.netconf.rpc_data_containers.huawei_ping import (
+            parse_huawei_ping_state,
+        )
+
+        # Opportunistic preflight — удаляем осиротевшие наши же тесты.
+        # Ошибки preflight никогда не должны прерывать основной ping —
+        # cleanup внутри обёрнут в try/except.
+        self._preflight_huawei_diagnostic_cleanup(kind="ping", prefix="pc")
+
+        test_name = f"pc{uuid.uuid4().hex[:8]}"
+        attempts = 0
+        last_partial = None
+
+        while True:
+            attempts += 1
+            try:
+                action = HuaweiPingActionRequest(request, test_name=test_name)
+                self._send_action_raw(action.get_request_filter())
+                break  # action accepted
+            except Exception as exc:  # noqa: BLE001
+                self._maybe_raise_auth(exc)
+                # data-exists 31403 — повторяем с новым UUID, один раз
+                if attempts == 1 and self._is_huawei_data_exists(exc):
+                    self.log.warning(
+                        "Huawei ping test-name collision на %s — retry с новым UUID",
+                        test_name,
+                    )
+                    test_name = f"pc{uuid.uuid4().hex[:8]}"
+                    continue
+                # Bad VRF — Huawei отвергает action-start. Возвращаем синтетический
+                # PingResult симметрично Nokia (`error_kind=vrf-not-found`),
+                # а не голый RPCError — AI/REST-клиент получит uniform контракт.
+                if self._is_huawei_vpn_not_exists(exc):
+                    self.log.info(
+                        "Huawei ping(%s): VRF '%s' не существует — синтетический результат vrf-not-found",
+                        test_name, request.vrf,
+                    )
+                    return self._synth_ping_failure(request, "vrf-not-found", str(exc), vendor="huawei")
+                raise
+
+        try:
+            deadline = time.time() + poll_timeout_s
+            poll_interval = 1.0
+            state_filter = HuaweiPingStateFilter(test_name).get_request_filter()
+            while True:
+                time.sleep(poll_interval)
+                try:
+                    reply_xml = self._get_raw_state(state_filter)
+                except Exception as exc:  # noqa: BLE001
+                    self.log.warning(
+                        "Huawei ping(%s): state poll сбойнул (%s) — повтор",
+                        test_name, exc,
+                    )
+                    if time.time() >= deadline:
+                        # вернём пустой partial и финализируем
+                        from pynetcom.utils.helpers.netconf.rpc_data_containers.ping import (
+                            PingResult,
+                        )
+                        return PingResult(
+                            success=False,
+                            status="partial",
+                            sent=0,
+                            received=0,
+                            lost=0,
+                            loss_percent=0.0,
+                            rtt_min_ms=None,
+                            rtt_avg_ms=None,
+                            rtt_max_ms=None,
+                            rtt_stddev_ms=None,
+                            probes=[],
+                            destination=request.destination,
+                            source_address=request.source_address,
+                            vrf=request.vrf,
+                            vendor="huawei",
+                            duration_ms=None,
+                            raw_response_xml="",
+                        )
+                    continue
+                result = parse_huawei_ping_state(reply_xml, request, test_name)
+                if result.status == "completed":
+                    return result
+                last_partial = result
+                if time.time() >= deadline:
+                    self.log.warning(
+                        "Huawei ping(%s): poll-deadline %.1fs hit, status=%s",
+                        test_name, poll_timeout_s, result.status,
+                    )
+                    return result
+        finally:
+            # cleanup обязательно — даже на timeout / exception. data-missing
+            # 31404 (test-name отсутствует) глотаем тихо.
+            try:
+                delete = HuaweiPingDeleteAction(test_name)
+                self._send_action_raw(delete.get_request_filter())
+            except Exception as exc:  # noqa: BLE001
+                if not self._is_huawei_data_missing(exc):
+                    self.log.warning(
+                        "Huawei ping cleanup (test=%s) сбойнул: %s",
+                        test_name, exc,
+                    )
+
+    def _traceroute_huawei(self, request, *, poll_timeout_s: float):
+        import time
+        import uuid
+        from pynetcom.utils.helpers.netconf.rpc_requests import (
+            HuaweiTracerouteActionRequest,
+            HuaweiTracerouteStateFilter,
+            HuaweiTracerouteDeleteAction,
+        )
+        from pynetcom.utils.helpers.netconf.rpc_data_containers.huawei_ping import (
+            parse_huawei_traceroute_state,
+        )
+
+        # Opportunistic preflight — удаляем осиротевшие traceroute-тесты.
+        self._preflight_huawei_diagnostic_cleanup(kind="traceroute", prefix="tr")
+
+        test_name = f"tr{uuid.uuid4().hex[:8]}"
+        attempts = 0
+        while True:
+            attempts += 1
+            try:
+                action = HuaweiTracerouteActionRequest(request, test_name=test_name)
+                self._send_action_raw(action.get_request_filter())
+                break
+            except Exception as exc:  # noqa: BLE001
+                self._maybe_raise_auth(exc)
+                if attempts == 1 and self._is_huawei_data_exists(exc):
+                    self.log.warning(
+                        "Huawei traceroute test-name collision на %s — retry",
+                        test_name,
+                    )
+                    test_name = f"tr{uuid.uuid4().hex[:8]}"
+                    continue
+                if self._is_huawei_vpn_not_exists(exc):
+                    self.log.info(
+                        "Huawei traceroute(%s): VRF '%s' не существует — vrf-not-found",
+                        test_name, request.vrf,
+                    )
+                    return self._synth_traceroute_failure(request, "vrf-not-found", str(exc))
+                raise
+
+        try:
+            deadline = time.time() + poll_timeout_s
+            state_filter = HuaweiTracerouteStateFilter(test_name).get_request_filter()
+            while True:
+                time.sleep(1.5)
+                try:
+                    reply_xml = self._get_raw_state(state_filter)
+                except Exception as exc:  # noqa: BLE001
+                    self.log.warning(
+                        "Huawei traceroute(%s): state poll сбойнул (%s)",
+                        test_name, exc,
+                    )
+                    if time.time() >= deadline:
+                        from pynetcom.utils.helpers.netconf.rpc_data_containers.traceroute import (
+                            TracerouteResult,
+                        )
+                        return TracerouteResult(
+                            hops=[],
+                            status="partial",
+                            destination=request.destination,
+                            source_address=request.source_address,
+                            vrf=request.vrf,
+                            vendor="huawei",
+                            duration_ms=None,
+                            raw_response_xml="",
+                        )
+                    continue
+                result = parse_huawei_traceroute_state(reply_xml, request, test_name)
+                if result.status == "completed":
+                    return result
+                if time.time() >= deadline:
+                    return result
+        finally:
+            try:
+                delete = HuaweiTracerouteDeleteAction(test_name)
+                self._send_action_raw(delete.get_request_filter())
+            except Exception as exc:  # noqa: BLE001
+                if not self._is_huawei_data_missing(exc):
+                    self.log.warning(
+                        "Huawei traceroute cleanup (test=%s) сбойнул: %s",
+                        test_name, exc,
+                    )
+
+    # ---- Housekeeping (Huawei, internal) ------------------------------ #
+    #
+    # ВНИМАНИЕ: cleanup-семейство — это vendor-internal hygiene, не публичный
+    # контракт. Snaружи pynetcom (REST, AI-агент) знать про state-таблицы
+    # Huawei не должны. Метод сохранён private (`_cleanup_orphan_diagnostic_tests`)
+    # как back-stop на случай явного запуска оператором или внутреннего вызова
+    # из preflight.
+    def _cleanup_orphan_diagnostic_tests(
+        self,
+        prefix: str = "pc",
+        *,
+        include_traceroute: bool = True,
+    ) -> dict:
+        """Удалить осиротевшие diagnostic-tools тесты с заданным префиксом.
+
+        Huawei (ATN/NE40E) — list ping-result / trace-result не имеет
+        max-elements и auto-expire. Если процесс падает между ``start`` и
+        ``delete`` (kill -9, OOM, exception между) — запись копится. Этот
+        метод проходит по обоим спискам и удаляет всё что начинается с нашего
+        prefix. Чужие тесты (созданные людьми / NSP / NCE) не трогаем —
+        фильтр по prefix обязателен.
+
+        :param prefix: префикс собственных тестов. По умолчанию ``"pc"``
+            (ping); для traceroute дополнительно проверяется ``"tr"``.
+        :param include_traceroute: чистить ли trace-result.
+        :return: ``{"ping_deleted": [...], "trace_deleted": [...]}``.
+        :raises NotImplementedError: на Nokia (sync action, никаких state-таблиц).
+        """
+        if self.vendor != "huawei":
+            raise NotImplementedError(
+                "_cleanup_orphan_diagnostic_tests актуален только для Huawei "
+                "(на Nokia ping/traceroute синхронный — state-таблиц нет)."
+            )
+
+        from pynetcom.utils.helpers.netconf.rpc_requests import (
+            HuaweiPingResultsListFilter,
+            HuaweiTracerouteResultsListFilter,
+            HuaweiPingDeleteAction,
+            HuaweiTracerouteDeleteAction,
+        )
+
+        deleted_ping: List[str] = []
+        try:
+            list_filter = HuaweiPingResultsListFilter().get_request_filter()
+            reply = self.nc.get(list_filter)
+            names = self._extract_huawei_test_names(reply, "ping-results", "ping-result")
+            for n in names:
+                if not (n and n.startswith(prefix)):
+                    continue
+                try:
+                    self._send_action_raw(
+                        HuaweiPingDeleteAction(n).get_request_filter()
+                    )
+                    deleted_ping.append(n)
+                except Exception as exc:  # noqa: BLE001
+                    if not self._is_huawei_data_missing(exc):
+                        self.log.warning(
+                            "cleanup ping(%s) сбойнул: %s", n, exc,
+                        )
+        except Exception as exc:  # noqa: BLE001
+            self.log.warning("cleanup ping list: %s", exc)
+
+        deleted_trace: List[str] = []
+        if include_traceroute:
+            tr_prefix = "tr"
+            try:
+                list_filter = HuaweiTracerouteResultsListFilter().get_request_filter()
+                reply = self.nc.get(list_filter)
+                names = self._extract_huawei_test_names(
+                    reply, "trace-results", "trace-result",
+                )
+                for n in names:
+                    if not (n and (n.startswith(tr_prefix) or n.startswith(prefix))):
+                        continue
+                    try:
+                        self._send_action_raw(
+                            HuaweiTracerouteDeleteAction(n).get_request_filter()
+                        )
+                        deleted_trace.append(n)
+                    except Exception as exc:  # noqa: BLE001
+                        if not self._is_huawei_data_missing(exc):
+                            self.log.warning(
+                                "cleanup trace(%s) сбойнул: %s", n, exc,
+                            )
+            except Exception as exc:  # noqa: BLE001
+                self.log.warning("cleanup traceroute list: %s", exc)
+
+        return {"ping_deleted": deleted_ping, "trace_deleted": deleted_trace}
+
+    @staticmethod
+    def _extract_huawei_test_names(
+        reply: dict, container_key: str, item_key: str,
+    ) -> List[str]:
+        """Достаёт ``test-name`` из ответа ``<get>`` ping/trace results list.
+
+        ``reply`` — словарь как его отдаёт :meth:`NetconfClient.get` (после
+        xmltodict). Структура: ``data/diagnostic-tools/ipv4/<container_key>/
+        <item_key>[]/test-name``.
+        """
+        def _strip(k):
+            if not isinstance(k, str):
+                return k
+            if "}" in k:
+                k = k.split("}", 1)[1]
+            if ":" in k:
+                k = k.split(":", 1)[1]
+            return k
+
+        def _walk(node, name):
+            if isinstance(node, dict):
+                for k, v in node.items():
+                    if _strip(k) == name:
+                        return v
+                for v in node.values():
+                    f = _walk(v, name)
+                    if f is not None:
+                        return f
+            elif isinstance(node, list):
+                for item in node:
+                    f = _walk(item, name)
+                    if f is not None:
+                        return f
+            return None
+
+        container = _walk(reply, container_key)
+        if container is None:
+            return []
+        items = _walk(container, item_key)
+        if items is None:
+            return []
+        if not isinstance(items, list):
+            items = [items]
+        names: List[str] = []
+        for it in items:
+            if isinstance(it, dict):
+                n = _walk(it, "test-name")
+                if isinstance(n, str):
+                    names.append(n)
+        return names
+
+    @staticmethod
+    def _extract_huawei_test_entries(
+        reply: dict, container_key: str, item_key: str,
+    ) -> List[dict]:
+        """Богатый вариант :meth:`_extract_huawei_test_names`.
+
+        Возвращает список словарей ``{"test-name": str, "status": str|None,
+        "system-time": str|None}`` по списку ping-result / trace-result.
+        Нужен для preflight.
+
+        :param reply: словарь как его отдаёт :meth:`NetconfClient.get`.
+        :param container_key: ``"ping-results"`` или ``"trace-results"``.
+        :param item_key: ``"ping-result"`` или ``"trace-result"``.
+
+        ``system-time`` Huawei: для ping живёт только в
+        ``details/detail/system-time`` (per-probe), берём timestamp последнего
+        detail как «когда тест завершился». Для trace-result этого поля
+        вообще нет (probe 24.05.2026) — возвращаем ``None``, preflight
+        traceroute работает без age-фильтра.
+        """
+        def _strip(k):
+            if not isinstance(k, str):
+                return k
+            if "}" in k:
+                k = k.split("}", 1)[1]
+            if ":" in k:
+                k = k.split(":", 1)[1]
+            return k
+
+        def _walk(node, name):
+            """Ищет первое вхождение leaf'а ``name`` сверху вниз."""
+            if isinstance(node, dict):
+                for k, v in node.items():
+                    if _strip(k) == name:
+                        return v
+                for v in node.values():
+                    f = _walk(v, name)
+                    if f is not None:
+                        return f
+            elif isinstance(node, list):
+                for item in node:
+                    f = _walk(item, name)
+                    if f is not None:
+                        return f
+            return None
+
+        def _extract_last_detail_system_time(entry: dict) -> Optional[str]:
+            """Из ``entry`` (ping-result) достаёт system-time последнего detail."""
+            details_container = None
+            for k, v in entry.items():
+                if _strip(k) == "details":
+                    details_container = v
+                    break
+            if not isinstance(details_container, dict):
+                return None
+            detail_list = None
+            for k, v in details_container.items():
+                if _strip(k) == "detail":
+                    detail_list = v
+                    break
+            if detail_list is None:
+                return None
+            if not isinstance(detail_list, list):
+                detail_list = [detail_list]
+            last_ts: Optional[str] = None
+            for d in detail_list:
+                if not isinstance(d, dict):
+                    continue
+                for k, v in d.items():
+                    if _strip(k) == "system-time" and isinstance(v, str):
+                        last_ts = v  # последнего перезаписываем
+                        break
+            return last_ts
+
+        container = _walk(reply, container_key)
+        if container is None:
+            return []
+        items = _walk(container, item_key)
+        if items is None:
+            return []
+        if not isinstance(items, list):
+            items = [items]
+        entries: List[dict] = []
+        for it in items:
+            if not isinstance(it, dict):
+                continue
+            name = _walk(it, "test-name")
+            if not isinstance(name, str):
+                continue
+            # status — single leaf на уровне result
+            status = None
+            for k, v in it.items():
+                if _strip(k) == "status" and isinstance(v, str):
+                    status = v
+                    break
+            stime = _extract_last_detail_system_time(it)
+            entries.append({
+                "test-name": name,
+                "status": status,
+                "system-time": stime,
+            })
+        return entries
+
+    @staticmethod
+    def _huawei_system_time_age_s(system_time: Optional[str]) -> Optional[float]:
+        """Перевести Huawei ``system-time`` (ISO-8601) в возраст в секундах.
+
+        Huawei отдаёт строки вида ``2026-05-24T15:30:42Z`` или
+        ``2026-05-24T15:30:42+05:00``. Если не парсится — возвращаем ``None``,
+        вызывающий должен считать запись «возраст неизвестен».
+        """
+        if not system_time:
+            return None
+        from datetime import datetime, timezone
+
+        s = system_time.strip()
+        # Python <3.11 не любит "Z" в fromisoformat → переписываем в +00:00
+        if s.endswith("Z"):
+            s = s[:-1] + "+00:00"
+        try:
+            dt = datetime.fromisoformat(s)
+        except ValueError:
+            return None
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        try:
+            return (datetime.now(timezone.utc) - dt).total_seconds()
+        except Exception:  # noqa: BLE001
+            return None
+
+    def _preflight_huawei_diagnostic_cleanup(
+        self,
+        *,
+        kind: str,
+        prefix: str,
+        min_age_s: float = 60.0,
+    ) -> None:
+        """Opportunistic cleanup осиротевших diagnostic-tools тестов.
+
+        Вызывается перед каждым ``<action>`` ping/traceroute. Удаляет только
+        записи которые **одновременно**:
+          * ``test-name`` начинается с нашего ``prefix`` (``pc`` для ping,
+            ``tr`` для traceroute);
+          * ``status == "finished"`` (тест уже завершён, это точно orphan,
+            а не активный наш ping в соседнем процессе);
+          * ``system-time`` старше ``min_age_s`` секунд (страховка от race
+            с параллельным процессом-сиблингом, который только что запустил
+            тест с тем же prefix).
+
+        Все ошибки глотаются — preflight никогда не должен прерывать основной
+        ping. data-missing 31404 (race с другим cleanup) — особо тихо на
+        DEBUG. Найден хотя бы один orphan → INFO, иначе всё на DEBUG.
+
+        :param kind: ``"ping"`` или ``"traceroute"``.
+        :param prefix: префикс собственных тестов (``"pc"`` / ``"tr"``).
+        :param min_age_s: минимальный возраст записи в секундах.
+        """
+        if self.vendor != "huawei":
+            return
+
+        try:
+            from pynetcom.utils.helpers.netconf.rpc_requests import (
+                HuaweiPingResultsListFilter,
+                HuaweiTracerouteResultsListFilter,
+                HuaweiPingDeleteAction,
+                HuaweiTracerouteDeleteAction,
+            )
+
+            if kind == "ping":
+                list_filter = HuaweiPingResultsListFilter().get_request_filter()
+                container_key, item_key = "ping-results", "ping-result"
+                DeleteAction = HuaweiPingDeleteAction
+            elif kind == "traceroute":
+                list_filter = HuaweiTracerouteResultsListFilter().get_request_filter()
+                container_key, item_key = "trace-results", "trace-result"
+                DeleteAction = HuaweiTracerouteDeleteAction
+            else:
+                self.log.debug("preflight cleanup: неизвестный kind=%r", kind)
+                return
+
+            reply = self.nc.get(list_filter)
+            entries = self._extract_huawei_test_entries(
+                reply, container_key, item_key,
+            )
+
+            # У Huawei trace-result нет system-time нигде (probe 24.05.2026),
+            # поэтому для traceroute возрастной фильтр невозможен — только
+            # prefix + status=finished. Race-окно остаётся, но prefix `tr` +
+            # UUID8 делает коллизию вырожденно маловероятной.
+            has_age_signal = kind == "ping"
+
+            candidates: List[str] = []
+            for e in entries:
+                name = e.get("test-name") or ""
+                if not name.startswith(prefix):
+                    continue
+                status = (e.get("status") or "").strip().lower()
+                if status != "finished":
+                    # активный (processing) или с ошибкой — не трогаем
+                    continue
+                if has_age_signal:
+                    age_s = self._huawei_system_time_age_s(e.get("system-time"))
+                    if age_s is None:
+                        # возраст неизвестен — на всякий случай НЕ трогаем
+                        # (страховка против race с параллельным процессом)
+                        continue
+                    if age_s < min_age_s:
+                        continue
+                candidates.append(name)
+
+            deleted = 0
+            for n in candidates:
+                try:
+                    self._send_action_raw(DeleteAction(n).get_request_filter())
+                    deleted += 1
+                except Exception as exc:  # noqa: BLE001
+                    if self._is_huawei_data_missing(exc):
+                        # race — другой процесс уже удалил, тихо
+                        self.log.debug(
+                            "preflight cleanup %s(%s): уже удалён (race)",
+                            kind, n,
+                        )
+                    else:
+                        self.log.debug(
+                            "preflight cleanup %s(%s) сбойнул: %s",
+                            kind, n, exc,
+                        )
+
+            if deleted > 0:
+                self.log.info(
+                    "Huawei preflight: cleaned up %d orphan %s tests",
+                    deleted, kind,
+                )
+            else:
+                self.log.debug(
+                    "Huawei preflight %s: no orphans (scanned %d entries)",
+                    kind, len(entries),
+                )
+        except Exception as exc:  # noqa: BLE001
+            # Никогда не прерываем основной flow.
+            self.log.debug("Huawei preflight cleanup %s сбойнул: %s", kind, exc)
+
+    # ---- shared low-level helpers ------------------------------------- #
+    def _send_action_raw(self, action_xml: str) -> str:
+        """Отправить ``<action>`` RPC, вернуть сырой rpc-reply как строку.
+
+        Работаем напрямую через ``self.nc.session.rpc(...)`` чтобы получить
+        полный XML rpc-reply, который парсеры берут как первоисточник.
+        :meth:`NetconfClient.rpc` распарсивает в dict, чего мы не хотим —
+        теряются namespace-префиксы которые иногда важны.
+
+        ncclient для ``<action>`` отдаёт :class:`ncclient.xml_.NCElement`
+        (а не классический ``RPCReply``). У него ``.data_xml`` — строка с
+        полным envelope rpc-reply, ``.xml`` — None. Поэтому пробуем сначала
+        data_xml, затем tostring (свойство), затем str(reply).
+        """
+        from lxml import etree
+
+        rpc_element = etree.fromstring(action_xml.encode("utf-8"))
+        reply = self.nc.session.rpc(rpc_element)
+        # NCElement.data_xml = строка с полным <rpc-reply>... — то что нужно
+        for attr in ("data_xml", "xml"):
+            value = getattr(reply, attr, None)
+            if isinstance(value, str) and value.strip():
+                return value
+        # Если объект имеет _NCElement_element / _root, попробуем сериализовать
+        try:
+            root = getattr(reply, "_root", None) or getattr(reply, "_NCElement_element", None)
+            if root is not None:
+                return etree.tostring(root, encoding="unicode")
+        except Exception:  # noqa: BLE001
+            pass
+        return str(reply) or ""
+
+    def _get_raw_state(self, subtree_filter_xml: str) -> str:
+        """Отправить ``<get>`` со subtree-фильтром, вернуть сырой rpc-reply XML.
+
+        Используется для polling'а Huawei. Возвращаем строку (как
+        ``data_xml`` ncclient'а), чтобы parser работал с тем же XML что и в
+        probe-артефактах.
+        """
+        from ncclient.xml_ import to_ele
+
+        reply = self.nc.session.get(("subtree", to_ele(subtree_filter_xml)))
+        # У ncclient GetReply есть .data_xml — это и есть содержимое <data>
+        # wrapped в <data> tag. Передаём как есть в parse_*_state — там
+        # _clean_keys+_walk покрывают оба варианта (с/без rpc-reply envelope).
+        data_xml = getattr(reply, "data_xml", None)
+        if data_xml:
+            return data_xml
+        # fallback на полный envelope
+        return getattr(reply, "xml", None) or ""
+
+    @staticmethod
+    def _maybe_raise_auth(exc):
+        """Если ``exc`` — RPCError с признаками отказа auth-профиля, конвертит
+        в :class:`NetconfActionNotAuthorized`. Иначе ничего не делает (caller
+        re-raise'нет исходное)."""
+        from pynetcom.exceptions import NetconfActionNotAuthorized
+
+        # ncclient.operations.rpc.RPCError несёт .tag / .message / .severity
+        tag = getattr(exc, "tag", None)
+        message = getattr(exc, "message", None) or ""
+        text = str(exc)
+        marker = "base-op-authorization"
+        # Nokia: tag=operation-not-supported + message с base-op-authorization
+        if tag == "operation-not-supported" and (marker in message or marker in text):
+            raise NetconfActionNotAuthorized(
+                vendor="nokia", underlying_error=exc,
+            ) from exc
+        # запасной матч по тексту — на случай если ncclient версии не пробросили tag
+        if "MGMT_CORE" in text and marker in text:
+            raise NetconfActionNotAuthorized(
+                vendor="nokia", underlying_error=exc,
+            ) from exc
+
+    @staticmethod
+    def _is_huawei_data_exists(exc) -> bool:
+        """Huawei rpc-error code 31403 / tag=data-exists ("The specified test
+        instance already exists.")"""
+        text = str(exc)
+        if "31403" in text:
+            return True
+        tag = getattr(exc, "tag", None)
+        if tag == "data-exists":
+            return True
+        return False
+
+    @staticmethod
+    def _is_huawei_data_missing(exc) -> bool:
+        """Huawei rpc-error code 31404 / tag=data-missing — test-name отсутствует.
+        Возникает при cleanup уже удалённого / никогда не созданного теста.
+        """
+        text = str(exc)
+        if "31404" in text:
+            return True
+        tag = getattr(exc, "tag", None)
+        if tag == "data-missing":
+            return True
+        return False
+
+    def _synth_ping_failure(self, request, error_kind: str, raw_msg: str, *, vendor: str):
+        """Синтезирует PingResult для случаев, когда action-start был отвергнут
+        и реального теста на устройстве не возникло (bad VRF на Huawei и т.п.).
+        Возвращает по одному "виртуальному" probe на каждый запрошенный count
+        с одинаковыми error_kind/raw_status, чтобы AI-боту контракт был
+        идентичен с Nokia per-probe failure-cases."""
+        from pynetcom.utils.helpers.netconf.rpc_data_containers.ping import (
+            PingResult, PingProbe,
+        )
+        probes = [
+            PingProbe(
+                sequence=i,
+                success=False,
+                rtt_ms=None,
+                ttl=None,
+                response_address=None,
+                error_kind=error_kind,
+                raw_status=error_kind,
+                timestamp=None,
+            )
+            for i in range(1, max(1, request.count) + 1)
+        ]
+        return PingResult(
+            success=False,
+            status="completed",
+            sent=request.count,
+            received=0,
+            lost=request.count,
+            loss_percent=100.0,
+            rtt_min_ms=None,
+            rtt_avg_ms=None,
+            rtt_max_ms=None,
+            rtt_stddev_ms=None,
+            probes=probes,
+            destination=request.destination,
+            source_address=request.source_address,
+            vrf=request.vrf,
+            vendor=vendor,
+            duration_ms=0,
+            raw_response_xml=f"<synthetic-failure error_kind='{error_kind}'>{raw_msg}</synthetic-failure>",
+        )
+
+    def _synth_traceroute_failure(self, request, error_kind: str, raw_msg: str):
+        from pynetcom.utils.helpers.netconf.rpc_data_containers.traceroute import (
+            TracerouteResult,
+        )
+        return TracerouteResult(
+            hops=[],
+            status="failed",
+            destination=request.destination,
+            source_address=request.source_address,
+            vrf=request.vrf,
+            vendor="huawei",
+            duration_ms=0,
+            raw_response_xml=f"<synthetic-failure error_kind='{error_kind}'>{raw_msg}</synthetic-failure>",
+        )
+
+    @staticmethod
+    def _is_huawei_vpn_not_exists(exc) -> bool:
+        """Huawei на action-start ipv4-start-ip-ping/trace отвергает RPC при
+        несуществующем vrf-name: ``tag=operation-failed, message="The VPN
+        instance does not exist."``. Эмпирически подтверждено probe'ом 24.05.2026
+        на NE40E. Нет отдельного error-info-code — определяем по тексту."""
+        text = str(exc).lower()
+        return "vpn instance does not exist" in text

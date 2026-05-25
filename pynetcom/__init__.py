@@ -33,6 +33,20 @@ from pynetcom.utils.helpers.netconf.rpc_data_containers.services import (
     NeighborOrigin,
 )
 
+# Diagnostic-actions data containers (ping / traceroute)
+from pynetcom.utils.helpers.netconf.rpc_data_containers.ping import (
+    PingRequest,
+    PingProbe,
+    PingResult,
+)
+from pynetcom.utils.helpers.netconf.rpc_data_containers.traceroute import (
+    TracerouteRequest,
+    TracerouteProbe,
+    TracerouteHop,
+    TracerouteResult,
+)
+from pynetcom.exceptions import NetconfActionNotAuthorized
+
 # from pynetcom.cli_client import EquipCLI, NokiaEquipCLI, HuaweiEquipCLI, cli_caret
 
 # Library version
@@ -78,4 +92,13 @@ __all__ = [
     "MacEntryType",
     "MacSourceType",
     "NeighborOrigin",
+    # Diagnostic actions
+    "PingRequest",
+    "PingProbe",
+    "PingResult",
+    "TracerouteRequest",
+    "TracerouteProbe",
+    "TracerouteHop",
+    "TracerouteResult",
+    "NetconfActionNotAuthorized",
 ]
