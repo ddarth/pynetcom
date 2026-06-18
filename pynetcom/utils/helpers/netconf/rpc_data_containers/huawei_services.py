@@ -614,11 +614,22 @@ def _cleaned(response: dict) -> dict:
 
 
 def parse_l2vpn_response(response: dict) -> List[HuaweiL2vpnInstance]:
-    """Parse a HuaweiL2vpnRPCRequest reply into NetworkInstance objects."""
+    """Parse a HuaweiL2vpnRPCRequest reply into NetworkInstance objects.
+
+    Tolerant of thin / negative responses (no ``<state>``, no ``<vpls>``
+    subtree, empty / self-closing ``<instances/>``, missing ``<l2vpn>``).
+    Returns an empty list when the server didn't match any instance —
+    typical for :class:`HuaweiL2vpnByMemberInterfaceRPCRequest` against
+    a non-existent AC.
+    """
     if not isinstance(response, dict):
         return []
     cleaned = _cleaned(response)
-    root = (cleaned.get("l2vpn") or {}).get("instances", {}).get("instance")
+    l2vpn = cleaned.get("l2vpn") or {}
+    instances = l2vpn.get("instances") or {}
+    if not isinstance(instances, dict):
+        return []
+    root = instances.get("instance")
     return [HuaweiL2vpnInstance(entry) for entry in _as_list(root)]
 
 

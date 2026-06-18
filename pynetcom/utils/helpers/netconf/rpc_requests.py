@@ -934,6 +934,76 @@ class HuaweiL2vpnRPCRequest:
 HuaweiVsiRPCRequest = HuaweiL2vpnRPCRequest
 
 
+class HuaweiL2vpnByMemberInterfaceRPCRequest:
+    """Filter for the Huawei L2VPN instance that owns a given AC interface.
+
+    Mirrors ``examples/xml/Huawei/services/get_l2vpn_by_member_interface.xml``
+    exactly. The wire format is::
+
+        <l2vpn xmlns="urn:huawei:yang:huawei-l2vpn">
+          <instances>
+            <instance>
+              <vpls>
+                <acs>
+                  <ac>
+                    <interface-name>{member_interface}</interface-name>
+                  </ac>
+                </acs>
+              </vpls>
+            </instance>
+          </instances>
+        </l2vpn>
+
+    Server semantics (verified live on VRP V8 NE-series, June 2026):
+    the ``<interface-name>`` leaf inside ``<ac>`` acts as a CONTENT-MATCH
+    filter — the server returns the single ``<instance>`` whose AC list has
+    a matching interface-name, and inside that instance only the matching
+    ``<ac>`` (no PWs, no FDB, no statistics — extremely cheap). Probed
+    response size: ~900 B vs ~336 KB for an unfiltered dump; ~390 ms vs
+    ~8.7 s wall on a 32-VSI BSC-class box (~22x speedup).
+
+    Why this is a SEPARATE class from :class:`HuaweiL2vpnRPCRequest` (which
+    supports a ``name=`` list-key narrow): adding field-selectors at the
+    ``<instance>`` level (e.g. ``<name/>``, ``<type/>``, ``<state/>``)
+    BREAKS the content-match. The server treats those selectors as
+    "return these leaves for ALL instances", and ``<interface-name>``
+    stops being a whole-instance filter, returning all VSIs instead of
+    the one match. The full-dump builder uses such selectors, so it
+    cannot accept ``member_interface`` without losing speed. Hence:
+    dedicated builder, no shared shape.
+
+    Negative case (no instance owns the AC): the server returns an empty
+    ``<instances/>`` element. Parser tolerance covers that — see
+    :func:`pynetcom.utils.helpers.netconf.rpc_data_containers.huawei_services.parse_l2vpn_response`.
+    """
+
+    def __init__(self, member_interface: str):
+        if not member_interface or not isinstance(member_interface, str):
+            raise ValueError(
+                "HuaweiL2vpnByMemberInterfaceRPCRequest: member_interface "
+                "must be a non-empty string (e.g. 'GigabitEthernet0/2/1.100')"
+            )
+        self.member_interface = member_interface
+        self.request_filter = (
+            '<l2vpn xmlns="urn:huawei:yang:huawei-l2vpn">'
+            '<instances>'
+            '<instance>'
+            '<vpls>'
+            '<acs>'
+            '<ac>'
+            f'<interface-name>{member_interface}</interface-name>'
+            '</ac>'
+            '</acs>'
+            '</vpls>'
+            '</instance>'
+            '</instances>'
+            '</l2vpn>'
+        )
+
+    def get_request_filter(self) -> str:
+        return self.request_filter
+
+
 class HuaweiMacRPCRequest:
     """Filter for Huawei MAC tables in ``urn:huawei:yang:huawei-mac`` — batched.
 

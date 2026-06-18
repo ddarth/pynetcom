@@ -46,6 +46,7 @@ from pynetcom.utils.helpers.netconf.rpc_requests import (
     HuaweiArpRPCRequest,
     HuaweiBgpVpnRoutesRPCRequest,
     HuaweiInterfaceAdminOperStateRPCRequest,
+    HuaweiL2vpnByMemberInterfaceRPCRequest,
     HuaweiL2vpnRPCRequest,
     HuaweiL3InterfaceRPCRequest,
     HuaweiL3vpnRPCRequest,
@@ -617,11 +618,6 @@ class ServicesClient:
         # cross-vendor callers.
         return ifaces
 
-    # Class-level flag so we log the "huawei L2VPN dump is unfiltered" warning
-    # at most once per ServicesClient instance — repeated warnings on every
-    # get_l3_interfaces call would spam structured logs without adding info.
-    _huawei_l2vpn_unfiltered_warned: bool = False
-
     def _enrich_huawei_l2_service(
         self,
         l3_interfaces: List[L3Interface],
@@ -631,33 +627,34 @@ class ServicesClient:
 
         Algorithm:
           1. Pull ve-groups → ``{l3_parent: l2_parent}`` map.
-          2. Pull all VSIs (brief, no FDB) → ``{l2_subif_name: vsi_name}``
-             reverse map from each LOCAL endpoint (SAP).
-          3. For each L3Interface whose name is ``<parent>.<vlan>``: look up
-             the paired L2 parent → form expected ``<l2_parent>.<vlan>`` →
-             look up that sub-interface in the VSI SAP map → set
-             ``l2_service``. Misses leave the field at None.
+          2. For each L3 sub-interface ``<l3_parent>.<vlan>`` form the
+             expected L2 AC name ``<l2_parent>.<vlan>``; collect the unique
+             set of L2 AC names actually needed.
+          3. For each unique L2 AC name run ONE narrow RPC built by
+             :class:`HuaweiL2vpnByMemberInterfaceRPCRequest` — server-side
+             content-match by ``interface-name`` returns just the owning
+             VSI (and only the matching ``<ac>`` inside it), no PWs / FDB /
+             statistics. Build ``{l2_subif_name: vsi_name}`` from the
+             responses and apply to every interface that matches.
 
-        Two RPCs total; cheap regardless of the number of L3 interfaces.
+        Total RPCs: ``1 (ve-groups) + N`` where N is the number of UNIQUE
+        L2 ACs the supplied L3 interfaces need to resolve (typically the
+        same as the number of L3 sub-interfaces in the supplied list).
+        On VRP V8 NE-series each narrow RPC is ~400 ms / ~900 B vs
+        ~8.7 s / ~336 KB for an unfiltered ``HuaweiL2vpnRPCRequest`` dump
+        (~22x speedup observed on a 32-VSI BSC-class box; see
+        ``examples/xml/Huawei/services/get_l2vpn_by_member_interface(response).xml``).
 
         ``vprn_name`` is accepted for API symmetry with the Nokia path
         (:meth:`_enrich_nokia_l2_service` requires a VRF to scope its
         configure-namespace query). On Huawei neither ``huawei-fim-ifm``
         (VE-groups, /ifm/global) nor ``huawei-l2vpn`` (/l2vpn/instances)
-        accepts a ``vrf-name`` filter — they are global subtrees. We log
-        a single warning so operators know the L2VPN dump can be heavy on
-        big BSC-class boxes, then proceed unfiltered.
+        accepts a ``vrf-name`` filter — they are global subtrees. The
+        per-interface narrow RPC obsoletes the previous "heavy unfiltered
+        L2VPN dump" warning, which is no longer emitted.
         """
         if not l3_interfaces:
             return
-        if vprn_name and not self._huawei_l2vpn_unfiltered_warned:
-            self.log.warning(
-                "Huawei L2VPN dump is unfiltered: huawei-fim-ifm / "
-                "huawei-l2vpn YANG models do not support vrf scoping; "
-                "this RPC may be heavy on large routers. (vprn_name=%r)",
-                vprn_name,
-            )
-            self._huawei_l2vpn_unfiltered_warned = True
 
         # Step 1 — ve-groups → l3_parent → l2_parent
         ve_resp = self.nc.get(HuaweiVeGroupRPCRequest().get_request_filter())
@@ -668,17 +665,11 @@ class ServicesClient:
         if not l3_to_l2_parent:
             return  # no VE-groups configured — nothing to enrich
 
-        # Step 2 — VSI SAP list → l2_subif_name → vsi_name
-        vsi_resp = self.nc.get(HuaweiL2vpnRPCRequest().get_request_filter())
-        vsis = huawei.parse_l2vpn_response(vsi_resp)
-        sap_to_vsi: dict = {}
-        for vsi in vsis:
-            for cp in vsi.connection_points or []:
-                for ep in cp.endpoints or []:
-                    if ep.local and ep.local.subinterface:
-                        sap_to_vsi[ep.local.subinterface] = vsi.name
-
-        # Step 3 — resolve per L3 interface
+        # Step 2 — figure out which L2 AC names each L3 sub-IF needs.
+        # iface_to_l2_ac: list of (iface, l2_ac) — preserve association so we
+        # can map results back without re-deriving.
+        iface_to_l2_ac: list = []
+        needed_l2_acs: set = set()
         for iface in l3_interfaces:
             if not iface.name or "." not in iface.name:
                 continue  # only sub-interfaces have a VE-group binding
@@ -687,7 +678,29 @@ class ServicesClient:
             if not l2_parent:
                 continue
             expected_l2_subif = f"{l2_parent}.{vlan_tag}"
-            iface.l2_service = sap_to_vsi.get(expected_l2_subif)
+            iface_to_l2_ac.append((iface, expected_l2_subif))
+            needed_l2_acs.add(expected_l2_subif)
+
+        if not needed_l2_acs:
+            return  # no L3 sub-IF maps to a VE-group — nothing to query
+
+        # Step 3 — one narrow per-AC RPC per unique L2 AC name.
+        # Each RPC returns at most one <instance> (the owning VSI) with
+        # only the matching <ac> inside — no PWs / FDB / statistics.
+        l2_ac_to_vsi: dict = {}
+        for l2_ac in needed_l2_acs:
+            req = HuaweiL2vpnByMemberInterfaceRPCRequest(member_interface=l2_ac)
+            resp = self.nc.get(req.get_request_filter())
+            vsis = huawei.parse_l2vpn_response(resp)
+            # Expected: 0 or 1 entries. Defensive: take the first match.
+            for vsi in vsis:
+                if vsi.name:
+                    l2_ac_to_vsi[l2_ac] = vsi.name
+                    break
+
+        # Step 4 — apply per-interface
+        for iface, l2_ac in iface_to_l2_ac:
+            iface.l2_service = l2_ac_to_vsi.get(l2_ac)
 
     def _enrich_nokia_l2_service(
         self,
