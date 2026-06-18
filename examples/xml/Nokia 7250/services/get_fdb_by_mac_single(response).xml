@@ -1,0 +1,22 @@
+<rpc-reply message-id="urn:uuid:a2634a7a-0211-0148-8696-11c53ce11370">
+    <data>
+        <state>
+            <service>
+                <vpls>
+                    <service-name>VPLS_EXAMPLE_1</service-name>
+                    <fdb>
+                        <mac>
+                            <address>00:00:5e:00:01:33</address>
+                            <locale>sdp-bind</locale>
+                            <sdp-bind>1:1500013061</sdp-bind>
+                            <type>learned</type>
+                            <last-update>2025-10-18T23:02:24.3Z</last-update>
+                            <age>0</age>
+                            <protected-mac>false</protected-mac>
+                        </mac>
+                    </fdb>
+                </vpls>
+            </service>
+        </state>
+    </data>
+</rpc-reply>

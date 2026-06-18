@@ -1,0 +1,25 @@
+<rpc-reply message-id="urn:uuid:60681019-0211-0124-e933-30881abfe04d">
+    <data>
+        <state>
+            <service>
+                <vprn>
+                    <service-name>VPRN_EXAMPLE_2</service-name>
+                    <interface>
+                        <interface-name>VPLS_EXAMPLE_2</interface-name>
+                        <ipv4>
+                            <neighbor-discovery>
+                                <neighbor>
+                                    <ipv4-address>203.0.113.31</ipv4-address>
+                                    <oper-state>up</oper-state>
+                                    <mac-address>02:11:00:d4:e7:7d</mac-address>
+                                    <type>dynamic</type>
+                                    <timer>13504</timer>
+                                </neighbor>
+                            </neighbor-discovery>
+                        </ipv4>
+                    </interface>
+                </vprn>
+            </service>
+        </state>
+    </data>
+</rpc-reply>

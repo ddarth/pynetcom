@@ -328,8 +328,8 @@ returns `[]` for VPLSes with no IRB gateway — that is the legitimate
 ```python
 ServicesClient.get_mac_table(
     service_name: str | None = None,
-    mac: str | None = None,
-    port: str | None = None,
+    macs: list[str] | None = None,
+    ports: list[str] | None = None,
     entry_type: str | None = None,
     learned_via: str | None = None,
     include_standby: bool = False,
@@ -339,15 +339,15 @@ ServicesClient.get_mac_table(
 
 | Parameter | Side | Description |
 |-----------|------|-------------|
-| `service_name` | **server** | VPLS / VSI name. YANG list key on both vendors. |
-| `mac` | **server** | MAC address. YANG list key. Any separator style accepted (`aabbccddeeff`, `aa:bb:..`, `aa-bb-..`, `aabb.ccdd.eeff`) — normalised to the vendor's canonical form internally. |
-| `port` | **client** | Substring match (case-insensitive) on `MacEntry.interface`. |
+| `service_name` | **server** | Single VPLS / VSI name. YANG list key on both vendors. Multi-service fan-out not handled here. |
+| `macs` | **server** | List of MAC addresses, OR-combined server-side (one round-trip). Each MAC becomes a sibling list-key entry under `<fdb>` (Nokia) or `<vsi-dynamic-macs>` (Huawei). Any separator style accepted (`aabbccddeeff`, `aa:bb:..`, `aa-bb-..`, `aabb.ccdd.eeff`) — each entry is normalised to the vendor's canonical form internally. `[]` is equivalent to `None`. |
+| `ports` | **client** | List of substring patterns, OR-combined. An entry matches if any pattern appears (case-insensitive) in `MacEntry.interface`. |
 | `entry_type` | **client** | `"STATIC"` or `"DYNAMIC"` (exact). |
 | `learned_via` | **client** | `"sap"` or `"pw"` (exact) — restricts to MACs learned on a local SAP/AC vs. over a remote PW. Maps to `MacEntry.source_type`. |
 | `include_standby` | **client** | Huawei-only. When `False` (default), `pw-role=slave` FDB records (the blocked half of an H-VPLS PW-redundancy pair) are filtered out so the table reflects only paths that actually carry traffic. Set `True` for failover debugging. No effect on Nokia (its FDB already exposes only the active sdp-bind). |
 | `enrich_remote_system` | **client** | Nokia-only. When `True` (default), after parsing the FDB the client issues one extra brief query against `/state/service/sdp` and stamps `MacEntry.remote_system` on every PW row by joining the parsed `sdp-id` (left half of `sdp-bind`) with the SDP's `oper-tunnel-far-end-inet-address`. Set `False` to skip the extra round-trip. No effect on Huawei (`peer-ip` is already inline on every FDB record there). |
 
-When `service_name is None and mac is None` the device returns the entire FDB —
+When `service_name is None and not macs` the device returns the entire FDB —
 on big boxes that can be tens of MB and tens of seconds. A WARNING is logged in
 that case. See [`benchmark_results.md`](../../examples/benchmark_results.md).
 
@@ -435,9 +435,9 @@ Concrete numbers from `ROUTER_BSC`, service
 
 ```python
 ServicesClient.get_arp_table(
-    vprn_name: str | None = None,
-    ip: str | None = None,
-    mac: str | None = None,
+    vprn_names: list[str] | None = None,
+    ips: list[str] | None = None,
+    macs: list[str] | None = None,
     interface: str | None = None,
     origin: str | None = None,
 ) -> List[Neighbor]
@@ -445,11 +445,17 @@ ServicesClient.get_arp_table(
 
 | Parameter | Side | Description |
 |-----------|------|-------------|
-| `vprn_name` | **server** | Routing-instance name. Canonical value `"Base"` for the global routing table on both vendors. Nokia: `"Base"` selects the base router; any other name → that VPRN service name. Huawei: a `vpn-instance` name; `None` = global routing table (Huawei's `/arp/query-entries` is a global subtree). |
-| `ip` | **server** | IPv4 address (YANG list key). |
-| `mac` | **client** | Substring match on `link_layer_address`. |
-| `interface` | **client** | Substring match on `interface`. |
-| `origin` | **client** | `"STATIC"`, `"DYNAMIC"`, or `"OTHER"`. |
+| `vprn_names` | **server** | List of routing-instance names. Canonical value `"Base"` for the global routing table on both vendors. Nokia: a single `"Base"` selects the base router; any other name(s) → VPRN service names — note that Nokia cannot mix `"Base"` with named VPRNs in one RPC (hard YANG split). Huawei: `vpn-instance` names; `None` / `[]` = global routing table (Huawei's `/arp/query-entries` is a global subtree). Empty list is equivalent to `None`. |
+| `ips` | **server** | List of IPv4 addresses (YANG list key). Expanded into sibling `<neighbor>` (Nokia) / `<query-entry>` (Huawei) elements. |
+| `macs` | **mixed** | List of MACs (any separator style accepted, normalised internally). Nokia: **server-side** via content-match on `<mac-address>`. Huawei: **client-side** — server rejects MAC content-match (`This operation is not supported`), pynetcom filters after parse. |
+| `interface` | client | Substring match on `Neighbor.interface`. |
+| `origin` | client | `"STATIC"`, `"DYNAMIC"`, or `"OTHER"`. |
+
+Batch (list-input) semantics — verified live 24-26 May 2026, ground-truth XML
+in `network_entries/examples/probe_artifacts/arp_multi_*` and
+`arp_mac_filter/`. One round-trip suffices for any combination of
+`(vprn_names × ips × macs)` — collapses former N-way sequential walks into a
+single RPC.
 
 ### Output: `Neighbor`
 
@@ -496,13 +502,13 @@ issue the request via a non-pynetcom transport). Every builder exposes
 | `NokiaServiceRPCRequest` | `/state/service/vpls` | `service_name`, `brief`, `include_fdb` |
 | `NokiaEpipeRPCRequest` | `/state/service/epipe` | `service_name`, `brief` |
 | `NokiaSdpRPCRequest` | `/state/service/sdp` | `sdp_id`, `brief` |
-| `NokiaFdbRPCRequest` | `/state/service/vpls/<n>/fdb/mac` | `service_name`, `mac_address` |
-| `NokiaArpRPCRequest` | `/state/router/<n>/interface/.../neighbor-discovery/neighbor` or VPRN variant | `router_name`, `vprn_service_name`, `interface_name`, `ipv4_address` |
+| `NokiaFdbRPCRequest` | `/state/service/vpls/<n>/fdb/mac` | `service_name`, `mac_addresses: list[str]` |
+| `NokiaArpRPCRequest` | `/state/router/<n>/interface/.../neighbor-discovery/neighbor` or VPRN variant | `router_name`, `vprn_service_names: list[str]`, `interface_name`, `ipv4_addresses: list[str]`, `mac_addresses: list[str]` |
 | `NokiaVprnRPCRequest` | `/state/service/vprn` | `service_name` |
 | `NokiaL3InterfaceRPCRequest` | `/state/router/<n>/interface` or `/state/service/vprn/<n>/interface` | `router_name`, `vprn_service_name`, `interface_name` |
 | `HuaweiL2vpnRPCRequest` | `/l2vpn/instances/instance` | `name` |
-| `HuaweiMacRPCRequest` | `/mac/vsi-dynamic-macs/vsi-dynamic-mac` (+ static/blackhole) | `vsi_name`, `mac_address`, `include_static` |
-| `HuaweiArpRPCRequest` | `/arp/query-entries/query-entry` | `vpn_instance`, `ip_address` |
+| `HuaweiMacRPCRequest` | `/mac/vsi-dynamic-macs/vsi-dynamic-mac` (+ static/blackhole) | `vsi_name`, `mac_addresses: list[str]`, `include_static` |
+| `HuaweiArpRPCRequest` | `/arp/query-entries/query-entry` | `vpn_instances: list[str]`, `ip_addresses: list[str]` (Cartesian-product expanded) |
 | `HuaweiL3vpnRPCRequest` | `/network-instance/instances/instance` | `name` |
 | `HuaweiL3InterfaceRPCRequest` | `/ifm/interfaces/interface` | `interface_name` |
 
@@ -597,7 +603,7 @@ automatically when `enrich_remote_system=True`.
 | `get_l3vpn_services` | `name` (= `service-name` / `instance/name`) | — |
 | `get_l3_interfaces` | `vprn_name` (Nokia — server; Huawei — client) | — |
 | `get_mac_table` | `service_name`, `mac` | `port` (substring), `entry_type`, `learned_via` |
-| `get_arp_table` | `vprn_name` (Nokia: router-instance / VPRN service name; Huawei: `ni-name`), `ip` | `mac` (substring), `interface` (substring), `origin` |
+| `get_arp_table` | `vprn_names: list[str]`, `ips: list[str]`, `macs: list[str]` (Nokia only — server-side content-match) | `macs` (Huawei — client-side), `interface` (substring), `origin` |
 
 ---
 
@@ -620,9 +626,9 @@ it — it's a method parameter — but it does not reduce what the device ships)
 | `get_mac_table` | `port` | client | both | substring, case-insensitive | matched on `MacEntry.interface` |
 | `get_mac_table` | `entry_type` | client | both | exact | `STATIC` / `DYNAMIC` |
 | `get_mac_table` | `learned_via` | client | both | exact | `sap` / `pw` → `MacEntry.source_type` |
-| `get_arp_table` | `vprn_name` | server | both | exact | Nokia: `Base` or VPRN name; Huawei: `ni-name` |
-| `get_arp_table` | `ip` | server | both | exact (YANG key) | IPv4 address |
-| `get_arp_table` | `mac` | client | both | substring | any separator style accepted |
+| `get_arp_table` | `vprn_names` | server | both | exact, list | Nokia: `["Base"]` (alone) or any number of VPRN names; Huawei: `ni-name` list. Nokia can NOT mix `"Base"` with named VPRNs in one RPC. |
+| `get_arp_table` | `ips` | server | both | exact, list (YANG key) | Each IP becomes a sibling list element; OR-combined. |
+| `get_arp_table` | `macs` | server (Nokia) / client (Huawei) | both | exact, list | Nokia: content-match `<mac-address>`; Huawei: post-filter (server rejects `<mac-addr>` content-match). Any separator style accepted. |
 | `get_arp_table` | `interface` | client | both | substring | matched on `Neighbor.interface` |
 | `get_arp_table` | `origin` | client | both | exact | `STATIC` / `DYNAMIC` / `OTHER` |
 

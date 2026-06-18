@@ -1,0 +1,7 @@
+<mac xmlns="urn:huawei:yang:huawei-mac">
+  <vsi-dynamic-macs>
+    <vsi-dynamic-mac>
+      <address>0211-0101-4cd0</address>
+    </vsi-dynamic-mac>
+  </vsi-dynamic-macs>
+</mac>

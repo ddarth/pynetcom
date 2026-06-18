@@ -1,0 +1,8 @@
+<arp xmlns="urn:huawei:yang:huawei-arp">
+  <query-entries>
+    <query-entry>
+      <ni-name>VPRN_EXAMPLE_2</ni-name>
+      <mac-addr>0211-00e1-a478</mac-addr>
+    </query-entry>
+  </query-entries>
+</arp>

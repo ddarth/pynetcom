@@ -142,8 +142,8 @@ detail = sc.get_l2vpn_services(name="VPLS-100")[0]
 # MAC table scoped to one service (server-side YANG-key narrowing)
 macs = sc.get_mac_table(service_name="VPLS-100")
 
-# ARP table for a VRF (server-side narrowing)
-arps = sc.get_arp_table(vprn_name="VPRN-200")
+# ARP table for one or more VRFs (server-side narrowing, batched)
+arps = sc.get_arp_table(vprn_names=["VPRN-200"])
 
 nc.close()
 ```

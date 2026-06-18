@@ -32,8 +32,8 @@ Typical usage::
     for svc in sc.get_l2vpn_services():
         print(svc.name, svc.oper_status, len(svc.saps()), "SAPs")
 
-    macs = sc.get_mac_table(service_name="VPLS-100", port="1/1/1")
-    arps = sc.get_arp_table(vprn_name="VPRN-200")
+    macs = sc.get_mac_table(service_name="VPLS-100", ports=["1/1/1"])
+    arps = sc.get_arp_table(vprn_names=["VPRN-200"])
 """
 
 from __future__ import annotations
@@ -779,28 +779,39 @@ class ServicesClient:
     def get_mac_table(
         self,
         service_name: Optional[str] = None,
-        mac: Optional[str] = None,
-        port: Optional[str] = None,
+        macs: Optional[List[str]] = None,
+        ports: Optional[List[str]] = None,
         entry_type: Optional[str] = None,
         learned_via: Optional[str] = None,
         include_standby: bool = False,
         enrich_remote_system: bool = True,
     ) -> List[MacEntry]:
-        """Return MAC table entries with optional filtering.
+        """Return MAC table entries with optional batch filtering.
 
         Parameters
         ----------
-        service_name, mac:
-            Server-side filters (YANG list keys: VPLS/VSI name, MAC address).
-            Combine for the cheapest possible query. ``mac`` may be supplied
-            in any common separator form (``aabbccddeeff``, ``aa:bb:..``,
-            ``aa-bb-..``, ``aabb.ccdd.eeff``) — the library normalises it to
-            the vendor's expected canonical form before building the filter.
-        port, entry_type, learned_via:
+        service_name:
+            Server-side filter — single VPLS / VSI name (YANG list key on
+            both vendors). Multi-service fan-out is a higher-level concern
+            and not handled here.
+        macs:
+            Server-side batch filter — list of MAC addresses. Each MAC is
+            embedded into the request as a separate list-key sibling, so
+            the device returns the union "any of these MACs" in one
+            round-trip (verified live 26-28 May 2026, ground-truth XML in
+            ``examples/xml/{Nokia 7250,Huawei}/services/get_fdb_*``).
+            Accepts any common separator style
+            (``aabbccddeeff`` / ``aa:bb:..`` / ``aa-bb-..`` /
+            ``aabb.ccdd.eeff``); each entry is normalised to the vendor's
+            canonical form before the request is built. Pass ``None`` or
+            ``[]`` for a full FDB dump of the scoped service.
+        ports, entry_type, learned_via:
             Client-side filters applied after parsing.
 
-            * ``port`` matches against :attr:`MacEntry.interface`
-              (case-insensitive substring).
+            * ``ports`` — list of substrings, OR-combined. An entry matches
+              if any substring appears (case-insensitive) in
+              :attr:`MacEntry.interface`. Useful e.g. for
+              ``["1/1/1", "1/1/2"]`` against ``"1/1/1:100"``.
             * ``entry_type`` is one of ``"STATIC"`` / ``"DYNAMIC"`` —
               exact match.
             * ``learned_via`` is one of ``"sap"`` / ``"pw"`` — restricts to
@@ -840,15 +851,17 @@ class ServicesClient:
         ``remote_system`` to skip the brute-force PE walk when locating a
         MAC's true origin in a meshed VPLS topology.
         """
-        if service_name is None and mac is None:
+        if service_name is None and not macs:
             self.log.warning(
                 "ServicesClient.get_mac_table called without service_name or "
-                "mac — this will pull the entire FDB; consider narrowing on "
+                "macs — this will pull the entire FDB; consider narrowing on "
                 "large devices."
             )
 
         if self.vendor == "nokia":
-            req = NokiaFdbRPCRequest(service_name=service_name, mac_address=mac)
+            req = NokiaFdbRPCRequest(
+                service_name=service_name, mac_addresses=macs,
+            )
             resp = self.nc.get(req.get_request_filter())
             entries: List[MacEntry] = list(
                 nokia.parse_fdb_response(resp, service_name=service_name)
@@ -856,14 +869,16 @@ class ServicesClient:
             if enrich_remote_system:
                 self._enrich_nokia_pw_remote(entries)
         else:
-            req = HuaweiMacRPCRequest(vsi_name=service_name, mac_address=mac)
+            req = HuaweiMacRPCRequest(
+                vsi_name=service_name, mac_addresses=macs, include_static=False,
+            )
             resp = self.nc.get(req.get_request_filter())
             entries = list(huawei.parse_mac_response(
                 resp, include_standby=include_standby,
             ))
 
         return self._post_filter_macs(
-            entries, port=port, entry_type=entry_type, learned_via=learned_via,
+            entries, ports=ports, entry_type=entry_type, learned_via=learned_via,
         )
 
     def _enrich_nokia_pw_remote(self, entries: List[MacEntry]) -> None:
@@ -904,12 +919,18 @@ class ServicesClient:
         self,
         entries: List[MacEntry],
         *,
-        port: Optional[str],
+        ports: Optional[List[str]],
         entry_type: Optional[str],
         learned_via: Optional[str],
     ) -> List[MacEntry]:
-        """Apply client-side filters using the shared RestNMSDataFilter."""
-        if not (port or entry_type or learned_via):
+        """Apply client-side filters using the shared RestNMSDataFilter.
+
+        ``ports`` is a list of substrings, OR-combined: an entry matches
+        when any of the substrings appears (case-insensitive) in
+        :attr:`MacEntry.interface`. ``entry_type`` and ``learned_via``
+        stay single-value exact-match filters.
+        """
+        if not (ports or entry_type or learned_via):
             return entries
 
         flt = RestNMSDataFilter()
@@ -927,75 +948,151 @@ class ServicesClient:
                 )
             entries = [e for e in entries if e.source_type == want]
 
-        if not port:
+        if not ports:
             return flt.apply(entries)
 
         # RestNMSDataFilter does exact case-insensitive matching; the operator
         # usually thinks "by port" as a substring match (e.g. "1/1/1" against
-        # "1/1/1:100"). Implement that as a thin manual pass so we don't
-        # invent new wildcard syntax on RestNMSDataFilter.
-        port_l = port.lower()
+        # "1/1/1:100"). With a list of ports we OR-combine substring matches.
+        ports_lower = [p.lower() for p in ports if p]
         type_filtered = flt.apply(entries)
-        return [e for e in type_filtered if e.interface and port_l in e.interface.lower()]
+        if not ports_lower:
+            return type_filtered
+        return [
+            e for e in type_filtered
+            if e.interface
+            and any(p_l in e.interface.lower() for p_l in ports_lower)
+        ]
 
     # -------------------- ARP / Neighbor -------------------- #
     def get_arp_table(
         self,
-        vprn_name: Optional[str] = None,
-        ip: Optional[str] = None,
-        mac: Optional[str] = None,
+        vprn_names: Optional[List[str]] = None,
+        ips: Optional[List[str]] = None,
+        macs: Optional[List[str]] = None,
         interface: Optional[str] = None,
         origin: Optional[str] = None,
     ) -> List[Neighbor]:
-        """Return ARP / neighbor entries with optional filtering.
+        """Return ARP / neighbor entries with optional batch filtering.
 
         Parameters
         ----------
-        vprn_name:
-            Routing-instance name. Canonical value ``"Base"`` for the global
+        vprn_names:
+            Routing-instance names. Canonical value ``"Base"`` for the global
             routing table on both vendors. On Nokia, ``"Base"`` selects the
             base router; any other name → a VPRN service name (L3VPN). On
-            Huawei this is the ``vpn-instance`` name; pass ``None`` for the
-            global routing table (Huawei does NOT need an explicit ``"Base"``
-            value — its ``/arp/query-entries`` is a global subtree).
-        ip:
-            Server-side filter on the IPv4 list key.
-        mac, interface, origin:
+            Huawei these are ``vpn-instance`` names; pass ``None`` / ``[]``
+            for the global routing table (Huawei does NOT need an explicit
+            ``"Base"`` value — its ``/arp/query-entries`` is a global
+            subtree).
+
+            Mixing ``"Base"`` with named VPRNs on Nokia in a single call is
+            NOT supported — the YANG split between ``/state/router`` and
+            ``/state/service/vprn`` is hard. Callers wanting both must
+            either invoke twice or pass only named VPRNs (then Base entries
+            won't show). On Huawei this is moot — a single global subtree
+            covers everything.
+        ips:
+            Server-side filter — exact IPv4 list-key matches; expanded into
+            one ``<neighbor>`` (Nokia) or one ``<query-entry>`` per IP
+            (Huawei).
+        macs:
+            * Nokia — server-side: content-match expanded into sibling
+              ``<neighbor><mac-address>`` elements (OR-combined). Saves
+              round-trips for "give me ARP of these N MACs".
+            * Huawei — client-side: server returns
+              ``RPCError: This operation is not supported`` on
+              ``<mac-addr>`` content-match (verified by probe). pynetcom
+              normalises the MACs and filters the parser output.
+        interface, origin:
             Client-side filters. ``origin`` is one of ``"STATIC"`` /
             ``"DYNAMIC"`` / ``"OTHER"``.
+
+        Empty list (``[]``) is treated identically to ``None`` — full
+        unscoped query.
         """
+        # Coerce empty list → None for symmetry.
+        vprn_names = vprn_names or None
+        ips = ips or None
+        macs = macs or None
+
         if self.vendor == "nokia":
-            if vprn_name and vprn_name not in ("Base", "base"):
-                # vprn_name on Nokia is a VPRN service name when it's not the
-                # base router. The RPC builder will route the request under
-                # /service/vprn/<name>/arp accordingly.
-                req = NokiaArpRPCRequest(vprn_service_name=vprn_name, ipv4_address=ip)
-                scoped_vprn_name = vprn_name
+            # Nokia: hard split between /state/router and /state/service/vprn.
+            # If the caller passes ["Base"] (or just "Base" as the only entry)
+            # → go via the <router> branch; otherwise → the <vprn> branch.
+            base_only = (
+                vprn_names is not None
+                and len(vprn_names) == 1
+                and (vprn_names[0] in ("Base", "base"))
+            )
+            if vprn_names and not base_only:
+                # Drop any "Base" sentinel — it can't ride alongside named
+                # VPRNs in the same RPC. Documented above.
+                vprn_filtered = [v for v in vprn_names if v not in ("Base", "base")]
+                req = NokiaArpRPCRequest(
+                    vprn_service_names=vprn_filtered,
+                    ipv4_addresses=ips,
+                    mac_addresses=macs,
+                )
+                # Fallback vprn_name for parser when YANG list-key is absent
+                # (rare). With multi-VPRN request the parser uses the
+                # per-entry <service-name>; this is just the default.
+                scoped_vprn_name = vprn_filtered[0] if vprn_filtered else "Base"
             else:
-                req = NokiaArpRPCRequest(router_name=vprn_name or "Base", ipv4_address=ip)
-                scoped_vprn_name = vprn_name or "Base"
+                # Base router or unscoped global query.
+                router_name = "Base"
+                if vprn_names and base_only:
+                    router_name = vprn_names[0]  # "Base" / "base"
+                req = NokiaArpRPCRequest(
+                    router_name=router_name,
+                    vprn_service_names=None,
+                    ipv4_addresses=ips,
+                    mac_addresses=macs,
+                )
+                scoped_vprn_name = router_name
             resp = self.nc.get(req.get_request_filter())
             neighbors: List[Neighbor] = list(
                 nokia.parse_arp_response(resp, vprn_name=scoped_vprn_name)
             )
+            # MAC was filtered server-side — no client-side post-pass.
         else:
-            req = HuaweiArpRPCRequest(vpn_instance=vprn_name, ip_address=ip)
+            # Huawei: <vpn-instances> × <ip-addresses> Cartesian product
+            # batch. MAC content-match not supported → client-side filter.
+            req = HuaweiArpRPCRequest(vpn_instances=vprn_names, ip_addresses=ips)
             resp = self.nc.get(req.get_request_filter())
             neighbors = list(huawei.parse_arp_response(resp))
+            if macs:
+                # Both sides normalised to colon-form via normalize_mac
+                # (Nokia canonical). Parser already stores
+                # Neighbor.link_layer_address in colon-form via
+                # huawei._normalise_mac, so comparison is straight equality
+                # on the canonical view.
+                wanted: set[str] = set()
+                for m in macs:
+                    try:
+                        wanted.add(normalize_mac(m, "nokia"))
+                    except ValueError:
+                        # Malformed input — skip silently rather than
+                        # blowing up the whole call; the empty-match path
+                        # below will simply not match it.
+                        continue
+                neighbors = [
+                    n for n in neighbors
+                    if n.link_layer_address and n.link_layer_address in wanted
+                ]
 
         return self._post_filter_neighbors(
-            neighbors, mac=mac, interface=interface, origin=origin
+            neighbors, interface=interface, origin=origin
         )
 
     def _post_filter_neighbors(
         self,
         neighbors: List[Neighbor],
         *,
-        mac: Optional[str],
         interface: Optional[str],
         origin: Optional[str],
     ) -> List[Neighbor]:
-        if not (mac or interface or origin):
+        if not (interface or origin):
             return neighbors
 
         flt = RestNMSDataFilter()
@@ -1003,19 +1100,6 @@ class ServicesClient:
             flt.include(origin=[origin.upper()])
         filtered = flt.apply(neighbors)
 
-        if mac:
-            # Normalise the user-supplied MAC to the colon form used by every
-            # parser when storing :attr:`Neighbor.link_layer_address`. Lets
-            # operators paste any common separator style (Cisco/Huawei dot,
-            # hyphen, no-sep, etc.) and still get a substring hit.
-            try:
-                mac_l = normalize_mac(mac, "nokia")
-            except ValueError:
-                mac_l = mac.lower()
-            filtered = [
-                n for n in filtered
-                if n.link_layer_address and mac_l in n.link_layer_address.lower()
-            ]
         if interface:
             if_l = interface.lower()
             filtered = [
@@ -1056,6 +1140,14 @@ class ServicesClient:
             enrichment now (configure/router/Base/interface/vpls).
 
         Returns ``None`` if the IP is not in ARP on any candidate VRF.
+
+        The returned dict may carry ``mac=None`` when the ARP entry exists
+        but the MAC is not yet resolved (incomplete entry — downstream did
+        not answer the ARP request, e.g. port oper-down or silent host).
+        ``vprn_name``, ``l3_interface`` and ``l2_service`` are still filled
+        in this case. The caller is responsible for distinguishing this
+        intermediate ARP-state-machine state from a true "no ARP entry"
+        result (the latter is the ``None`` return).
         """
         candidates = vprn_name_candidates
         if candidates is None:
@@ -1069,7 +1161,9 @@ class ServicesClient:
         arp_hit = None
         matched_vprn_name = None
         for vprn_name in candidates:
-            arps = self.get_arp_table(vprn_name=vprn_name, ip=ip)
+            # vprn_name may be None for Huawei global / "Base" for Nokia base.
+            vprn_list = [vprn_name] if vprn_name is not None else None
+            arps = self.get_arp_table(vprn_names=vprn_list, ips=[ip])
             if arps:
                 arp_hit = arps[0]
                 matched_vprn_name = vprn_name

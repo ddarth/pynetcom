@@ -1,0 +1,10 @@
+<mac xmlns="urn:huawei:yang:huawei-mac">
+  <vsi-dynamic-macs>
+    <vsi-dynamic-mac>
+      <vsi-name>VPLS_EXAMPLE_4</vsi-name>
+    </vsi-dynamic-mac>
+    <vsi-dynamic-mac>
+      <vsi-name>VPLS_EXAMPLE_3</vsi-name>
+    </vsi-dynamic-mac>
+  </vsi-dynamic-macs>
+</mac>

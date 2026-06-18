@@ -1,0 +1,16 @@
+<state xmlns="urn:nokia.com:sros:ns:yang:sr:state">
+  <service>
+    <vpls>
+      <service-name>VPLS_EXAMPLE_1</service-name>
+      <fdb>
+        <mac/>
+      </fdb>
+    </vpls>
+    <vpls>
+      <service-name>VPLS_EXAMPLE_2</service-name>
+      <fdb>
+        <mac/>
+      </fdb>
+    </vpls>
+  </service>
+</state>

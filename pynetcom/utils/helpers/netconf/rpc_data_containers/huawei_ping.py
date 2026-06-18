@@ -7,8 +7,7 @@ state-пути ``/diagnostic-tools/ipv4/ping-results/ping-result``. Этот м�
 парсит state-ответ (один polled snapshot), не сам action и не действие
 удаления.
 
-Wire-формат (probe 24 мая 2026, артефакты
-``network_entries/examples/probe_artifacts/v2_20260524_102647/``):
+Wire-формат (probe 24 мая 2026 на боевом Huawei-роутере):
 
 * ``rtt`` / ``rtt-min`` / ``rtt-max`` / ``average-rtt`` приходят в
   **миллисекундах** как целые. Возвращаем как есть (без деления).

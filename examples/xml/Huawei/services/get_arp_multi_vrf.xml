@@ -1,0 +1,10 @@
+<arp xmlns="urn:huawei:yang:huawei-arp">
+  <query-entries>
+    <query-entry>
+      <ni-name>VPRN_EXAMPLE_2</ni-name>
+    </query-entry>
+    <query-entry>
+      <ni-name>vpn_example</ni-name>
+    </query-entry>
+  </query-entries>
+</arp>

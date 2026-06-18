@@ -127,20 +127,21 @@ def scenario_1_find_mac_by_ip(sc: ServicesClient, ip: str, vprn_candidates: list
     """Q: "I have an IP. What's its MAC, and on which port does the device see it?"
 
     Two library calls, no custom filtering:
-      1. get_arp_table(vprn_name=..., ip=...)  — both params SERVER-SIDE. On
-         Nokia ARP is per-routing-instance, so we try each candidate VRF until
-         we hit one (Huawei returns all VPNs in one query, so a single call
-         suffices — pass vprn_name=None there).
+      1. get_arp_table(vprn_names=[...], ips=[...])  — both params SERVER-SIDE.
+         On Nokia ARP is per-routing-instance, so we try each candidate VRF
+         until we hit one (Huawei returns all VPNs in one query, so a single
+         call suffices — pass vprn_names=None there).
       2. get_mac_table(mac=...)          — mac is SERVER-SIDE. With no
          service_name the device walks every service but returns only rows
          matching this MAC, so the response stays small.
     """
     _banner(f"SCENARIO 1 — find MAC for IP {ip}, then locate it in the FDB")
 
-    # Step 1: locate the IP in ARP. [SERVER-SIDE] vprn_name + ip.
+    # Step 1: locate the IP in ARP. [SERVER-SIDE] vprn_names + ips.
     arp_hit = None
     for vprn_name in vprn_candidates:
-        arps = sc.get_arp_table(vprn_name=vprn_name, ip=ip)
+        vprn_list = [vprn_name] if vprn_name is not None else None
+        arps = sc.get_arp_table(vprn_names=vprn_list, ips=[ip])
         if arps:
             arp_hit = arps[0]
             print(f"ARP: {ip} -> {arp_hit.link_layer_address} "
@@ -151,8 +152,8 @@ def scenario_1_find_mac_by_ip(sc: ServicesClient, ip: str, vprn_candidates: list
         return
     mac = arp_hit.link_layer_address
 
-    # Step 2: find that MAC in the L2 forwarding database. [SERVER-SIDE] mac.
-    macs = sc.get_mac_table(mac=mac)
+    # Step 2: find that MAC in the L2 forwarding database. [SERVER-SIDE] macs.
+    macs = sc.get_mac_table(macs=[mac])
     if not macs:
         print(f"FDB: MAC {mac} is not present in any L2 service "
               f"(host is reachable purely at L3)")
@@ -170,14 +171,14 @@ def scenario_1_find_mac_by_ip(sc: ServicesClient, ip: str, vprn_candidates: list
 def scenario_2_macs_by_port(sc: ServicesClient, port: str):
     """Q: "Show me every MAC the device learned through port X, in any service."
 
-    One call: get_mac_table(port=...).
-      - port is CLIENT-SIDE (substring match on MacEntry.interface).
+    One call: get_mac_table(ports=[...]).
+      - ports is CLIENT-SIDE (substring match on MacEntry.interface, OR-combined).
       - No service_name -> the device returns the whole FDB; the library logs
         a WARNING for that, and the port filter is applied after parsing.
         On a busy box prefer scenario 6 (add service_name to bound it).
     """
     _banner(f"SCENARIO 2 — all MACs learned via port {port} (every service)")
-    macs = sc.get_mac_table(port=port)          # [CLIENT-SIDE] port
+    macs = sc.get_mac_table(ports=[port])       # [CLIENT-SIDE] ports
     print(f"{len(macs)} MAC(s) on port matching {port!r}")
     for m in macs:
         print(f"  {m.mac_address}  service={m.network_instance}  "
@@ -250,15 +251,15 @@ def scenario_6_macs_by_sap(sc: ServicesClient, service_name: str, sap: str):
     """Q: "Which MACs came in on this exact SAP?"
 
     One call combining three filters:
-      get_mac_table(service_name=..., port=<sap-id>, learned_via="sap")
+      get_mac_table(service_name=..., ports=[<sap-id>], learned_via="sap")
       - service_name  SERVER-SIDE — bounds the device-side walk.
-      - port          CLIENT-SIDE — substring match on the SAP id.
+      - ports         CLIENT-SIDE — substring match on the SAP id (OR-combined).
       - learned_via   CLIENT-SIDE — guards against a coincidental substring
                       hit on a PW whose sdp-bind-id happens to contain the
                       same digits.
     """
     _banner(f"SCENARIO 6 — MACs on SAP {sap} of service {service_name}")
-    macs = sc.get_mac_table(service_name=service_name, port=sap, learned_via="sap")
+    macs = sc.get_mac_table(service_name=service_name, ports=[sap], learned_via="sap")
     print(f"{len(macs)} MAC(s) on SAP {sap!r}")
     for m in macs[:10]:
         print(f"  {m.mac_address}  iface={m.interface}")
@@ -270,14 +271,16 @@ def scenario_6_macs_by_sap(sc: ServicesClient, service_name: str, sap: str):
 def scenario_7_ip_by_mac_in_vrf(sc: ServicesClient, mac: str, vprn_name: str):
     """Q: "I have a MAC. What IP does it have inside VRF X?"
 
-    One call: get_arp_table(vprn_name=..., mac=...).
-      - vprn_name is SERVER-SIDE — the device returns only that VRF's ARP
+    One call: get_arp_table(vprn_names=[...], macs=[...]).
+      - vprn_names is SERVER-SIDE — the device returns only that VRF's ARP
         cache.
-      - mac is CLIENT-SIDE — substring match on link_layer_address. Any MAC
-        format is accepted (normalised internally).
+      - macs is SERVER-SIDE on Nokia (content-match expanded into sibling
+        <neighbor><mac-address> elements), CLIENT-SIDE on Huawei (server
+        rejects MAC content-match — pynetcom filters after parse).
+        Any MAC format is accepted (normalised internally).
     """
     _banner(f"SCENARIO 7 — IP for MAC {mac} inside VRF {vprn_name}")
-    neighbors = sc.get_arp_table(vprn_name=vprn_name, mac=mac)
+    neighbors = sc.get_arp_table(vprn_names=[vprn_name], macs=[mac])
     if not neighbors:
         print(f"MAC {mac} has no ARP entry in {vprn_name}")
         return
@@ -296,7 +299,7 @@ def scenario_8_locate_host(sc: ServicesClient, ip: str, vprn_candidates: list[st
     — it is just three library calls composed. This recipe IS the canonical
     composition; copy it verbatim.
 
-      step 1  get_arp_table(vprn_name, ip)    -> MAC                [SERVER-SIDE]
+      step 1  get_arp_table(vprn_names, ips)  -> MAC                [SERVER-SIDE]
       step 2  get_mac_table(mac=...)          -> service + interface[SERVER-SIDE]
       step 3  get_l2vpn_services(name=svc)    -> classify the endpoint as a
               LOCAL (SAP) or REMOTE (PW) connection point             [SERVER-SIDE]
@@ -306,7 +309,8 @@ def scenario_8_locate_host(sc: ServicesClient, ip: str, vprn_candidates: list[st
     # step 1 — IP -> MAC
     arp_hit = None
     for vprn_name in vprn_candidates:
-        hits = sc.get_arp_table(vprn_name=vprn_name, ip=ip)
+        vprn_list = [vprn_name] if vprn_name is not None else None
+        hits = sc.get_arp_table(vprn_names=vprn_list, ips=[ip])
         if hits:
             arp_hit = hits[0]
             break
@@ -318,7 +322,7 @@ def scenario_8_locate_host(sc: ServicesClient, ip: str, vprn_candidates: list[st
           f"L3 iface={arp_hit.interface})")
 
     # step 2 — MAC -> service + L2 interface
-    fdb = sc.get_mac_table(mac=mac)
+    fdb = sc.get_mac_table(macs=[mac])
     if not fdb:
         print(f"  step 2: MAC {mac} not in any L2 FDB — host is L3-only, stop")
         return
@@ -393,7 +397,7 @@ def scenario_10_locate_bs_via_pw_peer(
     the BS on a local SAP, and on which port?"
 
     Cross-router chain WITHOUT brute-force:
-      1. get_arp_table(vprn_name=..., ip=ip)  →  MAC of the BS.
+      1. get_arp_table(vprn_names=[...], ips=[ip])  →  MAC of the BS.
       2. get_mac_table(mac=..., service_name=...)  on the LOCAL PE:
          every PW-learned entry now carries ``remote_system`` (the
          originating PE's system / loopback IP) and ``pw_id`` — server-side
@@ -414,7 +418,8 @@ def scenario_10_locate_bs_via_pw_peer(
     # Step 1: IP → MAC via ARP.
     arp_hit = None
     for vprn_name in vprn_candidates:
-        arps = sc_local.get_arp_table(vprn_name=vprn_name, ip=ip)
+        vprn_list = [vprn_name] if vprn_name is not None else None
+        arps = sc_local.get_arp_table(vprn_names=vprn_list, ips=[ip])
         if arps:
             arp_hit = arps[0]
             print(f"  step 1: ARP  {ip}  ->  {arp_hit.link_layer_address}  "

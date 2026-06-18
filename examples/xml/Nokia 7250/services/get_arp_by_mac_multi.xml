@@ -1,0 +1,23 @@
+<state xmlns="urn:nokia.com:sros:ns:yang:sr:state">
+  <service>
+    <vprn>
+      <service-name>VPRN_EXAMPLE_2</service-name>
+      <interface>
+        <interface-name/>
+        <ipv4>
+          <neighbor-discovery>
+            <neighbor>
+              <mac-address>02:11:00:d4:e7:7d</mac-address>
+            </neighbor>
+            <neighbor>
+              <mac-address>02:11:02:04:64:98</mac-address>
+            </neighbor>
+            <neighbor>
+              <mac-address>02:11:01:b1:9f:05</mac-address>
+            </neighbor>
+          </neighbor-discovery>
+        </ipv4>
+      </interface>
+    </vprn>
+  </service>
+</state>

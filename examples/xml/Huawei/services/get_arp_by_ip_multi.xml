@@ -1,0 +1,1 @@
+<arp xmlns="urn:huawei:yang:huawei-arp">  <query-entries><query-entry><ni-name>VPRN_EXAMPLE_2</ni-name><ip-addr>203.0.113.1</ip-addr></query-entry><query-entry><ni-name>VPRN_EXAMPLE_2</ni-name><ip-addr>203.0.113.2</ip-addr></query-entry><query-entry><ni-name>VPRN_EXAMPLE_2</ni-name><ip-addr>203.0.113.3</ip-addr></query-entry></query-entries></arp>

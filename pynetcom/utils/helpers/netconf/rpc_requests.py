@@ -717,26 +717,51 @@ class NokiaEpipeRPCRequest:
 
 
 class NokiaFdbRPCRequest:
-    """Filter for Nokia VPLS FDB (MAC) table.
+    """Filter for Nokia VPLS FDB (MAC) table — list-input batched.
 
-    YANG: ``/state/service/vpls/<service-name>/fdb/mac``. Service name is
-    a list key so when supplied the request narrows entirely server-side.
-    The ``<mac>`` list is keyed by ``address``; supplying ``mac_address``
-    embeds it as the key and narrows server-side. When neither is supplied
-    the request walks *all* VPLS services on the device — on large platforms
-    this can be slow, so the high-level client warns when neither filter is
-    set.
+    YANG: ``/state/service/vpls[service-name]/fdb/mac[address]`` in
+    ``urn:nokia.com:sros:ns:yang:sr:state``. ``service-name`` is the list
+    key for VPLS and narrows server-side; ``address`` is the list key for
+    ``<mac>`` and likewise narrows server-side.
+
+    Batch (list-input) semantics — verified live on Nokia SR OS, 26-28 May
+    2026, ground-truth XML in ``examples/xml/Nokia 7250/services/``:
+
+      * ``mac_addresses`` non-empty → emit one ``<mac><address>M</address></mac>``
+        sibling per MAC inside the single ``<fdb>``. Sibling list-key
+        elements are OR-combined server-side (RFC 6241 §6.2.2), so the
+        device returns the union of "any of these MACs". Mirrors
+        ``get_fdb_by_mac_multi.xml`` exactly.
+      * ``mac_addresses`` empty / None → single empty ``<mac/>`` (full FDB
+        dump for the scoped VPLS — or for ALL VPLSes if ``service_name``
+        is also None, which the high-level client warns against).
+
+    ``service_name`` stays single in this builder by design (Nokia VPLS
+    list key) — multi-VPLS FDB fan-out is a higher-level concern. MAC
+    normalisation is applied inside the builder via :func:`normalize_mac`
+    (Nokia colon-form); idempotent for any common separator style.
     """
 
-    def __init__(self, service_name: str | None = None, mac_address: str | None = None):
+    def __init__(
+        self,
+        service_name: str | None = None,
+        mac_addresses: list[str] | None = None,
+    ):
         self.service_name = service_name
-        self.mac_address = normalize_mac(mac_address, "nokia") if mac_address else None
+        # Normalise MACs to Nokia colon-form once at build time. Empty list
+        # is treated as None — no per-key filter, single <mac/> placeholder.
+        self.mac_addresses = (
+            [normalize_mac(m, "nokia") for m in mac_addresses]
+            if mac_addresses else None
+        )
 
         name_xml = f"<service-name>{service_name}</service-name>" if service_name else ""
-        mac_xml = (
-            f"<mac><address>{self.mac_address}</address></mac>"
-            if self.mac_address else "<mac/>"
-        )
+        if self.mac_addresses:
+            mac_xml = "".join(
+                f"<mac><address>{m}</address></mac>" for m in self.mac_addresses
+            )
+        else:
+            mac_xml = "<mac/>"
         fdb_xml = f"<fdb>{mac_xml}</fdb>"
         self.request_filter = (
             f'<state xmlns="urn:nokia.com:sros:ns:yang:sr:state">'
@@ -769,23 +794,70 @@ class NokiaArpRPCRequest:
     no ``arp`` container, only ``neighbor-discovery/neighbor``. The list key
     is ``ipv4-address`` so passing it narrows server-side. ``interface-name``
     is also a list key and can be passed to scope to one L3 interface.
+
+    Batch (list-input) semantics — verified live on Nokia SR OS, 24-26 May
+    2026, ground-truth XML in ``examples/xml/Nokia 7250/services/``
+    (``get_arp_by_ip_*.xml``, ``get_arp_by_mac_*.xml``,
+    ``get_arp_multi_vprn*.xml``):
+
+      * ``vprn_service_names`` non-empty → repeat ``<vprn>`` for each VPRN
+        (RFC 6241 §6.2.2: sibling list keys are OR-combined server-side).
+      * ``vprn_service_names`` empty / None → fall back to ``<router>`` with
+        ``router_name``.
+      * ``ipv4_addresses`` and ``mac_addresses`` non-empty → emit one
+        ``<neighbor>`` element per IPv4 address AND one per MAC address
+        inside the same ``<neighbor-discovery>``. The server OR-combines
+        them so the response is the union of "any of these IPs" and "any
+        of these MACs". MAC content-match is supported on Nokia (Huawei
+        does NOT — kept asymmetric in :class:`HuaweiArpRPCRequest`).
+      * Both lists empty → single empty ``<neighbor/>`` (full dump).
+
+    MAC normalisation is applied inside the builder via
+    :func:`normalize_mac` (Nokia colon-form), so the caller does not have
+    to pre-format input. Idempotent: passing canonical MAC is a no-op.
     """
 
     def __init__(
         self,
         router_name: str = "Base",
-        vprn_service_name: str | None = None,
+        vprn_service_names: list[str] | None = None,
         interface_name: str | None = None,
-        ipv4_address: str | None = None,
+        ipv4_addresses: list[str] | None = None,
+        mac_addresses: list[str] | None = None,
     ):
         self.router_name = router_name
-        self.vprn_service_name = vprn_service_name
+        self.vprn_service_names = vprn_service_names or None
         self.interface_name = interface_name
-        self.ipv4_address = ipv4_address
+        self.ipv4_addresses = ipv4_addresses or None
+        # Normalise MACs to Nokia colon-form once at build time. Cheap,
+        # idempotent, lets every caller paste any separator style without
+        # leaking malformed input into the device.
+        self.mac_addresses = (
+            [normalize_mac(m, "nokia") for m in mac_addresses]
+            if mac_addresses else None
+        )
 
         if_keys = f"<interface-name>{interface_name}</interface-name>" if interface_name else "<interface-name/>"
-        ip_xml = f"<ipv4-address>{ipv4_address}</ipv4-address>" if ipv4_address else ""
-        nd_inner = f"<neighbor>{ip_xml}</neighbor>" if ipv4_address else "<neighbor/>"
+
+        # Build the <neighbor> list — one per IPv4, one per MAC. Sibling
+        # <neighbor> elements are OR-combined by the NETCONF server
+        # (content-match semantics, RFC 6241 §6.2.2).
+        neighbor_xml_parts: list[str] = []
+        if self.ipv4_addresses:
+            for ip in self.ipv4_addresses:
+                neighbor_xml_parts.append(
+                    f"<neighbor><ipv4-address>{ip}</ipv4-address></neighbor>"
+                )
+        if self.mac_addresses:
+            for m in self.mac_addresses:
+                neighbor_xml_parts.append(
+                    f"<neighbor><mac-address>{m}</mac-address></neighbor>"
+                )
+        if not neighbor_xml_parts:
+            # Full-table dump path.
+            neighbor_xml_parts.append("<neighbor/>")
+        nd_inner = "".join(neighbor_xml_parts)
+
         if_block = (
             f"<interface>"
             f"  {if_keys}"
@@ -793,14 +865,18 @@ class NokiaArpRPCRequest:
             f"</interface>"
         )
 
-        if vprn_service_name:
+        if self.vprn_service_names:
+            vprn_blocks = "".join(
+                f"<vprn>"
+                f"  <service-name>{name}</service-name>"
+                f"  {if_block}"
+                f"</vprn>"
+                for name in self.vprn_service_names
+            )
             self.request_filter = (
                 f'<state xmlns="urn:nokia.com:sros:ns:yang:sr:state">'
                 f'  <service>'
-                f'    <vprn>'
-                f'      <service-name>{vprn_service_name}</service-name>'
-                f'      {if_block}'
-                f'    </vprn>'
+                f'    {vprn_blocks}'
                 f'  </service>'
                 f'</state>'
             )
@@ -859,7 +935,7 @@ HuaweiVsiRPCRequest = HuaweiL2vpnRPCRequest
 
 
 class HuaweiMacRPCRequest:
-    """Filter for Huawei MAC tables in ``urn:huawei:yang:huawei-mac``.
+    """Filter for Huawei MAC tables in ``urn:huawei:yang:huawei-mac`` — batched.
 
     The MAC table is exposed as three sibling lists keyed by
     (slot-id, vsi-name, vlan-id, address):
@@ -868,35 +944,65 @@ class HuaweiMacRPCRequest:
       * ``/mac/vsi-static-macs/vsi-static-mac`` — operator-configured.
       * ``/mac/vsi-blackhole-macs/vsi-blackhole-mac`` — drop entries.
 
-    This builder by default queries the *dynamic* list (the common case);
-    pass ``include_static=True`` to also pull static + blackhole entries
-    in one round-trip. ``vsi_name`` and ``mac_address`` are list keys and
-    narrow server-side.
+    This builder by default queries only the *dynamic* list (the common
+    case); pass ``include_static=True`` to also pull static + blackhole
+    entries in one round-trip.
+
+    Batch (list-input) semantics — verified live on Huawei VRP, 26-28 May
+    2026, ground-truth XML in ``examples/xml/Huawei/services/``:
+
+      * ``mac_addresses`` non-empty → emit one
+        ``<vsi-dynamic-mac>``-block per MAC, each carrying the supplied
+        ``<vsi-name>`` (if any) AND ``<address>`` as list keys. Sibling
+        blocks are OR-combined server-side. Mirrors
+        ``get_fdb_by_mac_multi.xml`` (no ``vsi_name``) and
+        ``get_fdb_cartesian.xml`` (with ``vsi_name``) exactly.
+      * ``mac_addresses`` empty / None + ``vsi_name`` set → single
+        ``<vsi-dynamic-mac><vsi-name>X</vsi-name></vsi-dynamic-mac>``
+        (full FDB of the scoped VSI). Mirrors ``get_fdb_multi_vsi.xml``
+        shape with one VSI.
+      * Both ``vsi_name`` and ``mac_addresses`` empty / None → single
+        empty ``<vsi-dynamic-mac/>`` (full MAC table dump — slow, the
+        high-level client warns).
+
+    ``vsi_name`` stays single in this builder (Huawei VSI list key);
+    multi-VSI fan-out is a higher-level concern. MAC normalisation is
+    applied inside the builder via :func:`normalize_mac` (Huawei dash-quad
+    form); idempotent for any common separator style.
     """
 
     def __init__(
         self,
         vsi_name: str | None = None,
-        mac_address: str | None = None,
+        mac_addresses: list[str] | None = None,
         include_static: bool = False,
     ):
         self.vsi_name = vsi_name
-        self.mac_address = normalize_mac(mac_address, "huawei") if mac_address else None
+        self.mac_addresses = (
+            [normalize_mac(m, "huawei") for m in mac_addresses]
+            if mac_addresses else None
+        )
         self.include_static = include_static
 
-        parts = []
-        if vsi_name:
-            parts.append(f"<vsi-name>{vsi_name}</vsi-name>")
-        if self.mac_address:
-            parts.append(f"<address>{self.mac_address}</address>")
-        keys = "".join(parts)
+        vsi_key = f"<vsi-name>{vsi_name}</vsi-name>" if vsi_name else ""
 
-        lists = [f"<vsi-dynamic-macs><vsi-dynamic-mac>{keys}</vsi-dynamic-mac></vsi-dynamic-macs>"]
+        def _block(list_outer: str, list_inner: str) -> str:
+            if self.mac_addresses:
+                inner = "".join(
+                    f"<{list_inner}>{vsi_key}<address>{m}</address></{list_inner}>"
+                    for m in self.mac_addresses
+                )
+            elif vsi_key:
+                inner = f"<{list_inner}>{vsi_key}</{list_inner}>"
+            else:
+                # Self-closing empty element — full-dump path.
+                inner = f"<{list_inner}/>"
+            return f"<{list_outer}>{inner}</{list_outer}>"
+
+        lists = [_block("vsi-dynamic-macs", "vsi-dynamic-mac")]
         if include_static:
-            lists.append(f"<vsi-static-macs><vsi-static-mac>{keys}</vsi-static-mac></vsi-static-macs>")
-            lists.append(
-                f"<vsi-blackhole-macs><vsi-blackhole-mac>{keys}</vsi-blackhole-mac></vsi-blackhole-macs>"
-            )
+            lists.append(_block("vsi-static-macs", "vsi-static-mac"))
+            lists.append(_block("vsi-blackhole-macs", "vsi-blackhole-mac"))
 
         self.request_filter = (
             f'<mac xmlns="urn:huawei:yang:huawei-mac">' + "".join(lists) + "</mac>"
@@ -912,26 +1018,71 @@ class HuaweiArpRPCRequest:
     YANG: ``/arp/query-entries/query-entry`` in
     ``urn:huawei:yang:huawei-arp``. Filter keys:
 
-      * ``vpn_instance`` → ``ni-name`` (VPN/VRF). Pass an empty string to
-        match only entries with an empty ``ni-name`` (rare).
-      * ``ip_address`` → ``ip-addr`` (list key — exact IP).
+      * ``vpn_instances`` → ``ni-name`` (VPN/VRF list).
+      * ``ip_addresses`` → ``ip-addr`` (list key — exact IPv4).
+
+    Batch (list-input) semantics — verified live on Huawei VRP, 24-26 May
+    2026, ground-truth XML in ``examples/xml/Huawei/services/``
+    (``get_arp_by_ip_*.xml``, ``get_arp_multi_vrf*.xml``):
+
+      * ``vpn_instances`` × ``ip_addresses`` → emit one ``<query-entry>``
+        per ``(ni-name, ip-addr)`` Cartesian product (verified empirically:
+        sibling ``<query-entry>`` blocks are OR-combined). This is the
+        only batch shape Huawei accepts on this list — a single
+        ``<query-entry>`` with multiple ``<ip-addr>`` children returns
+        ``RPCError: This operation is not supported``.
+      * ``ip_addresses`` only → one ``<query-entry>`` per IP (no VRF
+        constraint).
+      * ``vpn_instances`` only → one ``<query-entry>`` per VRF (no IP
+        constraint).
+      * Both ``None`` / empty → a single empty ``<query-entry/>`` (global
+        full dump).
+
+    MAC content-match: NOT supported by Huawei on this list — verified by
+    probe ``arp_mac_filter/13_huawei_multi_mac_request.xml``, server replies
+    ``RPCError: This operation is not supported``. Callers wanting MAC
+    filtering on Huawei must apply it client-side (see
+    :meth:`ServicesClient.get_arp_table`).
     """
 
-    def __init__(self, vpn_instance: str | None = None, ip_address: str | None = None):
-        self.vpn_instance = vpn_instance
-        self.ip_address = ip_address
+    def __init__(
+        self,
+        vpn_instances: list[str] | None = None,
+        ip_addresses: list[str] | None = None,
+    ):
+        self.vpn_instances = vpn_instances or None
+        self.ip_addresses = ip_addresses or None
 
-        parts = []
-        if vpn_instance is not None:
-            parts.append(f"<ni-name>{vpn_instance}</ni-name>")
-        if ip_address:
-            parts.append(f"<ip-addr>{ip_address}</ip-addr>")
-        inner = "".join(parts)
+        # Build the <query-entry> list.
+        entries: list[str] = []
+        if self.vpn_instances and self.ip_addresses:
+            # Cartesian product — only batch shape Huawei accepts here.
+            for vpn in self.vpn_instances:
+                for ip in self.ip_addresses:
+                    entries.append(
+                        f"<query-entry>"
+                        f"<ni-name>{vpn}</ni-name>"
+                        f"<ip-addr>{ip}</ip-addr>"
+                        f"</query-entry>"
+                    )
+        elif self.vpn_instances:
+            for vpn in self.vpn_instances:
+                entries.append(
+                    f"<query-entry><ni-name>{vpn}</ni-name></query-entry>"
+                )
+        elif self.ip_addresses:
+            for ip in self.ip_addresses:
+                entries.append(
+                    f"<query-entry><ip-addr>{ip}</ip-addr></query-entry>"
+                )
+        else:
+            # Global full dump.
+            entries.append("<query-entry/>")
 
         self.request_filter = (
             f'<arp xmlns="urn:huawei:yang:huawei-arp">'
             f'  <query-entries>'
-            f'    <query-entry>{inner}</query-entry>'
+            f'    {"".join(entries)}'
             f'  </query-entries>'
             f'</arp>'
         )
@@ -1485,9 +1636,9 @@ class HuaweiVeGroupRPCRequest:
 # =========================================================================
 # Diagnostic actions: ping / traceroute
 # =========================================================================
-# Wire-форматы зафиксированы live-probe'ом на боевых роутерах 24 мая 2026,
-# артефакты в network_entries/examples/probe_artifacts/. Не переписывать по
-# памяти, не "поправить под удобный" YANG-порядок — устройство отклонит.
+# Wire-форматы зафиксированы live-probe'ом на боевых роутерах 24 мая 2026.
+# Не переписывать по памяти, не "поправить под удобный" YANG-порядок —
+# устройство отклонит.
 #
 # Все классы возвращают XML-фрагмент через get_request_filter() — точно так
 # же как остальные *RPCRequest. Для action-RPC фрагмент это уже готовый

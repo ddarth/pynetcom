@@ -1,0 +1,26 @@
+<state xmlns="urn:nokia.com:sros:ns:yang:sr:state">
+  <service>
+    <vprn>
+      <service-name>VPRN_EXAMPLE_2</service-name>
+      <interface>
+        <interface-name/>
+        <ipv4>
+          <neighbor-discovery>
+            <neighbor/>
+          </neighbor-discovery>
+        </ipv4>
+      </interface>
+    </vprn>
+    <vprn>
+      <service-name>VPRN_EXAMPLE_1</service-name>
+      <interface>
+        <interface-name/>
+        <ipv4>
+          <neighbor-discovery>
+            <neighbor/>
+          </neighbor-discovery>
+        </ipv4>
+      </interface>
+    </vprn>
+  </service>
+</state>
