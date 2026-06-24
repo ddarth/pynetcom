@@ -12,6 +12,7 @@ from .openconfig import (
     Severity,
     parse_utc_datetime,
 )
+from pynetcom.utils import huawei_router_tools
 
 
 @dataclass
@@ -117,6 +118,31 @@ class HuaweiTransceiverThresholdsList(OpenconfigTransceiverThresholdsList):
 
 @dataclass
 class HuaweiTransceiver(OpenconfigTranseiver):
+    """Huawei VRP transceiver. Field sources:
+
+    * ``devm/ports/port/optical-module`` (huawei-pic NS) — primary source
+      of Huawei-specific fields: ``trans-bw``, ``trans-mode``,
+      ``wavelength``, ``transmission-distance``, ``vendor-pn`` and the
+      measured tx/rx-power.
+    * ``components/component/transceiver/state`` (OpenConfig) — fallback
+      via :meth:`merge_missing_fields_from`. The useful field here is
+      ``ethernet-pmd``: Huawei publishes the decoded identity directly,
+      so we never see raw EEPROM bytes.
+
+    ``ethernet_pmd`` is resolved by the following priority chain:
+
+    1. If ``trans-mode == "copper-mode"`` the module is a copper SFP. We
+       call :func:`huawei_router_tools.copper_pmd_from_bw` (a direct
+       ``trans-bw → EXT_ETH_*BASE_T*`` mapping). This is NOT a heuristic
+       — ``trans-mode`` is an explicit Huawei YANG leaf.
+    2. Otherwise, if the OC namespace gave us a valid ``ETH_*`` identity
+       (not ``ETH_UNDEFINED``), we keep it normalised by
+       ``_normalise_ethernet_pmd`` on the base class.
+    3. Otherwise ``ethernet_pmd`` stays ``None``. We deliberately do not
+       guess by distance or wavelength — the AI consumer receives the raw
+       fields and assesses the type cautiously.
+    """
+
     prefix = ['devm', 'ports', 'port', 'optical-module']
     field_mapping = OpenconfigTranseiver.field_mapping.copy()
     field_mapping.update({
@@ -126,6 +152,8 @@ class HuaweiTransceiver(OpenconfigTranseiver):
         'vendor_pn': ['vendor-pn'],
         'bandwidth': ['trans-bw'],
         'wavelength': ['wavelength'],
+        'transmission_distance': ['transmission-distance'],
+        'trans_mode': ['trans-mode'],
         'input_power': ['rx-power'],
         'output_power': ['tx-power'],
     })
@@ -133,6 +161,8 @@ class HuaweiTransceiver(OpenconfigTranseiver):
     vendor_pn = None
     bandwidth = None
     wavelength = None
+    transmission_distance = None
+    trans_mode = None
     input_power = None
     output_power = None
     ddm = None
@@ -144,16 +174,41 @@ class HuaweiTransceiver(OpenconfigTranseiver):
         # Fallback: merge missing from OpenConfig
         oc = OpenconfigTranseiver(data)
         self.merge_missing_fields_from(oc)
+        # Resolve ethernet_pmd per the priority chain (see class docstring).
+        self._resolve_ethernet_pmd()
         self.ddm = HuaweiDDM(data)
         self.physical_channels = HuaweiPhysicalChannels(data)
         self.thresholds = HuaweiTransceiverThresholdsList(data)
+
+    def _resolve_ethernet_pmd(self) -> None:
+        """Populate ``ethernet_pmd`` per the Huawei rules (see class docstring)."""
+        # 1) An explicit copper-mode marker from the device wins over OC.
+        mode = (self.trans_mode or '').strip().lower() if isinstance(self.trans_mode, str) else ''
+        if mode == 'copper-mode':
+            self.ethernet_pmd = huawei_router_tools.copper_pmd_from_bw(self.bandwidth)
+            return
+        # 2) The base ``OpenconfigTranseiver.__init__`` has already
+        #    normalised OC ``ethernet-pmd`` (namespace prefix stripped,
+        #    ``ETH_UNDEFINED`` → None). Nothing else to do — optical
+        #    modules end up with the precise OC identity or with ``None``
+        #    (the AI consumer then assesses the type from the raw fields).
+        return
+
     def __str__(self):
+        # Copper is identified by the ``BASE_T`` / ``BASE_TX`` substring in
+        # ``ethernet_pmd``; ``form_factor`` now only carries OC-valid
+        # identities (sfp / sfp-plus / qsfp28 / ...).
+        is_copper = isinstance(self.ethernet_pmd, str) and (
+            'BASE_T' in self.ethernet_pmd or 'BASE_TX' in self.ethernet_pmd
+        )
         return (super().__str__() + f"""
-                DDM: {None if self.form_factor == 'copper' else self.ddm}
+                DDM: {None if is_copper else self.ddm}
                 Additional info:
                 VendorPN: {self.vendor_pn},
                 Bandwidth: {self.bandwidth},
                 Wavelength: {self.wavelength},
+                TransmissionDistance: {self.transmission_distance},
+                TransMode: {self.trans_mode},
                 """
                 )
 

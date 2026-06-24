@@ -1,7 +1,35 @@
 """
 This file contains utility functions for parsing Huawei router interface names and converting between short and long interface formats.
-""" 
+"""
 import re
+from typing import Optional
+
+
+def copper_pmd_from_bw(trans_bw) -> Optional[str]:
+    """Map a Huawei ``trans-bw`` value (in Mbit/s) to an ``EXT_ETH_*BASE_T*`` identity.
+
+    This is invoked ONLY when Huawei explicitly marks the module as copper
+    through the ``huawei-pic/optical-module/trans-mode=copper-mode`` leaf,
+    so it is not a speed-based heuristic but a direct mapping from bit rate
+    to the matching BASE-T identity (IEEE 802.3 §§ 25 / 40 / 55).
+
+    :param trans_bw: ``trans-bw`` value from YANG (string or int, Mbit/s).
+    :type trans_bw: str | int | None
+    :return: ``"EXT_ETH_100BASE_TX"`` / ``"EXT_ETH_1000BASE_T"`` /
+        ``"EXT_ETH_10GBASE_T"``, or ``None`` if the bandwidth is unknown.
+    :rtype: Optional[str]
+    """
+    if trans_bw is None:
+        return None
+    try:
+        bw = int(str(trans_bw).strip())
+    except (TypeError, ValueError):
+        return None
+    return {
+        100: 'EXT_ETH_100BASE_TX',
+        1000: 'EXT_ETH_1000BASE_T',
+        10000: 'EXT_ETH_10GBASE_T',
+    }.get(bw)
 
 class HuaweiRouterToolException(Exception):
     def __init__(self, message="Something went wrong!"):

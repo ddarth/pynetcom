@@ -307,6 +307,54 @@ class OpenconfigTransceiverThresholdsList(RPCDataContainer):
         self.thresholds = [t for t in self.thresholds if self._has_any_value(t)]
 
 class OpenconfigTranseiver(RPCDataContainer):
+    """Vendor-agnostic transceiver (single SFP/QSFP) on a physical port.
+
+    The ``ethernet_pmd`` field carries the precise transceiver type. It holds
+    ONE OF:
+
+    * Standard OpenConfig identities from ``openconfig-transport-types``
+      (rev 2026-04-24):
+
+      - 1G optical: ``ETH_1000BASE_LX10``, ``ETH_1000BASE_SX``
+      - 10G: ``ETH_10GBASE_LR``, ``ETH_10GBASE_LRM``,
+        ``ETH_10GBASE_SR``, ``ETH_10GBASE_ER``, ``ETH_10GBASE_ZR``
+      - 25G: ``ETH_25GBASE_LR``, ``ETH_25GBASE_SR``
+      - 40G: ``ETH_40GBASE_LR4``, ``ETH_40GBASE_SR4``,
+        ``ETH_40GBASE_ER4``, ``ETH_40GBASE_PSM4``,
+        ``ETH_40GBASE_CR4``, ``ETH_4X10GBASE_LR``,
+        ``ETH_4X10GBASE_SR``
+      - 100G: ``ETH_100GBASE_LR4``, ``ETH_100GBASE_SR4``,
+        ``ETH_100GBASE_SR10``, ``ETH_100GBASE_CR4``,
+        ``ETH_100GBASE_ER4``, ``ETH_100GBASE_ER4L``,
+        ``ETH_100GBASE_CWDM4``, ``ETH_100GBASE_CLR4``,
+        ``ETH_100GBASE_PSM4``, ``ETH_100GBASE_FR``,
+        ``ETH_100GBASE_DR``, ``ETH_100G_AOC``, ``ETH_100G_ACC``
+      - 400G: ``ETH_400GBASE_LR4``, ``ETH_400GBASE_LR8``,
+        ``ETH_400GBASE_FR4``, ``ETH_400GBASE_DR4``,
+        ``ETH_400GBASE_ZR``, ``ETH_400GMSA_PSM4``
+      - 800G: ``ETH_800GBASE_DR8``, ``ETH_800GBASE_2XFR4``,
+        ``ETH_800GBASE_ZR``
+
+    * Operator extension (``EXT_`` prefix, not covered by the OC standard):
+
+      - copper: ``EXT_ETH_100BASE_TX``, ``EXT_ETH_1000BASE_T``,
+        ``EXT_ETH_10GBASE_T``
+      - BiDi: ``EXT_ETH_1000BASE_BX10``, ``EXT_ETH_10GBASE_BX10``,
+        ``EXT_ETH_10GBASE_BX40``
+      - Nokia 100G 4WDM-40 MSA: ``EXT_ETH_100GBASE_4WDM40``
+        (SFF-8024 extension byte = 0x24)
+
+    * ``None`` — the device did NOT report a precise PMD and the helper
+      could not derive one from the raw fields. ``ETH_UNDEFINED`` from the
+      OC namespace is normalised to ``None`` (as is an empty string). The
+      consumer should then look at the raw fields ``wavelength``,
+      ``transmission_distance``, ``trans_mode``, ``form_factor``,
+      ``vendor_part_number`` and estimate carefully (without certainty).
+
+    Copper is detected by the substring ``BASE_T`` / ``BASE_TX`` in
+    ``ethernet_pmd``.
+    """
+
     prefix = ['components', 'component', 'transceiver', 'state']
     field_mapping = {
         'enabled': ['enabled'],
@@ -326,12 +374,46 @@ class OpenconfigTranseiver(RPCDataContainer):
     ethernet_pmd = None
     output_power = None
     input_power = None
+    # Laser wavelength in nm (when applicable). ``0`` / ``None`` indicates
+    # copper or unknown. Populated by the vendor parsers (Huawei:
+    # ``huawei-pic/optical-module/wavelength``; Nokia:
+    # ``transceiver/laser-wavelength``).
+    wavelength: Optional[int] = None
+    # Advertised reach of the module in metres. Huawei:
+    # ``optical-module/transmission-distance``. Nokia: derived from
+    # ``transceiver/link-length-information`` (SFF-8472 bytes 14..19).
+    transmission_distance: Optional[int] = None
+    # Optical mode: ``"single-mode"`` / ``"multi-mode"`` /
+    # ``"copper-mode"`` / ``None``. Huawei exposes an explicit leaf
+    # (``optical-module/trans-mode``); Nokia is derived from the
+    # wavelength (``0`` → copper, otherwise single-mode by default).
+    trans_mode: Optional[str] = None
     physical_channels : PhysicalChannels = None
     thresholds : OpenconfigTransceiverThresholdsList = None
     def __init__(self, data: dict):
         self.populate_from_data(data)
         self.physical_channels = PhysicalChannels(data)
         self.thresholds = OpenconfigTransceiverThresholdsList(data)
+        # Normalise OC ``ethernet_pmd`` to a bare identity name and turn
+        # ``ETH_UNDEFINED`` into None. Vendor subclasses are free to
+        # override the value afterwards.
+        self._normalise_ethernet_pmd()
+
+    def _normalise_ethernet_pmd(self) -> None:
+        """Strip the OC namespace prefix (``oc-opt-types:...``) and normalise ``ETH_UNDEFINED`` / empty to None."""
+        value = self.ethernet_pmd
+        if value is None:
+            return
+        if not isinstance(value, str):
+            return
+        # Strip XML-namespace prefix.
+        if ':' in value:
+            value = value.split(':', 1)[1]
+        value = value.strip()
+        if not value or value == 'ETH_UNDEFINED':
+            self.ethernet_pmd = None
+            return
+        self.ethernet_pmd = value
     def __str__(self):
         return (f"""Enabled: {self.enabled}, 
                 Present: {self.present}, 
@@ -349,22 +431,31 @@ class OpenconfigTranseiver(RPCDataContainer):
         """
         Returns JSON representation of the transceiver.
 
-        If present == "NOT_PRESENT", keeps only the "present" and "form_factor" fields.
+        If present == "NOT_PRESENT", keeps only "present", "form_factor" and
+        "ethernet_pmd" — the last one matters because the consumer must see
+        that no PMD is reported either, not assume a leftover from the
+        previously inserted module.
         """
         base_dict = self.to_dict()
         present = base_dict.get('present')
 
         if present == 'NOT_PRESENT' or present is None:
             filtered = {}
-            if 'present' in base_dict:
-                filtered['present'] = base_dict['present']
-            if 'form_factor' in base_dict:
-                filtered['form_factor'] = base_dict['form_factor']
+            for key in ('present', 'form_factor', 'ethernet_pmd'):
+                if key in base_dict:
+                    filtered[key] = base_dict[key]
             return filtered
 
         # Reorder keys for readable output:
-        # 1) present, 2) input_power, 3) physical_channels, 4) thresholds, 5) everything else
-        preferred_order = ['present', 'input_power', 'physical_channels', 'thresholds']
+        # 1) present, 2) ethernet_pmd, 3) input_power, 4) physical_channels,
+        # 5) thresholds, 6) everything else.
+        preferred_order = [
+            'present',
+            'ethernet_pmd',
+            'input_power',
+            'physical_channels',
+            'thresholds',
+        ]
         ordered: Dict[str, object] = {}
 
         for key in preferred_order:

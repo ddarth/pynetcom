@@ -3,6 +3,7 @@ from .openconfig import OpenconfigLLDPNeighborState, OpenconfigInterfaceLLDP, Op
 from typing import Dict, List, Optional
 from .openconfig import OpenconfigTransceiverThresholdsList, OpenconfigTransceiverThreshold, PhysicalChannel, PhysicalChannels, Severity
 from .openconfig import RPCDataContainer
+from pynetcom.utils import nokia_router_tools
 
 
 @dataclass
@@ -217,6 +218,26 @@ class NokiaPhysicalChannels(PhysicalChannels):
 
 @dataclass
 class NokiaTransceiver(OpenconfigTranseiver):
+    """Nokia SR OS transceiver (state-tree subset).
+
+    Fields come from ``/state/port/transceiver`` (NS
+    ``urn:nokia.com:sros:ns:yang:sr:state``). Nokia does not publish a
+    decoded ``ethernet-pmd`` leaf — it only exposes the raw EEPROM bytes
+    (SFF-8472 / 8636 / 8024). The decoding is delegated to
+    :func:`nokia_router_tools.derive_ethernet_pmd_from_sff`.
+
+    Vendor-agnostic normalisation applied here:
+
+    * ``equipped="true"`` → ``present="PRESENT"``,
+      ``equipped="false"`` → ``present="NOT_PRESENT"``. The state-tree has
+      no ``present`` leaf of its own — we derive it from ``equipped``.
+    * ``laser-wavelength=0`` → ``trans_mode="copper-mode"``; otherwise
+      ``trans_mode="single-mode"`` (our fleet has no multi-mode SFPs on
+      network ports, so we do not publish a more specific value).
+    * ``transmission_distance`` is derived from ``link-length-information``
+      via :func:`nokia_router_tools.transmission_distance_from_sff`.
+    """
+
     prefix = ['state', 'port', 'transceiver']
     field_mapping = OpenconfigTranseiver.field_mapping.copy()
     field_mapping.update({
@@ -226,10 +247,26 @@ class NokiaTransceiver(OpenconfigTranseiver):
         # Additional fields
         'vendor_pn': ['vendor-part-number'],
         'bandwidth': ['trans-bw'],
-        'wavelength': ['wavelength'],
+        'wavelength': ['laser-wavelength'],
         'input_power': ['rx-power'],
         'output_power': ['tx-power'],
+        # Raw SFF dumps plus the module-present flag.
+        'optical_compliance': ['optical-compliance'],
+        'optical_compliance_extension': ['optical-compliance-extension'],
+        'link_length_information': ['link-length-information'],
+        'equipped': ['equipped'],
     })
+    # The raw SFF fields are an implementation detail and are not exposed.
+    serialization_exclude = OpenconfigTranseiver.serialization_exclude | {
+        'optical_compliance',
+        'optical_compliance_extension',
+        'link_length_information',
+        'equipped',
+    }
+    optical_compliance = None
+    optical_compliance_extension = None
+    link_length_information = None
+    equipped = None
     # physical_channels : NokiaPhysicalChannels = None
     thresholds : NokiaTransceiverThresholdsList = None
     def __init__(self, data: dict):
@@ -237,6 +274,97 @@ class NokiaTransceiver(OpenconfigTranseiver):
         self.merge_missing_fields_from(OpenconfigTranseiver(data))
         # self.physical_channels = NokiaPhysicalChannels(data)
         self.thresholds = NokiaTransceiverThresholdsList(data)
+        # Vendor-agnostic field normalisation.
+        self._normalise_present()
+        self._derive_trans_mode()
+        self._derive_transmission_distance()
+        self._derive_ethernet_pmd_from_sff(data)
+
+    def _normalise_present(self) -> None:
+        """``equipped="true"`` → ``present="PRESENT"``; ``"false"`` → ``"NOT_PRESENT"``."""
+        eq = self.equipped
+        if isinstance(eq, str):
+            val = eq.strip().lower()
+            if val == 'true':
+                if not self.present:
+                    self.present = 'PRESENT'
+            elif val == 'false':
+                self.present = 'NOT_PRESENT'
+
+    def _derive_trans_mode(self) -> None:
+        """``laser-wavelength=0`` → copper-mode; otherwise single-mode."""
+        if self.trans_mode:
+            return
+        wl = self.wavelength
+        try:
+            wl_int = int(float(str(wl).strip())) if wl is not None else None
+        except (TypeError, ValueError):
+            wl_int = None
+        if wl_int == 0:
+            self.trans_mode = 'copper-mode'
+        elif wl_int is not None and wl_int > 0:
+            self.trans_mode = 'single-mode'
+
+    def _derive_transmission_distance(self) -> None:
+        """Derive the distance in metres from ``link-length-information``."""
+        if self.transmission_distance is not None:
+            return
+        self.transmission_distance = nokia_router_tools.transmission_distance_from_sff(
+            self.link_length_information,
+        )
+
+    def _derive_ethernet_pmd_from_sff(self, raw_data: dict) -> None:
+        """Decode the precise PMD identity from the raw SFF dump.
+
+        Uses ``optical-compliance``, ``optical-compliance-extension``,
+        ``laser-wavelength`` and the port-level ``type`` leaf (the latter
+        disambiguates 1G versus 10G BiDi modules that share identical SFF
+        bytes). For an empty / NOT_PRESENT module the helper receives an
+        empty string and returns None.
+        """
+        if self.present == 'NOT_PRESENT':
+            self.ethernet_pmd = None
+            return
+        # Port-level <type> leaf is needed for BiDi disambiguation.
+        port_type = self._extract_port_type(raw_data)
+        derived = nokia_router_tools.derive_ethernet_pmd_from_sff(
+            self.optical_compliance,
+            self.optical_compliance_extension,
+            wavelength=self.wavelength,
+            port_type=port_type,
+        )
+        if derived:
+            self.ethernet_pmd = derived
+        # If the helper returns None we keep whatever was there (either
+        # None from OC or a valid OC value if one happens to arrive).
+
+    def _extract_port_type(self, raw_data) -> Optional[str]:
+        """Extract ``/state/port/type`` (or ``state.port.type``) from the raw dict.
+
+        The shape may be a single ``port`` dict or a list (Nokia merged
+        view). The lookup is defensive: any unexpected shape yields None.
+        """
+        if not isinstance(raw_data, dict):
+            return None
+        node = self._unwrap_data_node(raw_data)
+        node = self.remove_namespaces(node)
+        state = node.get('state') if isinstance(node, dict) else None
+        if not isinstance(state, dict):
+            return None
+        port = state.get('port')
+        if isinstance(port, list):
+            for p in port:
+                if isinstance(p, dict) and 'transceiver' in p and isinstance(p.get('type'), str):
+                    return p['type']
+            # Fallback: any entry that carries a ``type`` leaf.
+            for p in port:
+                if isinstance(p, dict) and isinstance(p.get('type'), str):
+                    return p['type']
+            return None
+        if isinstance(port, dict):
+            t = port.get('type')
+            return t if isinstance(t, str) else None
+        return None
 
 
 
