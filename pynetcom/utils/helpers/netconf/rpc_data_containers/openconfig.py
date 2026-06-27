@@ -398,6 +398,10 @@ class OpenconfigTranseiver(RPCDataContainer):
         # ``ETH_UNDEFINED`` into None. Vendor subclasses are free to
         # override the value afterwards.
         self._normalise_ethernet_pmd()
+        # Same treatment for ``form_factor`` — strip the OC namespace
+        # prefix and lowercase, so both vendors converge on the
+        # OpenAPI enum form (``qsfp28``, ``cfp2``, ``sfp-plus``, ...).
+        self._normalise_form_factor()
 
     def _normalise_ethernet_pmd(self) -> None:
         """Strip the OC namespace prefix (``oc-opt-types:...``) and normalise ``ETH_UNDEFINED`` / empty to None."""
@@ -414,6 +418,28 @@ class OpenconfigTranseiver(RPCDataContainer):
             self.ethernet_pmd = None
             return
         self.ethernet_pmd = value
+
+    def _normalise_form_factor(self) -> None:
+        """Strip the OC namespace prefix (``openconfig-transport-types:...``)
+        from form_factor and lowercase it. Empty string → None.
+
+        Nokia 7250 IXR returns ``form_factor`` as a namespaced identity-ref
+        (e.g. ``openconfig-transport-types:QSFP28``); Huawei returns it
+        already lowercased (e.g. ``qsfp28``). Both vendors converge to the
+        OpenAPI enum form (``qsfp28``, ``cfp2``, ``sfp-plus``, ...).
+        """
+        value = self.form_factor
+        if value is None:
+            return
+        if not isinstance(value, str):
+            return
+        if ':' in value:
+            value = value.split(':', 1)[1]
+        value = value.strip().lower()
+        if not value:
+            self.form_factor = None
+            return
+        self.form_factor = value
     def __str__(self):
         return (f"""Enabled: {self.enabled}, 
                 Present: {self.present}, 

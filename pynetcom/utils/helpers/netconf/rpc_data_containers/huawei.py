@@ -176,6 +176,10 @@ class HuaweiTransceiver(OpenconfigTranseiver):
         self.merge_missing_fields_from(oc)
         # Resolve ethernet_pmd per the priority chain (see class docstring).
         self._resolve_ethernet_pmd()
+        # Idempotent for Huawei (``qsfp28`` is already lowercased without
+        # a namespace prefix) but keeps the vendor-agnostic contract: both
+        # subclasses must end up with a normalised ``form_factor``.
+        self._normalise_form_factor()
         self.ddm = HuaweiDDM(data)
         self.physical_channels = HuaweiPhysicalChannels(data)
         self.thresholds = HuaweiTransceiverThresholdsList(data)

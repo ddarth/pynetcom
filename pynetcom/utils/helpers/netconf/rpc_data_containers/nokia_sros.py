@@ -279,6 +279,10 @@ class NokiaTransceiver(OpenconfigTranseiver):
         self._derive_trans_mode()
         self._derive_transmission_distance()
         self._derive_ethernet_pmd_from_sff(data)
+        # Nokia 7250 IXR returns ``form_factor`` as a namespaced identity
+        # (e.g. ``openconfig-transport-types:QSFP28``). Strip + lowercase
+        # so the vendor-agnostic dataclass yields the OpenAPI enum form.
+        self._normalise_form_factor()
 
     def _normalise_present(self) -> None:
         """``equipped="true"`` → ``present="PRESENT"``; ``"false"`` → ``"NOT_PRESENT"``."""
