@@ -467,8 +467,10 @@ class L3Interface(RPCDataContainer):
         global instance is ``"Base"`` on both vendors (Nokia: native;
         Huawei: ``_public_`` is normalised to ``"Base"`` by the adapter).
       - ``ipv4_prefix_length`` is populated on Huawei (derived from the
-        netmask the device returns) but stays ``None`` on Nokia — the SR OS
-        state model exposes the operational address without a mask.
+        netmask the device returns). On Nokia the SR OS *state* model exposes
+        only the operational address without a mask, so it stays ``None``
+        unless ``enrich_config=True`` — one extra configure-NS ``<get-config>``
+        then supplies ``ipv4/primary/prefix-length`` (both Base and VPRN scope).
       - ``l2_service`` is populated only when ``enrich_l2_service=True`` is
         passed to ``get_l3_interfaces``. It names the L2 service (VPLS / VSI)
         that this L3 interface routes into. Stays ``None`` for "pure L3"

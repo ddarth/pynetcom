@@ -67,8 +67,12 @@ class NceDataProvider:
     PORTS_ENDPOINT = "/restconf/v3/data/huawei-nce-resource-inventory:ltps"
 
     # Performance Monitoring — Vendor Specific Raw PM
-    # NOTE: Limited to OCH ports on 9800 M24 only. Requires PM task creation.
-    # For DWDM optical power on ALL port types, prefer EML PM (get_eml_pm_for_board).
+    # NOTE: Requires a PM task on the resource (create_pm_task). Works on any
+    # resource that has a task — DWDM OCH ports (OptiX OSN 9800) AND the
+    # Ethernet ports of IP routers (ATN / NE-series), for which realtime PM
+    # returns Rx/Tx optical power. It is NOT restricted to OCH / 9800 M24.
+    # For DWDM optical power on ALL port types without task creation, prefer
+    # EML PM (get_eml_pm_for_board).
     # For thresholds, use get_optical_power_thresholds().
     # For reference power, use get_reference_power().
     PM_CREATE_URL = "/restconf/v1/operations/huawei-nce-common-pm-rawdata:create-monitor-tasks"
@@ -1657,10 +1661,13 @@ class NceDataProvider:
         Uses Vendor Specific Raw PM API (huawei-nce-common-pm-rawdata).
 
         Note:
-            This API only works on OCH ports of OptiX OSN 9800 M24
-            (U5N402 boards). For optical power on ALL DWDM port types
-            (amplifiers, FIU, OAU, AST2, etc.) without task creation,
-            use get_eml_pm_for_board() / get_eml_pm_for_ne() instead.
+            Works on any resource that accepts a raw-PM task — both DWDM
+            OCH ports (OptiX OSN 9800) and the Ethernet ports of IP routers
+            (ATN / NE-series), where realtime PM then returns Rx/Tx optical
+            power. It is NOT restricted to OCH ports of the 9800 M24. For
+            optical power on ALL DWDM port types (amplifiers, FIU, OAU,
+            AST2, etc.) WITHOUT creating a task, use get_eml_pm_for_board()
+            / get_eml_pm_for_ne() instead.
 
         Args:
             tp_id: Resource UUID — port tp_id (for optical power) or
@@ -1728,8 +1735,13 @@ class NceDataProvider:
         """
         Query realtime Performance Monitoring data for ports or boards.
 
-        Returns current PM values (optical power, temperature, etc.).
-        PM task must be created first via create_pm_task().
+        Returns current PM values (optical power, temperature, etc.). A PM
+        task must exist on the resource first (create_pm_task). This is
+        server-side by tp_id, batched (max 10 ids). It is NOT limited to
+        DWDM OCH ports: given a task, it also returns Rx/Tx optical power
+        for the Ethernet ports of IP routers (ATN / NE-series). Whether a
+        task exists on a given port is fleet-dependent — on our fleet many
+        IP-router ports have no task, and creating one writes to NCE.
 
         Args:
             tp_ids: List of resource UUIDs (max 10). Port tp_id or board card-id.

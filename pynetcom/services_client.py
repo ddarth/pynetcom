@@ -54,7 +54,6 @@ from pynetcom.utils.helpers.netconf.rpc_requests import (
     HuaweiVeGroupRPCRequest,
     NokiaArpRPCRequest,
     NokiaBaseRouterInterfaceConfigRPCRequest,
-    NokiaBaseRouterInterfaceVplsRPCRequest,
     NokiaEpipeRPCRequest,
     NokiaFdbRPCRequest,
     NokiaL3InterfaceRPCRequest,
@@ -589,17 +588,22 @@ class ServicesClient:
                 scoped_vprn_name = vprn_name or "Base"
             resp = self.nc.get(req.get_request_filter())
             ifaces = list(nokia.parse_l3_interface_response(resp, vprn_name=scoped_vprn_name))
-            # Enrichment covers both Base router R-VPLS and per-VPRN bindings —
-            # the adapter picks the right configure-namespace path internally
-            # based on the VRF name.
-            if enrich_l2_service and scoped_vprn_name is not None:
+            # ``scoped_vprn_name`` is always a concrete string here
+            # (``vprn_name or "Base"``), so both enrichments run for the Base
+            # router as well as for a named VPRN.
+            # L2-service (R-VPLS) enrichment covers per-VPRN bindings; the
+            # Base router has no R-VPLS binding on our fleet (plan E1) and the
+            # adapter leaves ``l2_service=None`` there without an RPC.
+            if enrich_l2_service:
                 self._enrich_nokia_l2_service(ifaces, scoped_vprn_name)
-            # Configure-NS enrichment (one extra <get-config> RPC). Refines
-            # ``binding_type`` for ``sdp_spoke`` / ``sap_physical`` / ``loopback``
-            # cases that the name pattern cannot detect, AND fills
-            # ``admin_status`` as a fallback for Nokia VPRN-bound interfaces
-            # where state-NS omits the leaf.
-            if enrich_config and scoped_vprn_name is not None:
+            # Configure-NS enrichment (one extra <get-config> RPC). Fills
+            # ``parent_port`` / ``vlan`` (Base port-based binding), refines
+            # ``binding_type`` for ``sdp_spoke`` / ``sap_physical`` /
+            # ``physical_port`` / ``subinterface`` / ``loopback`` cases the
+            # name pattern cannot detect, and fills ``admin_status`` +
+            # ``ipv4_prefix_length`` which the state-NS omits. Runs for both
+            # Base and named-VPRN scope.
+            if enrich_config:
                 self._enrich_nokia_config(ifaces, scoped_vprn_name)
             return ifaces
 
@@ -719,17 +723,10 @@ class ServicesClient:
         if not l3_interfaces:
             return
         if vprn_name and vprn_name.lower() == "base":
-            # Base router R-VPLS bindings live under /configure/router[...=Base].
-            req = NokiaBaseRouterInterfaceVplsRPCRequest()
-            resp = self.nc.get_config(
-                source="running",
-                filter_subtree=req.get_request_filter(),
-            )
-            binding_map = nokia.parse_base_router_interface_vpls_response(resp)
-            # Adapter keys by ("Base", iface); L3Interface.vprn_name parser sets the
-            # same string for Base-router IRBs.
-            for iface in l3_interfaces:
-                iface.l2_service = binding_map.get(("Base", iface.name))
+            # Base-router R-VPLS does not exist on our fleet and the
+            # ``<vpls>`` leaf under /configure/router[Base]/interface is
+            # rejected by SR OS 23.10 (Unknown element) — see plan E1. No
+            # RPC is issued; ``l2_service`` stays None for Base IRBs.
             return
         # VPRN — configure namespace, scoped by VRF name.
         req = NokiaVprnInterfaceVplsRPCRequest(vprn_service_name=vprn_name)
@@ -746,22 +743,35 @@ class ServicesClient:
         l3_interfaces: List[L3Interface],
         vprn_name: str,
     ) -> None:
-        """Refine ``binding_type`` (and fill admin_status) on Nokia L3-IFs.
+        """Refine ``binding_type`` and fill admin_status / prefix on Nokia L3-IFs.
 
         One ``<get-config>`` round-trip with ``with_defaults="report-all"``
         (so that default-valued ``<loopback>false</loopback>`` does not
         silently drop), narrowed either to the Base router or to a single
-        VPRN. The parsed map is keyed by ``(vprn_name, iface_name)``;
-        each interface's ``apply_binding_from_config`` upgrades
-        ``binding_type`` from the name-pattern fallback to the precise
-        discriminator (``sdp_spoke`` / ``sap_physical`` / ``loopback``)
-        whenever the configure payload carries it, AND fills
-        ``admin_status`` as a fallback when state-NS omitted it (Nokia VPRN
-        interfaces — confirmed: ``/state/service/vprn/.../interface`` does
-        not carry ``<admin-state>``).
+        VPRN. The parsed map is keyed by ``(vprn_name, iface_name)``; each
+        interface's ``apply_binding_from_config`` upgrades ``binding_type``
+        from the name-pattern fallback to the precise discriminator whenever
+        the configure payload carries it:
 
-        Pure-L3 interfaces with no ``<sap>``/``<spoke-sdp>``/loopback leaf
-        keep whatever the name-pattern produced (typically ``unknown``).
+          * ``sdp_spoke`` — interface bound over a spoke-SDP.
+          * ``sap_physical`` — interface with an explicit ``<sap>``.
+          * ``loopback`` — ``<loopback>true</loopback>``.
+          * Base-router port-based binding — the single ``<port>`` leaf names
+            the carrier: ``"3/1/1"`` / ``"lag-3"`` → ``physical_port``
+            (``parent_port``, lag included), ``"2/1/8:671"`` →
+            ``subinterface`` (``parent_port`` + ``vlan``).
+
+        It also fills, as fallbacks when the state-NS omitted them:
+
+          * ``admin_status`` — Nokia VPRN interfaces confirmed not to carry
+            ``<admin-state>`` under ``/state/service/vprn/.../interface``.
+          * ``ipv4_prefix_length`` — derived from the configure ``<address>``
+            prefix (both Base and VPRN), since state ``oper-address`` gives
+            the bare host address without a mask.
+
+        Pure-L3 interfaces with no ``<port>``/``<sap>``/``<spoke-sdp>``/
+        loopback leaf keep whatever the name-pattern produced (typically
+        ``unknown``).
         """
         if not l3_interfaces:
             return
@@ -1280,28 +1290,11 @@ class ServicesClient:
 
     def _find_nokia_l3_gateways(self, l2_service_name: str) -> List[L3Interface]:
         # Discover all VPRNs once; for each VPRN, fetch its binding map.
-        # Also include Base router R-VPLS bindings.
+        # Base-router R-VPLS is not a valid scenario here (plan E1: ``<vpls>``
+        # under /configure/router[Base]/interface is rejected by SR OS 23.10),
+        # so only VPRN interfaces can bind a routed VPLS.
         vrfs = [v.name for v in self.get_l3vpn_services() if v.name]
         gateways: List[L3Interface] = []
-
-        # Base router R-VPLS — check first; small subtree.
-        base_req = NokiaBaseRouterInterfaceVplsRPCRequest()
-        base_resp = self.nc.get_config(
-            source="running",
-            filter_subtree=base_req.get_request_filter(),
-        )
-        base_binding = nokia.parse_base_router_interface_vpls_response(base_resp)
-        base_matching = [
-            iface_name
-            for (router_name, iface_name), vpls in base_binding.items()
-            if vpls == l2_service_name and router_name == "Base"
-        ]
-        if base_matching:
-            l3_list = self.get_l3_interfaces(vprn_name="Base")
-            for iface in l3_list:
-                if iface.name in base_matching:
-                    iface.l2_service = l2_service_name
-                    gateways.append(iface)
 
         # Per-VPRN bindings.
         for vprn_name in vrfs:

@@ -79,14 +79,20 @@ class OpenconfigInterfaceRPCRequest():
     </lldp>
     """
 
-    def __init__(self, port: str, transceiver_prefix: str):
+    def __init__(self, port: str, transceiver_prefix: str, include_lldp: bool = True):
         self.port = port
         self.transceiver_prefix = transceiver_prefix
+        # When False, the LLDP subtree is dropped from the filter. Needed for
+        # Huawei interfaces that reject the whole <get> with "LLDP is not
+        # supported on this port" (loopbacks / logical interfaces) — see
+        # :class:`pynetcom.exceptions.HuaweiLldpNotSupported`.
+        self.include_lldp = include_lldp
         self.request_filter = self.get_template().substitute(port=self.port, transceiver_prefix=self.transceiver_prefix)
 
     def get_template(self) -> Template:
-        return Template(self.interface + self.transceiver + self.lldp)
-    
+        lldp = self.lldp if self.include_lldp else ""
+        return Template(self.interface + self.transceiver + lldp)
+
     def get_request_filter(self):
         return self.request_filter
 
@@ -123,7 +129,14 @@ class HuaweiInterfaceRPCRequest(OpenconfigInterfaceRPCRequest):
             </interfaces>
         </ifm>
     """
-    # OpenConfig-only filter for Eth-Trunk (LAG) interfaces
+    # Filter for Eth-Trunk (LAG) interfaces: OpenConfig aggregation (state /
+    # lag-speed) plus the huawei-ifm-trunk augment that carries the member
+    # list. Huawei does NOT populate the OpenConfig ``<member>`` leaf-list,
+    # so the members come from ``/ifm/interfaces/interface/trunk/members/
+    # member/name`` (device-format names, e.g. ``"50|100GE6/1/2"``). The
+    # field-select (``<name/><status/>`` only) keeps the heavy LACP subtree
+    # out of the reply. Verified live 24 Jul 2026 on ``Bc.MSC4_.NE_02.X8``
+    # (Eth-Trunk1 → members ``50|100GE6/1/2``, ``50|100GE4/0/0``).
     eth_trunk_interface: str = """
 <interfaces xmlns="http://openconfig.net/yang/interfaces">
   <interface>
@@ -134,10 +147,28 @@ class HuaweiInterfaceRPCRequest(OpenconfigInterfaceRPCRequest):
     </aggregation>
   </interface>
 </interfaces>
+<ifm xmlns="urn:huawei:yang:huawei-ifm">
+  <interfaces>
+    <interface>
+      <name>$port</name>
+      <trunk xmlns="urn:huawei:yang:huawei-ifm-trunk">
+        <members>
+          <member>
+            <name/>
+            <status/>
+          </member>
+        </members>
+      </trunk>
+    </interface>
+  </interfaces>
+</ifm>
 """
 
-    def __init__(self, port: str):
-        # Eth-Trunk interfaces: use simplified OpenConfig filter with aggregation info only
+    def __init__(self, port: str, include_lldp: bool = True):
+        self.include_lldp = include_lldp
+        # Eth-Trunk interfaces: use simplified OpenConfig + huawei-ifm-trunk
+        # filter (aggregation + member list). No LLDP subtree here — LAGs
+        # carry no LLDP agent, so this path never hits HuaweiLldpNotSupported.
         if isinstance(port, str) and port.lower().startswith('eth-trunk'):
             self.port = port
             self.transceiver_prefix = 'TRANSCEIVER:'
@@ -153,11 +184,103 @@ class HuaweiInterfaceRPCRequest(OpenconfigInterfaceRPCRequest):
         )
 
     def get_template(self) -> Template:
-        return Template(self.interface + self.transceiver + self.lldp + self.huawei_interface)
+        lldp = self.lldp if self.include_lldp else ""
+        return Template(self.interface + self.transceiver + lldp + self.huawei_interface)
 
     def get_position(self) -> str:
         """Get position of the interface"""
         return split_if_to_type_id_tag(self.port)['if_pos']
+
+
+class HuaweiMultiPortInterfaceRPCRequest:
+    """Batch per-port detail (status + optics) for several Huawei ports in one ``<get>``.
+
+    Motivation
+    ----------
+    Resolving the optics of every physical member of a LAG would otherwise
+    cost one round-trip per member. This builder OR-combines the port keys
+    into a single subtree filter (same batching idea as
+    :class:`NokiaArpRPCRequest` / :class:`HuaweiMacRPCRequest`) so N members
+    cost ONE round-trip. Verified live 24 Jul 2026 on ``Bc.MSC4_.NE_02.X8``
+    (two 100G members in one reply).
+
+    Composition (mirrors the single-port :class:`HuaweiInterfaceRPCRequest`
+    field-selection, repeated per port):
+
+      * ``/devm/ports/port[position]`` (huawei-devm + huawei-pic) —
+        ``optical-module`` (aggregate + per-channel Tx/Rx), ``ethernet``
+        (speed / duplex / negotiation), ``physical-bandwidth`` and the
+        last-up/down timestamps. This is the optics source.
+      * ``/interfaces/interface[name]/state`` (OpenConfig) — oper / admin
+        status, description. Keyed by the device-format interface name.
+      * ``/components/component[name=TRANSCEIVER:<port>]/transceiver/state/
+        present`` (OpenConfig platform) — the module-present flag, keyed by
+        the ``TRANSCEIVER:`` + device-format name (same key the single-port
+        :class:`HuaweiInterfaceRPCRequest` uses). Without this component the
+        parsed ``present`` stays ``None`` and
+        :meth:`OpenconfigTranseiver.to_output_dict` drops the measured optics
+        as if no module were inserted. Field-selected to ``state/present``
+        only — the tx/rx power come from the ``devm`` optical-module, so the
+        heavy OC transceiver subtree is intentionally not pulled.
+
+    LLDP is intentionally absent (batch is for physical carriers; the
+    per-lane / status data does not need it, and dropping it avoids the
+    ``LLDP is not supported`` failure on any non-LLDP member).
+
+    :param ports: device-format interface names (e.g. ``["50|100GE6/1/2",
+        "50|100GE4/0/0"]``). The ``position`` for the ``devm`` key is derived
+        from each name via ``split_if_to_type_id_tag``. Parse the reply with
+        :func:`~pynetcom.utils.helpers.netconf.rpc_data_containers.huawei.parse_multi_port_interface_response`.
+    :type ports: list[str]
+    """
+
+    def __init__(self, ports: list):
+        self.ports = list(ports or [])
+        devm_blocks = []
+        oc_blocks = []
+        comp_blocks = []
+        for name in self.ports:
+            position = split_if_to_type_id_tag(name)['if_pos']
+            devm_blocks.append(
+                f'<port>'
+                f'<position>{position}</position>'
+                f'<last-up-time/><last-down-time/>'
+                f'<optical-module xmlns="urn:huawei:yang:huawei-pic"/>'
+                f'<ethernet xmlns="urn:huawei:yang:huawei-pic">'
+                f'<speed/><duplex-status/><negotiation/><negotiation-mode/>'
+                f'</ethernet>'
+                f'<physical-bandwidth/>'
+                f'</port>'
+            )
+            oc_blocks.append(
+                f'<interface><name>{name}</name><state/></interface>'
+            )
+            # OpenConfig platform component carrying the module-present flag.
+            # Keyed by ``TRANSCEIVER:`` + device-format name — same key the
+            # single-port HuaweiInterfaceRPCRequest uses. Field-selected to
+            # state/present only (optics come from the devm optical-module).
+            comp_blocks.append(
+                f'<component>'
+                f'<name>TRANSCEIVER:{name}</name>'
+                f'<transceiver xmlns="http://openconfig.net/yang/platform/transceiver">'
+                f'<state><present/></state>'
+                f'</transceiver>'
+                f'</component>'
+            )
+        self.request_filter = (
+            '<devm xmlns="urn:huawei:yang:huawei-devm"><ports>'
+            + "".join(devm_blocks)
+            + '</ports></devm>'
+            '<interfaces xmlns="http://openconfig.net/yang/interfaces">'
+            + "".join(oc_blocks)
+            + '</interfaces>'
+            '<components xmlns="http://openconfig.net/yang/platform">'
+            + "".join(comp_blocks)
+            + '</components>'
+        )
+
+    def get_request_filter(self) -> str:
+        return self.request_filter
 
 
 class NokiaInterfaceRPCRequest(OpenconfigInterfaceRPCRequest):
@@ -195,23 +318,18 @@ class NokiaInterfaceRPCRequest(OpenconfigInterfaceRPCRequest):
 </interfaces>
 """
 
-    def get_connector_port(self) -> str:
-        # First check format with /c
-        m = re.match(r"^(.+?/c\d+)(?:/(\d+))?$", self.port)
-        if m:
-            connector = m.group(1)
-            breakout_index = m.group(2) or "1"
-            breakout = f"{connector}/{breakout_index}"
-            return connector, breakout
-        # If not match with /c, then assume this is already L/M/P format
-        m2 = re.match(r"^(\d+/\d+/\d+)$", self.port)
-        if m2:
-            connector = self.port
-            breakout = self.port
-            return connector, breakout
-        raise ValueError(f"Unexpected port format: {self.port}")
+    def get_connector_port(self) -> Tuple[str, str]:
+        # Single-port path is strict: an unexpected port-id must fail loudly
+        # rather than silently degrade to (port, port). Shares one regex with
+        # the batch helper via ``strict=True``.
+        return nokia_connector_breakout(self.port, strict=True)
 
-    def __init__(self, port: str):
+    def __init__(self, port: str, include_lldp: bool = True):
+        # ``include_lldp`` is accepted for cross-vendor API symmetry with
+        # :class:`HuaweiInterfaceRPCRequest`. Nokia carries LLDP under
+        # ``/state/port/ethernet/lldp`` and never rejects a port for lacking
+        # it, so callers rarely need False here.
+        self.include_lldp = include_lldp
         # LAG interfaces: use simplified OpenConfig filter with aggregation info only
         if re.match(r"^lag-\d+$", port, re.IGNORECASE):
             self.port = port
@@ -226,15 +344,101 @@ class NokiaInterfaceRPCRequest(OpenconfigInterfaceRPCRequest):
         self.transceiver = self.transceiver.replace('$port', '$connector_port')
 
         self.request_filter = self.get_template().substitute(
-            port=breakout_port, 
-            transceiver_prefix=self.transceiver_prefix, 
+            port=breakout_port,
+            transceiver_prefix=self.transceiver_prefix,
             connector_port=connector_port,
             breakout_port=breakout_port
         )
         # print(self.request_filter)
 
     def get_template(self) -> Template:
-        return Template(self.interface + self.transceiver + self.lldp + self.nokia_interface)
+        lldp = self.lldp if self.include_lldp else ""
+        return Template(self.interface + self.transceiver + lldp + self.nokia_interface)
+
+
+def nokia_connector_breakout(port: str, strict: bool = False) -> Tuple[str, str]:
+    """Split a Nokia port-id into its (connector, breakout) pair.
+
+    Single implementation shared by the per-port
+    :meth:`NokiaInterfaceRPCRequest.get_connector_port` (which calls it with
+    ``strict=True``) and the batch
+    :class:`NokiaMultiPortInterfaceRPCRequest` (default ``strict=False``):
+
+      * ``"5/1/c2/1"`` → ``("5/1/c2", "5/1/c2/1")`` (connector + breakout).
+      * ``"5/1/c2"``   → ``("5/1/c2", "5/1/c2/1")`` (default breakout ``/1``).
+      * ``"3/1/1"``    → ``("3/1/1", "3/1/1")`` (plain L/M/P, no breakout).
+
+    :param strict: on an unrecognised port shape, ``True`` raises
+        ``ValueError`` (single-port callers want to fail loudly), while
+        ``False`` falls back to ``(port, port)`` so the batch path stays
+        robust across a whole port list rather than aborting on one odd
+        member name.
+    """
+    m = re.match(r"^(.+?/c\d+)(?:/(\d+))?$", port)
+    if m:
+        connector = m.group(1)
+        breakout = f"{connector}/{m.group(2) or '1'}"
+        return connector, breakout
+    if re.match(r"^\d+/\d+/\d+$", port):
+        return port, port
+    if strict:
+        raise ValueError(f"Unexpected port format: {port}")
+    return port, port
+
+
+class NokiaMultiPortInterfaceRPCRequest:
+    """Batch per-port detail (status + optics) for several Nokia ports in one ``<get>``.
+
+    Nokia counterpart of :class:`HuaweiMultiPortInterfaceRPCRequest`. OR-combines
+    several ``/state/port`` keys (plus the OpenConfig interface state) into a
+    single subtree filter so the optics of every physical LAG member cost
+    ONE round-trip. Verified live 24 Jul 2026 on ``Oc.MSC_3.CR_01``.
+
+    Per requested port the filter emits the same two ``/state/port`` entries
+    the single-port :class:`NokiaInterfaceRPCRequest` uses:
+
+      * connector port-id + ``<transceiver/>`` (optics, incl. per-lane
+        ``digital-diagnostic-monitoring/lane`` for 100G modules), and
+      * breakout port-id + ``oper-state-last-changed`` + ``ethernet``
+        (egress-rate),
+
+    plus one OpenConfig ``/interfaces/interface[name]/state`` block for
+    oper / admin status. LLDP is omitted (optics/status batch).
+
+    :param ports: Nokia port-ids (e.g. ``["4/2/1", "3/1/1"]``). Parse the
+        reply with
+        :func:`~pynetcom.utils.helpers.netconf.rpc_data_containers.nokia_sros.parse_multi_port_interface_response`,
+        passing the same list.
+    :type ports: list[str]
+    """
+
+    def __init__(self, ports: list):
+        self.ports = list(ports or [])
+        state_blocks = []
+        oc_blocks = []
+        for port in self.ports:
+            connector, breakout = nokia_connector_breakout(port)
+            state_blocks.append(
+                f'<port><port-id>{connector}</port-id><transceiver/></port>'
+                f'<port><port-id>{breakout}</port-id>'
+                f'<oper-state-last-changed/>'
+                f'<ethernet><oper-egress-rate/></ethernet>'
+                f'</port>'
+            )
+            oc_blocks.append(
+                f'<interface><name>{breakout}</name><state/></interface>'
+            )
+        self.request_filter = (
+            '<state xmlns="urn:nokia.com:sros:ns:yang:sr:state">'
+            + "".join(state_blocks)
+            + '</state>'
+            '<interfaces xmlns="http://openconfig.net/yang/interfaces">'
+            + "".join(oc_blocks)
+            + '</interfaces>'
+        )
+
+    def get_request_filter(self) -> str:
+        return self.request_filter
 
 
 class OpenconfigInterfacesBriefListRPCRequest:
@@ -1387,40 +1591,14 @@ class NokiaVprnInterfaceVplsRPCRequest:
         return self.request_filter
 
 
-class NokiaBaseRouterInterfaceVplsRPCRequest:
-    """Filter for Nokia R-VPLS interface→VPLS bindings on the Base router.
-
-    YANG path: ``/configure/router[router-name='Base']/interface[interface-name]/vpls``
-    in the **configure** namespace (``urn:nokia.com:sros:ns:yang:sr:conf``).
-    This is the Base-router counterpart of
-    :class:`NokiaVprnInterfaceVplsRPCRequest` — same binding shape (``vpls``
-    sub-element with a single ``vpls-name`` leaf), but the parent is the
-    global router rather than a VPRN.
-
-    Always scoped to ``router-name=Base`` (the only router-name on the
-    Base namespace). Pure-L3 interfaces omit the ``vpls`` element entirely
-    so the binding map naturally contains only bound R-VPLS interfaces.
-
-    Uses ``<get-config source="running">`` (caller-driven via
-    :meth:`NetconfClient.get_config`), since the binding is a configured
-    leaf.
-    """
-
-    def __init__(self):
-        self.request_filter = (
-            '<configure xmlns="urn:nokia.com:sros:ns:yang:sr:conf">'
-            '  <router>'
-            '    <router-name>Base</router-name>'
-            '    <interface>'
-            '      <interface-name/>'
-            '      <vpls/>'
-            '    </interface>'
-            '  </router>'
-            '</configure>'
-        )
-
-    def get_request_filter(self) -> str:
-        return self.request_filter
+# NOTE: A Base-router R-VPLS binding request (``/configure/router[Base]/
+# interface/vpls``) intentionally does NOT exist. ``<vpls>`` under
+# ``/configure/router[Base]/interface`` is rejected by SR OS 23.10 as
+# ``MGMT_CORE #2201: Unknown element`` (probed live 24 Jul 2026), and the
+# R-VPLS-on-base-router scenario does not exist on our fleet (plan decision
+# E1). Base-router L3 interfaces therefore always resolve ``l2_service=None``.
+# R-VPLS bindings are a VPRN-only concept here — see
+# :class:`NokiaVprnInterfaceVplsRPCRequest`.
 
 
 class NokiaVprnInterfaceConfigRPCRequest:
@@ -1443,6 +1621,9 @@ class NokiaVprnInterfaceConfigRPCRequest:
                              as the binding-config source for R-VPLS too).
       * ``<admin-state>`` — admin intent (``enable`` / ``disable``). Fallback
                              only — see ``NokiaL3Interface.apply_binding_from_config``.
+      * ``<ipv4>/<primary>/<prefix-length>`` — the configured netmask the
+                             VPRN state-NS ``oper-address`` omits; fills
+                             :attr:`L3Interface.ipv4_prefix_length`.
 
     No state-data is requested — strictly configure-NS leaves. Issue with
     ``<get-config source="running">`` and ``with_defaults="report-all"`` so
@@ -1467,6 +1648,14 @@ class NokiaVprnInterfaceConfigRPCRequest:
         "  <vpls-name/>"
         "</vpls>"
         "<admin-state/>"
+        # IPv4 primary carries the configured netmask (prefix-length) that
+        # the VPRN state-NS ``oper-address`` omits — fills
+        # ``L3Interface.ipv4_prefix_length`` under ``enrich_config``.
+        "<ipv4>"
+        "  <primary>"
+        "    <prefix-length/>"
+        "  </primary>"
+        "</ipv4>"
     )
 
     def __init__(self, vprn_service_name: str | None = None):
@@ -1499,23 +1688,51 @@ class NokiaBaseRouterInterfaceConfigRPCRequest:
 
     Counterpart of :class:`NokiaVprnInterfaceConfigRPCRequest` for the
     global Base router — ``/configure/router[router-name='Base']/interface``.
-    Same leaves (``<sap>``, ``<spoke-sdp>``, ``<loopback>``, ``<vpls>``,
-    ``<admin-state>``) so callers can run one RPC per scope and merge the
-    results into a single ``{(vprn_name, iface): config_entry}`` map.
+
+    The Base-router interface model is **port-based**, not SAP/spoke-based:
+    the binding-discriminator leaves used on VPRN interfaces
+    (``<sap>`` / ``<spoke-sdp>``) do not exist under
+    ``/configure/router[Base]/interface`` on SR OS 23.10 (probed live —
+    they return ``MGMT_CORE #2201: Unknown element``). Likewise ``<vpls>``
+    (R-VPLS on the base router) is rejected as ``Unknown element`` and the
+    scenario does not exist on our fleet, so it is intentionally absent
+    here (see plan decision E1).
+
+    Field-selected leaves (all verified live 24 Jul 2026 on
+    ``Oc.MSC_3.CR_01`` / ``Oc.JArk2.AC_01``):
+
+      * ``<port>``        — the physical port, LAG or ``port:vlan`` this
+                            L3 interface lives on (``"3/1/1"`` /
+                            ``"2/1/8:671"`` / ``"lag-3"``). Consumed by
+                            :meth:`NokiaL3Interface.apply_binding_from_config`
+                            to fill ``parent_port`` / ``vlan`` and refine
+                            ``binding_type`` to ``physical_port`` /
+                            ``subinterface``.
+      * ``<loopback/>``   — boolean leaf (``"true"`` ⇒ ``loopback``).
+      * ``<admin-state/>``— admin intent (``enable`` / ``disable``); fills
+                            :attr:`L3Interface.admin_status` (state-NS omits
+                            it here).
+      * ``<ipv4>/<primary>/<address>/<prefix-length>`` — the configured
+                            CIDR. ``prefix-length`` is the netmask the
+                            state-NS ``oper-address`` lacks; it fills
+                            :attr:`L3Interface.ipv4_prefix_length`.
+
+    Issue with ``<get-config source="running">`` and
+    ``with_defaults="report-all"`` so the default-valued
+    ``<admin-state>enable</admin-state>`` comes back (state-NS present only
+    for ``disable``).
     """
 
     _IF_FIELDS = (
-        "<sap>"
-        "  <sap-id/>"
-        "</sap>"
-        "<spoke-sdp>"
-        "  <sdp-bind-id/>"
-        "</spoke-sdp>"
+        "<port/>"
         "<loopback/>"
-        "<vpls>"
-        "  <vpls-name/>"
-        "</vpls>"
         "<admin-state/>"
+        "<ipv4>"
+        "  <primary>"
+        "    <address/>"
+        "    <prefix-length/>"
+        "  </primary>"
+        "</ipv4>"
     )
 
     def __init__(self):

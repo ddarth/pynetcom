@@ -4,6 +4,7 @@ from .openconfig import (
     RPCDataContainer,
     OpenconfigTranseiver,
     OpenconfigInterface,
+    OpenconfigInterfaceAggregation,
     DDM,
     PhysicalChannel,
     PhysicalChannels,
@@ -217,6 +218,39 @@ class HuaweiTransceiver(OpenconfigTranseiver):
                 )
 
 @dataclass
+class HuaweiInterfaceAggregation(OpenconfigInterfaceAggregation):
+    """Huawei Eth-Trunk membership from the ``huawei-ifm-trunk`` augment.
+
+    YANG path: ``/ifm/interfaces/interface/trunk/members/member`` (NS
+    ``urn:huawei:yang:huawei-ifm-trunk``, an augment of ``huawei-ifm``).
+    Each ``<member>`` carries ``<name>`` (device-format, e.g.
+    ``"50|100GE6/1/2"``, parsable by
+    :func:`~pynetcom.utils.huawei_router_tools.split_if_to_type_id_tag`)
+    and ``<status>``.
+
+    Huawei does NOT populate the OpenConfig ``aggregation/state/member``
+    leaf-list (verified live 24 Jul 2026 on ``Bc.MSC4_.NE_02.X8``:
+    ``Eth-Trunk1`` returns ``member=None`` under OpenConfig but the two
+    physical members under this augment). This container is therefore the
+    device source of Huawei LAG membership. ``member`` is normalised to a
+    ``list[str]`` of device-format member names (or ``None``).
+    """
+    prefix = ['ifm', 'interfaces', 'interface', 'trunk', 'members']
+    field_mapping = {'member': ['member']}
+
+    def __init__(self, data: dict):
+        self.populate_from_data(data)
+        raw = self.member
+        if isinstance(raw, dict):
+            raw = [raw]
+        if isinstance(raw, list):
+            names = [m.get('name') for m in raw if isinstance(m, dict) and m.get('name')]
+            self.member = names or None
+        else:
+            self.member = None
+
+
+@dataclass
 class HuaweiInterface(OpenconfigInterface):
     """Huawei VRP port interface (state-tree subset).
 
@@ -272,6 +306,19 @@ class HuaweiInterface(OpenconfigInterface):
 
         self.transeiver = HuaweiTransceiver(data)
 
+        # Eth-Trunk members: overlay the huawei-ifm-trunk augment onto the
+        # (member-less) OpenConfig aggregation the base parser built. Huawei
+        # does not populate the OpenConfig member leaf-list, so this is the
+        # only device source of LAG membership. Non-LAG ports have no
+        # ``trunk`` subtree → ``member`` stays None and aggregation is
+        # omitted from output.
+        h_agg = HuaweiInterfaceAggregation(data)
+        if h_agg.member:
+            if self.aggregation is None:
+                self.aggregation = h_agg
+            else:
+                self.aggregation.member = h_agg.member
+
         # Compute last_state_change based on Huawei-specific devm times, if available
         candidates = [
             parse_utc_datetime(self.last_up_time),
@@ -310,6 +357,82 @@ class HuaweiInterface(OpenconfigInterface):
             return "null"
         children = sub_if_index.get(port_name) or []
         return "dot1q" if children else "null"
+
+
+def parse_multi_port_interface_response(response: dict) -> List["HuaweiInterface"]:
+    """Split a :class:`HuaweiMultiPortInterfaceRPCRequest` reply into per-port objects.
+
+    The batch ``<get>`` returns several ``/devm/ports/port`` entries (optics,
+    keyed by ``position``) alongside several OpenConfig
+    ``/interfaces/interface`` entries (status, keyed by ``name``). This
+    function re-associates them by deriving each interface's ``position``
+    from its device-format name
+    (:func:`~pynetcom.utils.huawei_router_tools.split_if_to_type_id_tag`),
+    slices a single-port view per interface and materialises a
+    :class:`HuaweiInterface` (transceiver with per-channel optics, oper /
+    admin status). One :class:`HuaweiInterface` per OpenConfig interface in
+    the reply; ports whose ``devm`` block is absent still yield an object
+    (status only, ``transeiver`` empty).
+
+    :param response: the raw NETCONF reply dict (xmltodict shape).
+    :rtype: List[HuaweiInterface]
+    """
+    if not isinstance(response, dict):
+        return []
+    base = OpenconfigInterface({})
+    cleaned = base.remove_namespaces(base._unwrap_data_node(response))
+    if not isinstance(cleaned, dict):
+        return []
+
+    def _as_list(x):
+        if x is None:
+            return []
+        return x if isinstance(x, list) else [x]
+
+    devm_ports = _as_list(((cleaned.get('devm') or {}).get('ports') or {}).get('port'))
+    devm_by_pos = {
+        p.get('position'): p
+        for p in devm_ports
+        if isinstance(p, dict) and p.get('position')
+    }
+    oc_ifaces = _as_list((cleaned.get('interfaces') or {}).get('interface'))
+
+    # OpenConfig platform components carry the module-present flag, keyed by
+    # ``TRANSCEIVER:<device-format name>`` (see HuaweiMultiPortInterfaceRPCRequest).
+    # Index them by the bare port name so ``present`` reaches the RIGHT port's
+    # HuaweiTransceiver — without it OpenconfigTranseiver.to_output_dict drops
+    # the measured optics as if no module were inserted.
+    components = _as_list((cleaned.get('components') or {}).get('component'))
+    comp_by_name: dict = {}
+    for c in components:
+        if not isinstance(c, dict):
+            continue
+        cname = c.get('name')
+        if not isinstance(cname, str):
+            continue
+        port_key = cname[len('TRANSCEIVER:'):] if cname.startswith('TRANSCEIVER:') else cname
+        comp_by_name[port_key] = c
+
+    out: List["HuaweiInterface"] = []
+    for oc in oc_ifaces:
+        if not isinstance(oc, dict):
+            continue
+        name = oc.get('name') or (oc.get('state') or {}).get('name')
+        if not name:
+            continue
+        try:
+            position = huawei_router_tools.split_if_to_type_id_tag(name)['if_pos']
+        except Exception:
+            position = None
+        sub: dict = {'interfaces': {'interface': oc}}
+        devm_port = devm_by_pos.get(position)
+        if devm_port is not None:
+            sub['devm'] = {'ports': {'port': devm_port}}
+        component = comp_by_name.get(name)
+        if component is not None:
+            sub['components'] = {'component': component}
+        out.append(HuaweiInterface(sub))
+    return out
 
 
 def parse_sub_interface_parents(response: dict) -> Dict[str, List[str]]:

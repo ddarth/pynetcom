@@ -402,52 +402,12 @@ def parse_vprn_interface_vpls_response(response: dict) -> dict:
     return out
 
 
-def parse_base_router_interface_vpls_response(response: dict) -> dict:
-    """Parse a NokiaBaseRouterInterfaceVplsRPCRequest reply into a binding map.
-
-    Counterpart of :func:`parse_vprn_interface_vpls_response` for the
-    Base router. Returns ``{("Base", interface_name): vpls_name}`` for
-    every Base-router interface that has a ``vpls/vpls-name`` element
-    configured. Pure-L3 Base interfaces (no ``vpls`` element) are absent
-    from the map.
-
-    The response shape (configure namespace)::
-
-        configure/router[router-name='Base']/interface[<interface-name>]/vpls/vpls-name
-
-    We key by ``("Base", iface)`` to keep the result shape identical to
-    :func:`parse_vprn_interface_vpls_response` so the two maps can be
-    merged with ``dict.update`` in :class:`ServicesClient`.
-    """
-    if not isinstance(response, dict):
-        return {}
-    container = NetworkInstance()
-    cleaned = container.remove_namespaces(container._unwrap_data_node(response))
-    configure_root = (
-        cleaned.get("configure")
-        or cleaned  # in case caller already unwrapped one level
-    )
-    router_root = configure_root.get("router")
-    out: dict = {}
-    for router in _as_list(router_root):
-        if not isinstance(router, dict):
-            continue
-        # We only ever request router-name=Base so the canonical key is "Base";
-        # honour the device's echoed value too in case future SR OS releases
-        # surface more router-names here.
-        router_name = router.get("router-name") or "Base"
-        for iface in _as_list(router.get("interface")):
-            if not isinstance(iface, dict):
-                continue
-            iface_name = iface.get("interface-name")
-            vpls = iface.get("vpls") or {}
-            if isinstance(vpls, dict):
-                vpls_name = vpls.get("vpls-name")
-            else:
-                vpls_name = None
-            if router_name and iface_name and vpls_name:
-                out[(router_name, iface_name)] = vpls_name
-    return out
+# NOTE: a Base-router interface→VPLS binding parser intentionally does not
+# exist. R-VPLS on the base router is not a valid scenario on SR OS 23.10
+# (the ``<vpls>`` leaf under /configure/router[Base]/interface returns
+# Unknown element) and is absent from our fleet (plan E1). Base-router L3
+# interfaces always resolve ``l2_service=None``. R-VPLS bindings are parsed
+# for VPRN interfaces only — see :func:`parse_vprn_interface_vpls_response`.
 
 
 def parse_sap_admin_state_response(response: dict) -> dict:
@@ -1038,15 +998,17 @@ class NokiaL3Interface(L3Interface):
         oper-ip-mtu              -> mtu
         ipv4/primary/oper-address -> ipv4_address
 
-    ``vprn_name`` and ``ipv4_prefix_length`` are set by the parser / left
-    None — the SR OS state model exposes no netmask at this level.
+    ``vprn_name`` is set by the parser. ``ipv4_prefix_length`` is left None
+    by the parser — the SR OS **state** model exposes only the
+    ``oper-address`` without a netmask; the prefix-length is filled from the
+    configure-NS under ``enrich_config`` (see below).
 
     Binding (free vs enrich)
     ------------------------
     The state-tree does NOT expose binding-discriminator leaves
-    (``<sap>`` / ``<spoke-sdp>`` / ``<loopback>`` live in the configure
-    namespace). Without enrichment we derive ``binding_type`` from the
-    interface name alone:
+    (``<port>`` / ``<sap>`` / ``<spoke-sdp>`` / ``<loopback>`` live in the
+    configure namespace). Without enrichment we derive ``binding_type`` from
+    the interface name alone:
 
         ``LoopBack*``            → ``loopback``
         ``System``               → ``system``
@@ -1055,19 +1017,27 @@ class NokiaL3Interface(L3Interface):
 
     When ``apply_binding_from_config()`` is called (by ServicesClient when
     ``enrich_config=True``) we get the precise discriminator from the
-    configure-NS payload: ``<spoke-sdp>`` object → ``sdp_spoke``,
-    ``<sap>`` object → ``sap_physical`` (with ``parent_port`` + ``vlan``
-    derived from ``sap-id`` via :func:`split_sap_id`),
-    ``<loopback>true</loopback>`` → ``loopback``. The discriminator only
-    moves the ``unknown`` ones — name-recognised types are reaffirmed but
-    not overridden.
+    configure-NS payload:
 
-    ``admin_status`` is normally a state-NS leaf on the interface object,
-    but Nokia VPRN-bound interfaces (under ``/state/service/vprn/.../interface``)
-    do NOT carry ``<admin-state>``. As a fallback, ``apply_binding_from_config``
-    reads ``<admin-state>`` from the configure payload (mapped
-    ``enable→up`` / ``disable→down``) and fills it ONLY if state-NS left it
-    None — never overwrites a valid state-NS value.
+      * VPRN interfaces: ``<spoke-sdp>`` object → ``sdp_spoke``,
+        ``<sap>`` object → ``sap_physical`` (with ``parent_port`` + ``vlan``
+        derived from ``sap-id`` via :func:`split_sap_id`),
+        ``<loopback>true</loopback>`` → ``loopback``.
+      * Base-router interfaces: the ``<port>`` leaf names the carrier —
+        ``"3/1/1"`` → ``physical_port`` (parent_port), ``"lag-3"`` →
+        ``physical_port`` (parent_port=lag), ``"2/1/8:671"`` →
+        ``subinterface`` (parent_port + vlan).
+
+    The discriminator only moves the ``unknown`` ones — name-recognised
+    types are reaffirmed but not overridden.
+
+    ``admin_status`` and ``ipv4_prefix_length`` are also filled from the
+    configure payload as fallbacks: the state-NS omits ``<admin-state>`` on
+    Nokia VPRN-bound interfaces and never carries a netmask on either scope.
+    ``apply_binding_from_config`` maps ``admin-state`` ``enable→up`` /
+    ``disable→down`` and reads ``ipv4/primary/prefix-length``, writing each
+    ONLY if state-NS left it None — a valid state-NS value is never
+    overwritten.
     """
 
     # Name-pattern binding rules — applied at construction. Order matters:
@@ -1160,6 +1130,23 @@ class NokiaL3Interface(L3Interface):
                     self.admin_status = "down"
                 # any other value (or absence) → leave None
 
+        # ipv4_prefix_length fallback — the state-NS ``oper-address`` carries
+        # no netmask, but the configure-NS ``ipv4/primary/prefix-length``
+        # does. Fill it only if state-NS left it None (it always does on
+        # Nokia). Runs for both Base and VPRN scope; never overrides an
+        # existing value.
+        if self.ipv4_prefix_length is None:
+            ipv4_cfg = config_entry.get("ipv4")
+            if isinstance(ipv4_cfg, dict):
+                primary_cfg = ipv4_cfg.get("primary")
+                if isinstance(primary_cfg, dict):
+                    pfx = primary_cfg.get("prefix-length")
+                    if pfx is not None:
+                        try:
+                            self.ipv4_prefix_length = int(pfx)
+                        except (TypeError, ValueError):
+                            pass
+
         # 1. spoke-sdp object presence wins.
         # ``<spoke-sdp>`` is a YANG list — xmltodict may surface it as a
         # single dict (the common 1-spoke case) or a list of dicts. Either
@@ -1205,6 +1192,28 @@ class NokiaL3Interface(L3Interface):
         loopback_leaf = config_entry.get("loopback")
         if isinstance(loopback_leaf, str) and loopback_leaf.strip().lower() == "true":
             self.binding_type = "loopback"
+            return
+
+        # 4. Base-router port-based binding. On /configure/router[Base]/
+        #    interface the carrier is named by a single ``<port>`` leaf —
+        #    a physical port (``"3/1/1"``), a LAG (``"lag-3"``) or a
+        #    port:vlan sub-interface (``"2/1/8:671"``). VPRN interfaces use
+        #    ``<sap>``/``<spoke-sdp>`` instead (handled above), so this
+        #    branch only ever fires for Base IRBs. Fills ``parent_port`` /
+        #    ``vlan`` and upgrades ``binding_type`` from the name-pattern
+        #    ``unknown`` to ``physical_port`` / ``subinterface``.
+        port_leaf = config_entry.get("port")
+        if isinstance(port_leaf, str) and port_leaf.strip():
+            port_val = port_leaf.strip()
+            if ":" in port_val:
+                parent, _, vlan_str = port_val.partition(":")
+                self.parent_port = parent or None
+                if vlan_str and vlan_str.isdigit():
+                    self.vlan = int(vlan_str)
+                self.binding_type = "subinterface"
+            else:
+                self.parent_port = port_val
+                self.binding_type = "physical_port"
             return
         # No discriminator in configure either — keep whatever
         # _derive_binding_from_name() produced.

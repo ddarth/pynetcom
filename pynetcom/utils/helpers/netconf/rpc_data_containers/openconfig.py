@@ -643,6 +643,20 @@ class OpenconfigInterfaceAggregation(RPCDataContainer):
 
     def __init__(self, data: dict):
         self.populate_from_data(data)
+        self._normalise_member()
+
+    def _normalise_member(self) -> None:
+        """Coerce ``member`` to a ``list[str]`` (or None).
+
+        The OpenConfig ``member`` leaf-list collapses to a single string
+        when a LAG has exactly one member (xmltodict does not know it is a
+        list). Callers expect a uniform ``list[str]`` regardless of member
+        count, so wrap a lone scalar. ``None`` (no aggregation) is left as
+        ``None`` so :meth:`has_data` still omits the block for non-LAG
+        interfaces.
+        """
+        if self.member is not None and not isinstance(self.member, list):
+            self.member = [self.member]
 
     def has_data(self) -> bool:
         """Returns True if aggregation contains any meaningful data."""

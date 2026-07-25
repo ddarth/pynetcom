@@ -45,7 +45,7 @@ from pynetcom.utils.helpers.netconf.rpc_data_containers.traceroute import (
     TracerouteHop,
     TracerouteResult,
 )
-from pynetcom.exceptions import NetconfActionNotAuthorized
+from pynetcom.exceptions import HuaweiLldpNotSupported, NetconfActionNotAuthorized
 
 # from pynetcom.cli_client import EquipCLI, NokiaEquipCLI, HuaweiEquipCLI, cli_caret
 
@@ -101,4 +101,5 @@ __all__ = [
     "TracerouteHop",
     "TracerouteResult",
     "NetconfActionNotAuthorized",
+    "HuaweiLldpNotSupported",
 ]

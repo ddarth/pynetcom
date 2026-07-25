@@ -191,7 +191,11 @@ class NokiaTransceiverThresholdsList(OpenconfigTransceiverThresholdsList):
         self.filter_empty_thresholds()
 
 
-# Not used, because OpenconfigPhysicalChannel is used instead
+# Per-lane container: one ``lane`` entry from
+# ``digital-diagnostic-monitoring/lane[N]``. ``lane-id`` is the 1-based
+# lane index; per-lane Tx/Rx/bias live under the ``current`` leaf of each
+# power block. Used by :class:`NokiaTransceiver` to populate
+# ``physical_channels`` for multi-lane 100G modules.
 class NokiaPhysicalChannel(NokiaPhysicalChannel):
     prefix = []
     field_mapping = NokiaPhysicalChannel.field_mapping.copy()
@@ -204,7 +208,9 @@ class NokiaPhysicalChannel(NokiaPhysicalChannel):
     def __init__(self, data: dict):
         self.populate_from_data(data)
 
-# Not used, because OpenconfigPhysicalChannels is used instead
+# Per-lane list under ``state/port/transceiver/digital-diagnostic-monitoring``.
+# NATIVE Nokia path (the OpenConfig ``physical-channels`` subtree is not
+# populated by SR OS). Wired into :class:`NokiaTransceiver.physical_channels`.
 class NokiaPhysicalChannels(PhysicalChannels):
     prefix = ['state', 'port', 'transceiver', 'digital-diagnostic-monitoring']
     field_mapping = PhysicalChannels.field_mapping.copy()
@@ -267,12 +273,22 @@ class NokiaTransceiver(OpenconfigTranseiver):
     optical_compliance_extension = None
     link_length_information = None
     equipped = None
-    # physical_channels : NokiaPhysicalChannels = None
+    physical_channels : "NokiaPhysicalChannels" = None
     thresholds : NokiaTransceiverThresholdsList = None
     def __init__(self, data: dict):
         self.populate_from_data(data)
+        # Per-lane optics for multi-lane modules (100G cfp2 / qsfp28-LR4).
+        # Nokia keeps per-lane Tx/Rx under
+        # ``state/port/transceiver/digital-diagnostic-monitoring/lane[1..4]``
+        # — a NATIVE subtree, NOT the OpenConfig ``physical-channels`` path
+        # (Nokia does not populate that). Set this BEFORE the OpenConfig
+        # merge so the (empty) OC ``physical_channels`` does not overwrite
+        # the native lanes. For 10G single-lane modules the ``lane`` list is
+        # absent and this yields an empty list — the aggregate
+        # ``input_power`` / ``output_power`` cover those. Verified live
+        # 24 Jul 2026 on ``Oc.MSC_3.CR_01`` port 3/1/1 (cfp2, 4 lanes).
+        self.physical_channels = NokiaPhysicalChannels(data)
         self.merge_missing_fields_from(OpenconfigTranseiver(data))
-        # self.physical_channels = NokiaPhysicalChannels(data)
         self.thresholds = NokiaTransceiverThresholdsList(data)
         # Vendor-agnostic field normalisation.
         self._normalise_present()
@@ -414,6 +430,77 @@ class NokiaInterface(OpenconfigInterface):
         # Build sub-containers from merged view to ensure LLDP and thresholds are present
         self.lldp = NokiaLLDP(merged)
         self.transeiver = NokiaTransceiver(merged)
+
+
+def parse_multi_port_interface_response(
+    response: dict, ports: List[str]
+) -> List["NokiaInterface"]:
+    """Split a :class:`NokiaMultiPortInterfaceRPCRequest` reply into per-port objects.
+
+    The batch ``<get>`` returns an interleaved ``/state/port`` list (a
+    connector entry with ``transceiver`` and a breakout entry with
+    ``ethernet`` per requested port) plus one OpenConfig
+    ``/interfaces/interface`` per port. Because
+    :func:`_build_merged_nokia_port_view` merges *whatever* connector +
+    breakout it finds in a port list, feeding the whole batch to
+    :class:`NokiaInterface` at once would cross-contaminate ports — so this
+    function slices a single-port view per requested port-id first
+    (connector + breakout grouped by the same
+    :func:`~pynetcom.utils.helpers.netconf.rpc_requests.nokia_connector_breakout`
+    split the builder used) and materialises one :class:`NokiaInterface`
+    each (transceiver with per-lane optics + oper/admin status).
+
+    :param response: raw NETCONF reply dict (xmltodict shape).
+    :param ports: the SAME port-id list passed to the builder — needed to
+        regroup connector/breakout entries deterministically.
+    :rtype: List[NokiaInterface]
+    """
+    if not isinstance(response, dict) or not ports:
+        return []
+    from pynetcom.utils.helpers.netconf.rpc_requests import nokia_connector_breakout
+
+    cleaner = RPCDataContainer()
+    cleaned = cleaner.remove_namespaces(cleaner._unwrap_data_node(response))
+    if not isinstance(cleaned, dict):
+        return []
+
+    state = cleaned.get('state') or {}
+    port_entries = state.get('port')
+    if isinstance(port_entries, dict):
+        port_entries = [port_entries]
+    if not isinstance(port_entries, list):
+        port_entries = []
+    by_id: Dict[str, list] = {}
+    for p in port_entries:
+        if isinstance(p, dict) and p.get('port-id') is not None:
+            by_id.setdefault(p['port-id'], []).append(p)
+
+    oc_ifaces = (cleaned.get('interfaces') or {}).get('interface')
+    if isinstance(oc_ifaces, dict):
+        oc_ifaces = [oc_ifaces]
+    if not isinstance(oc_ifaces, list):
+        oc_ifaces = []
+    oc_by_name: Dict[str, dict] = {}
+    for oc in oc_ifaces:
+        if isinstance(oc, dict):
+            nm = oc.get('name') or (oc.get('state') or {}).get('name')
+            if nm:
+                oc_by_name[nm] = oc
+
+    out: List["NokiaInterface"] = []
+    for port in ports:
+        connector, breakout = nokia_connector_breakout(port)
+        matched: list = []
+        for pid in dict.fromkeys([connector, breakout]):  # preserve order, dedupe
+            matched.extend(by_id.get(pid, []))
+        if not matched:
+            continue
+        sub: dict = {'state': {'port': matched}}
+        oc = oc_by_name.get(breakout) or oc_by_name.get(port)
+        if oc is not None:
+            sub['interfaces'] = {'interface': oc}
+        out.append(NokiaInterface(sub))
+    return out
 
 
 def parse_port_encap_type_map(response: dict) -> Dict[str, str]:
